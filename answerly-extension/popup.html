@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Answerly Meta-Radar 1.1</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+
+    :root {
+      --bg: #030303;
+      --surface: #0a0a0a;
+      --surface-bright: #141414;
+      --border: rgba(255, 255, 255, 0.05);
+      --text-main: #ffffff;
+      --text-muted: #888888;
+      --primary: #3b82f6;
+      --accent: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      width: 400px;
+      margin: 0;
+      background-color: var(--bg);
+      color: var(--text-main);
+      overflow: hidden;
+      user-select: none;
+    }
+
+    header {
+      padding: 24px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(to bottom, rgba(59, 130, 246, 0.05), transparent);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 24px;
+      height: 24px;
+      background: var(--text-main);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #000;
+      font-weight: 900;
+      font-size: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .container {
+      padding: 20px;
+      max-height: 520px;
+      overflow-y: auto;
+    }
+
+    /* KPI Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 16px;
+      border-radius: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      border-color: rgba(255,255,255,0.15);
+      background: var(--surface-bright);
+    }
+
+    .stat-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .stat-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .trend-up { color: var(--accent); }
+    .pulse-text { font-style: italic; font-size: 10px; color: var(--text-muted); }
+
+    /* Intelligence Pulse */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .pulse-card {
+      background: linear-gradient(135deg, #111, #050505);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .insight-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .insight-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .insight-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 10px;
+    }
+
+    .insight-content { flex: 1; }
+    .insight-text { font-size: 12px; font-weight: 600; line-height: 1.4; }
+    .insight-meta { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Engine Status */
+    .engine-bar {
+      margin-top: 24px;
+      padding: 12px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+    }
+
+    .engine-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #333;
+      position: relative;
+    }
+
+    .engine-dot.active {
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+
+    .engine-dot::after {
+      content: attr(data-label);
+      position: absolute;
+      bottom: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 8px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn-action {
+      background: #fff;
+      color: #000;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-action:hover {
+      background: #eee;
+      transform: translateY(-1px);
+    }
+
+    .last-sync { font-size: 10px; color: var(--text-muted); }
+    .empty-state { padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 12px; }
+
+    #backoffNotice {
+      margin: 0 20px 12px;
+      padding: 10px;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid var(--warning);
+      border-radius: 12px;
+      font-size: 11px;
+      color: var(--warning);
+      display: none;
+    }
+
+    #diagnostics {
+      margin: 12px 20px;
+      padding: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      font-size: 10px;
+      display: none;
+    }
+
+    .diag-item { margin-bottom: 8px; border-left: 2px solid #444; padding-left: 8px; }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">A</div>
+      <h1>Answerly</h1>
+    </div>
+    <button id="syncNow" class="btn-action">Scan Now</button>
+  </header>
+
+  <div id="backoffNotice">
+    ⚠️ <strong>Rate Limit Backoff:</strong> Polling paused. Resuming in <span id="backoffTimer">--</span>m.
+  </div>
+  
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Pipeline Health</span>
+        <div class="stat-value" id="kpi-health">0%</div>
+        <div class="stat-sub">Lead Conversion</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Total Signals</span>
+        <div class="stat-value" id="kpi-signals">0</div>
+        <div class="stat-sub">Radar Detections</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Qualified Leads</span>
+        <div class="stat-value" id="kpi-leads">0</div>
+        <div class="stat-sub">Pipeline Strength</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Engagements</span>
+        <div class="stat-value" id="kpi-engagements">0</div>
+        <div class="stat-sub">Daily Outreach</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 24px; padding: 12px; background: rgba(59, 130, 246, 0.05); border-radius: 12px; border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div id="engineStatus" style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--accent);">Engine Active</div>
+            <div id="enginePulse" class="pulse-text" style="font-size: 10px;">Idle</div>
+        </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-title">Intelligence Pulse</div>
+      <div style="font-size: 10px; color: var(--primary); cursor: pointer;" id="showLogs">Diagnostics</div>
+    </div>
+
+    <div id="diagnostics">
+      <div style="color: var(--error); margin-bottom: 8px; font-weight: 800;">Recent Errors:</div>
+      <div id="errorList">None</div>
+      <div style="margin-top: 12px; color: var(--text-muted); font-weight: 800;">Active Scrapers:</div>
+      <div id="configList">None</div>
+      <button id="resetEngine" class="btn-action" style="margin-top: 12px; background: var(--error); color: #fff; width: 100%;">Reset Engine</button>
+    </div>
+
+    <div class="pulse-card">
+      <ul class="insight-list" id="insight-list">
+        <div class="empty-state">Gathering intel...</div>
+      </ul>
+    </div>
+
+    <div class="engine-bar">
+      <div class="engine-dot" data-label="X"></div>
+      <div class="engine-dot" data-label="LinkedIn"></div>
+      <div class="engine-dot" data-label="Reddit"></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="last-sync" id="check-time">Syncing data...</div>
+    <div style="font-size: 9px; opacity: 0.5;">Automated Radar Active</div>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

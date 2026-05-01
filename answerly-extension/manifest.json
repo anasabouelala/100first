@@ -1,0 +1,76 @@
+{
+  "manifest_version": 3,
+  "name": "Answerly Meta-Radar",
+  "version": "1.2",
+  "description": "Stealth profile monitoring and engagement for founders.",
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "cookies",
+    "notifications",
+    "tabs",
+    "scripting",
+    "windows"
+  ],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://*.x.com/*",
+    "https://twitter.com/*",
+    "https://*.twitter.com/*",
+    "https://syndication.twitter.com/*",
+    "https://linkedin.com/*",
+    "https://*.linkedin.com/*",
+    "https://reddit.com/*",
+    "https://*.reddit.com/*",
+    "https://producthunt.com/*",
+    "https://*.producthunt.com/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3001/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:3000/*", 
+        "http://127.0.0.1:3000/*",
+        "http://localhost:3001/*",
+        "http://127.0.0.1:3001/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["content_bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://x.com/*",
+        "https://*.x.com/*",
+        "https://twitter.com/*",
+        "https://*.twitter.com/*",
+        "https://linkedin.com/*",
+        "https://*.linkedin.com/*",
+        "https://reddit.com/*",
+        "https://*.reddit.com/*",
+        "https://producthunt.com/*",
+        "https://*.producthunt.com/*"
+      ],
+      "js": ["engagement_agent.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Answerly Feed",
+    "default_popup": "popup.html"
+  }
+}

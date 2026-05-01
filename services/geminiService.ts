@@ -918,3 +918,268 @@ export const generateLeadDorks = async (
         throw error;
       }
 }
+// Restored Answerly & ICP Recon Functions
+export const generateICPReconQueries = async (campaign: ICPReconCampaign): Promise<ICPTrackingKeyword[]> => {
+    const model = "gemini-3-flash-preview";
+    const schema: Schema = {
+        type: Type.ARRAY,
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                platform: { type: Type.STRING },
+                query: { type: Type.STRING },
+                intent: { type: Type.STRING }
+            },
+            required: ["platform", "query", "intent"]
+        }
+    };
+
+    const prompt = `
+You are an Intent-Based Keyword Architect for 2026. Your mission is to translate a founder's lead generation brief into surgically precise Boolean search strings. 
+
+### THE BUYER vs SELLER RULE
+- BUYERS say: "Need help with X", "X is failing", "Alternative to X", "Recommendations for X", "Budget for X".
+- SELLERS (Competitors) say: "How to fix X", "X tips", "DM for X", "Hire us for X", "X case study".
+- YOUR MISSION: Generate queries that catch BUYER signals while aggressively EXCLUDING SELLER noise.
+
+### CONTEXT
+Product Name: ${campaign.name}
+Full Brief: "${campaign.originalBrief || 'N/A'}"
+Target Personas: ${campaign.roles.join(', ')}
+Key Pain Points: ${campaign.painPoints.join(', ')}
+Manual Negative Keywords (EXCLUDE THESE): ${(campaign.negativeKeywords || []).join(', ')}
+
+### THE TASK
+Generate a MASSIVE matrix of 30-50 surgically precise search dorks.
+Spread them across these platforms: ${campaign.platforms.join(', ')}.
+
+The matrix MUST cover the following 18-layer signal clusters:
+- Intent Cluster: (recommend, looking for, buying, budget)
+- Pain Cluster: (broken, slow, expensive, losing leads)
+- Urgency Cluster: (asap, today, urgent, launch)
+- Switch Cluster: (alternatives, cancelling, leaving, hate)
+- Growth Cluster: (hiring, expansion, fundraising)
+- Authority Cluster: (founder, CEO, director, head of)
+
+Return a JSON array of 30-50 objects.
+`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: { responseMimeType: "application/json", responseSchema: schema }
+        });
+        return JSON.parse(response.text) as ICPTrackingKeyword[];
+    } catch (error) {
+        console.error("ICP Recon Gen Error:", error);
+        return campaign.painPoints.map(pp => ({
+            platform: campaign.platforms[0],
+            query: pp,
+            intent: "Fallback Keyword Search"
+        }));
+    }
+};
+
+export const generateContentEnginePost = async (params: any): Promise<ContentEnginePost> => {
+    const model = "gemini-3-flash-preview";
+    const schema: Schema = {
+        type: Type.OBJECT,
+        properties: {
+            title: { type: Type.STRING },
+            hook: { type: Type.STRING },
+            body: { type: Type.STRING },
+            tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["title", "hook", "body", "tags"]
+    };
+    const prompt = `Generate a high-engagement social post for ${params.platform}. Topic: ${params.topic}. Target: ${params.audience}.`;
+    const response = await ai.models.generateContent({
+        model, contents: prompt,
+        config: { responseMimeType: "application/json", responseSchema: schema }
+    });
+    return JSON.parse(response.text) as ContentEnginePost;
+};
+
+export const getPlatformInsights = async (platform: string): Promise<PlatformInsight> => {
+    const model = "gemini-3-flash-preview";
+    const schema: Schema = {
+        type: Type.OBJECT,
+        properties: {
+            platform: { type: Type.STRING },
+            trend: { type: Type.STRING },
+            intensity: { type: Type.NUMBER },
+            opportunities: { type: Type.ARRAY, items: { type: Type.STRING } },
+            threats: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["platform", "trend", "intensity", "opportunities", "threats"]
+    };
+    const response = await ai.models.generateContent({
+        model, contents: `Analyze current trends and opportunities for developers/founders on ${platform}.`,
+        config: { responseMimeType: "application/json", responseSchema: schema }
+    });
+    return JSON.parse(response.text) as PlatformInsight;
+};
+
+export const generateSmartEngagementComment = async (postText: string, appDesc: string, title: string): Promise<SmartComment> => {
+    const model = "gemini-3-flash-preview";
+    const schema: Schema = {
+        type: Type.OBJECT,
+        properties: {
+            options: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        body: { type: Type.STRING },
+                        why: { type: Type.STRING }
+                    },
+                    required: ["body", "why"]
+                }
+            }
+        },
+        required: ["options"]
+    };
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: `Generate 3 smart, non-spammy engagement comments for lead @${title}. Their post: "${postText}". My product: "${appDesc}". Under 200 chars each, conversational.`,
+            config: { responseMimeType: "application/json", responseSchema: schema }
+        });
+        return JSON.parse(response.text) as SmartComment;
+    } catch {
+        return { options: [{ body: "Great perspective! Would love to connect.", why: "Neutral opener" }] };
+    }
+};
+
+export const evaluateHNOpportunities = async (items: any[]): Promise<ForumOpportunity[]> => {
+    const model = "gemini-3-flash-preview";
+    const response = await ai.models.generateContent({
+        model,
+        contents: `Evaluate these Hacker News items for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
+        config: { responseMimeType: "application/json" }
+    });
+    return JSON.parse(response.text);
+};
+
+export const evaluatePHOpportunities = async (items: any[]): Promise<ForumOpportunity[]> => {
+    const model = "gemini-3-flash-preview";
+    const response = await ai.models.generateContent({
+        model,
+        contents: `Evaluate these Product Hunt items for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
+        config: { responseMimeType: "application/json" }
+    });
+    return JSON.parse(response.text);
+};
+
+export const evaluateRedditOpportunities = async (items: any[]): Promise<ForumOpportunity[]> => {
+    const model = "gemini-3-flash-preview";
+    const response = await ai.models.generateContent({
+        model,
+        contents: `Evaluate these Reddit posts for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
+        config: { responseMimeType: "application/json" }
+    });
+    return JSON.parse(response.text);
+};
+
+export const generateBuyerPersonas = async (appName: string, appDesc: string, category: string): Promise<BuyerPersonaAnalysis> => {
+    const model = "gemini-3-flash-preview";
+    const schema: Schema = {
+        type: Type.OBJECT,
+        properties: {
+            marketOverview: { type: Type.STRING },
+            personas: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING },
+                        role: { type: Type.STRING },
+                        demographics: { type: Type.STRING },
+                        realWorldQuote: { type: Type.STRING },
+                        painPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        goals: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        whereTheyHangOut: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        contentTheyConsume: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    },
+                    required: ["name","role","demographics","painPoints","goals","whereTheyHangOut","contentTheyConsume"]
+                }
+            }
+        },
+        required: ["marketOverview", "personas"]
+    };
+    const response = await ai.models.generateContent({
+        model,
+        contents: `Generate 3 detailed buyer personas for "${appName}" - a ${category} product. Description: "${appDesc}". Include market overview, demographics, pain points, goals, where they hang out online, and content they consume.`,
+        config: { responseMimeType: "application/json", responseSchema: schema }
+    });
+    return JSON.parse(response.text) as BuyerPersonaAnalysis;
+};
+
+export const parseReconBrief = async (brief: string): Promise<{
+    name: string;
+    roles: string[];
+    painPoints: string[];
+    negativeKeywords: string[];
+    platforms: string[];
+}> => {
+    try {
+        // V5: Upgraded to latest flash for faster synthesis
+        const modelName = "gemini-1.5-flash-latest"; 
+        
+        const schema: Schema = {
+            type: Type.OBJECT,
+            properties: {
+                name: { type: Type.STRING },
+                roles: { type: Type.ARRAY, items: { type: Type.STRING } },
+                painPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+                negativeKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                platforms: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["name", "roles", "painPoints", "negativeKeywords", "platforms"]
+        };
+
+        const generativeModel = ai.getGenerativeModel({ model: modelName });
+        const response = await generativeModel.generateContent({
+            contents: [{
+                role: 'user',
+                parts: [{
+                    text: `Act as a High-Precision ICP Recon DNA Parser. 
+                    Given the following user brief, extract a structured campaign identity.
+                    
+                    ### CRITICAL: THE BUYER vs SELLER POLARITY
+                    Identify "SELLERS" (specialists, agencies, consultants, experts) and add them to negativeKeywords.
+                    
+                    Brief: "${brief}"`
+                }]
+            }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: schema
+            }
+        });
+
+        const result = JSON.parse(response.response.text());
+        return {
+            name: result.name || brief.substring(0, 20),
+            roles: (result.roles || []).filter((r: string) => r.length > 2),
+            painPoints: (result.painPoints || []).filter((p: string) => p.length > 2),
+            negativeKeywords: [...new Set([...(result.negativeKeywords || []), "agency", "expert", "consultant"])],
+            platforms: (result.platforms || []).length > 0 ? result.platforms : ["X", "LinkedIn", "Reddit"]
+        };
+    } catch (e) {
+        console.error("[Gemini] Brief Parsing Failed:", e);
+        // ENHANCED FALLBACK: Use a more intelligent 'reasoning' approach even in failure
+        const stopWords = new Set(['looking', 'for', 'people', 'facing', 'with', 'their', 'the', 'and', 'this']);
+        const words = brief.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !stopWords.has(w));
+        
+        return {
+            name: "Campaign: " + (words[0] || "Targeting"),
+            roles: words.length > 0 ? [words[0].charAt(0).toUpperCase() + words[0].slice(1) + " Professional"] : ["Target Persona"],
+            painPoints: words.length > 1 ? [words.slice(1, 3).join(' ') + " Issues"] : ["Operational Friction"],
+            negativeKeywords: ["agency", "consultant", "expert", "freelancer"],
+            platforms: ["X", "LinkedIn", "Reddit"]
+        };
+    }
+};
+

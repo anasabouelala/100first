@@ -182,5 +182,129 @@ export enum AppMode {
   STRATEGY = 'STRATEGY',
   ROAST = 'ROAST',
   DISTRIBUTION = 'DISTRIBUTION',
-  OUTREACH = 'OUTREACH'
+  OUTREACH = 'OUTREACH',
+  PERSONA = 'PERSONA',
+  ICP_RECON = 'ICP_RECON',
+  ANSWERLY_RADAR = 'ANSWERLY_RADAR',
+  PIPELINE = 'PIPELINE',
+  FORUM_LEADS = 'FORUM_LEADS',
+  CONTENT_ENGINE = 'CONTENT_ENGINE',
+  PLATFORM_INSIGHTS = 'PLATFORM_INSIGHTS',
+  TRIAGE = 'TRIAGE'
+}
+
+export interface ICPReconCampaign {
+  id: string;
+  name: string;
+  roles: string[];
+  industries: string[];
+  painPoints: string[];
+  interests: string[];
+  negativeKeywords: string[];
+  platforms: string[];
+  originalBrief?: string;
+  lastRun?: string;
+  queries?: ICPTrackingKeyword[];
+  stats?: any;
+}
+
+export interface ICPTrackingKeyword {
+  platform: string;
+  query: string;
+  intent: string;
+  campaignId?: string;
+  campaignName?: string;
+}
+
+export interface SmartComment {
+  options: { body: string; why: string }[];
+}
+
+export interface LeadInteraction {
+  type: 'comment' | 'like' | 'note';
+  content?: string;
+  timestamp: string;
+}
+
+export interface PipelineLead {
+  id: string;
+  name: string;
+  title?: string; // Legacy fallback
+  handle?: string;
+  url: string;
+  platform: string;
+  avatar?: string;
+  bio?: string;
+  headline?: string;
+  status: 'new' | 'engaging' | 'qualified' | 'converted';
+  interactions: LeadInteraction[];
+  notes?: string;
+  postUrl?: string;
+  postText?: string;
+  why?: string;
+  relevance?: number;
+  
+  // V5 Intelligence Fields
+  intelligenceScore?: number;
+  intelligenceTier?: 'Buy Now' | 'Warm Opportunity' | 'Nurture';
+  intelligenceSignals?: string[];
+  intelligencePipeline?: Array<{ step: string; status: 'pass' | 'fail' | 'blocked' | 'neutral' | 'weak' | 'none'; detail: string }>;
+  detectedNeed?: string;
+  detectedPain?: string;
+  whyNowReasoning?: string;
+  bestOutreachAngle?: string;
+  authorityLevel?: string;
+  companyQuality?: string;
+
+  timestamp?: string;
+  scannedAt?: string;
+  campaignId?: string;
+  campaignName?: string;
+  intent?: string;
+}
+
+export interface ForumOpportunity {
+  id: string;
+  source: 'HackerNews' | 'Reddit' | 'ProductHunt';
+  title: string;
+  url: string;
+  content: string;
+  author: string;
+  engagement: number;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  relevanceScore: number;
+  reason: string;
+  timestamp: string;
+}
+
+export interface PlatformInsight {
+  platform: string;
+  trend: string;
+  intensity: number;
+  opportunities: string[];
+  threats: string[];
+}
+
+export interface ContentEnginePost {
+  title: string;
+  hook: string;
+  body: string;
+  imagePrompt?: string;
+  tags: string[];
+}
+
+export interface BuyerPersona {
+  name: string;
+  role: string;
+  demographics: string;
+  realWorldQuote?: string;
+  painPoints: string[];
+  goals: string[];
+  whereTheyHangOut: string[];
+  contentTheyConsume: string[];
+}
+
+export interface BuyerPersonaAnalysis {
+  marketOverview: string;
+  personas: BuyerPersona[];
 }

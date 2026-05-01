@@ -7,7 +7,18 @@ import { DistributionView } from './components/DistributionView';
 import { ReconView } from './components/ReconView';
 import { OutreachView } from './components/OutreachView';
 import { ReadinessWidget } from './components/ReadinessWidget';
-import { Rocket, Target, Zap, Layout, Loader2, Globe, Radar, MessageSquarePlus, Menu, Home, ArrowRight } from 'lucide-react';
+import { PersonaView } from './components/PersonaView';
+import { ICPReconView } from './components/ICPReconView';
+import { UnifiedCommandCenter } from './components/UnifiedCommandCenter';
+import { ForumOpportunitiesView } from './components/ForumOpportunitiesView';
+import { ContentEngineView } from './components/ContentEngineView';
+import { PlatformIntelligenceView } from './components/PlatformIntelligenceView';
+import { PipelineView } from './components/PipelineView';
+import { IntelligenceTriage } from './components/IntelligenceTriage';
+import { 
+  Rocket, Target, Zap, Layout, Loader2, Globe, Radar, MessageSquarePlus, 
+  Menu, Home, ArrowRight, ShieldCheck, Activity, Users, Sparkles, Database, ListChecks, GitMerge
+} from 'lucide-react';
 
 function App() {
   const [mode, setMode] = useState<AppMode | 'DASHBOARD'>('DASHBOARD');
@@ -56,13 +67,41 @@ function App() {
     }
   };
 
-  const navItems = [
-    { id: 'DASHBOARD', label: 'Mission Control', icon: <Home size={20} /> },
-    { id: AppMode.STRATEGY, label: 'Strategy Roadmap', icon: <Target size={20} /> },
-    { id: AppMode.RECON, label: 'Competitor Analysis', icon: <Radar size={20} /> },
-    { id: AppMode.ROAST, label: 'Landing Roast', icon: <Layout size={20} /> },
-    { id: AppMode.DISTRIBUTION, label: 'Distribution', icon: <Globe size={20} /> },
-    { id: AppMode.OUTREACH, label: 'Direct Outreach', icon: <MessageSquarePlus size={20} /> },
+  const navGroups = [
+    {
+      title: 'Mission Control',
+      items: [
+        { id: 'DASHBOARD', label: 'Dashboard', icon: <Home size={18} /> },
+        { id: AppMode.ANSWERLY_RADAR, label: 'Unified Radar', icon: <ShieldCheck size={18} /> },
+      ]
+    },
+    {
+      title: 'Growth Ops',
+      items: [
+        { id: AppMode.ICP_RECON, label: 'ICP Recon Pulse', icon: <Activity size={18} /> },
+        { id: AppMode.TRIAGE, label: 'Intelligence Triage', icon: <ListChecks size={18} /> },
+        { id: AppMode.PIPELINE, label: 'Pipeline', icon: <GitMerge size={18} /> },
+        { id: AppMode.FORUM_LEADS, label: 'Forum Intel', icon: <Users size={18} /> },
+        { id: AppMode.PLATFORM_INSIGHTS, label: 'Platform Insights', icon: <Database size={18} /> },
+      ]
+    },
+    {
+      title: 'Founder Suite',
+      items: [
+        { id: AppMode.STRATEGY, label: 'Launch Strategy', icon: <Target size={18} /> },
+        { id: AppMode.RECON, label: 'Competitor Analysis', icon: <Radar size={18} /> },
+        { id: AppMode.PERSONA, label: 'Buyer Persona', icon: <Users size={18} /> },
+        { id: AppMode.ROAST, label: 'Landing Roast', icon: <Layout size={18} /> },
+        { id: AppMode.DISTRIBUTION, label: 'Distribution', icon: <Globe size={18} /> },
+      ]
+    },
+    {
+      title: 'Execution',
+      items: [
+        { id: AppMode.CONTENT_ENGINE, label: 'Content Engine', icon: <Sparkles size={18} /> },
+        { id: AppMode.OUTREACH, label: 'Direct Outreach', icon: <MessageSquarePlus size={18} /> },
+      ]
+    }
   ];
 
   const renderContent = () => {
@@ -70,7 +109,15 @@ function App() {
       case AppMode.ROAST: return <RoastView />;
       case AppMode.DISTRIBUTION: return <DistributionView />;
       case AppMode.RECON: return <ReconView />;
-      case AppMode.OUTREACH: return <OutreachView />;
+      case AppMode.PERSONA: return <PersonaView appName={appName} appDesc={appDesc} category={audience} />;
+      case AppMode.OUTREACH: return <OutreachView appDesc={appDesc} />;
+      case AppMode.ICP_RECON: return <ICPReconView />;
+      case AppMode.ANSWERLY_RADAR: return <UnifiedCommandCenter appDesc={appDesc} />;
+      case AppMode.PIPELINE: return <PipelineView appDesc={appDesc} />;
+      case AppMode.TRIAGE: return <IntelligenceTriage />;
+      case AppMode.FORUM_LEADS: return <ForumOpportunitiesView />;
+      case AppMode.CONTENT_ENGINE: return <ContentEngineView />;
+      case AppMode.PLATFORM_INSIGHTS: return <PlatformIntelligenceView />;
       case AppMode.STRATEGY:
         if (plan) {
           return (
@@ -153,49 +200,75 @@ function App() {
       default:
         return (
           <div className="space-y-8 animate-fade-in">
-             <div className="flex flex-col md:flex-row gap-6 items-center justify-between bg-white p-8 rounded-3xl border border-base-200 shadow-sm">
-                <div>
-                   <h1 className="text-4xl font-display font-bold mb-2 text-brand-dark">Welcome, Founder.</h1>
-                   <p className="opacity-80 max-w-md">Your mission control for user acquisition. Select a tool from the sidebar to begin your campaign.</p>
+             <div className="flex flex-col lg:flex-row gap-6 items-center justify-between bg-gray-900 p-10 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-10 opacity-5 rotate-12">
+                   <Zap size={240} />
                 </div>
-                <div className="flex gap-4">
-                    <button onClick={() => setMode(AppMode.RECON)} className="btn btn-primary text-white"><Radar size={18}/> Start Recon</button>
-                    <button onClick={() => setMode(AppMode.STRATEGY)} className="btn btn-secondary text-white"><Target size={18}/> New Strategy</button>
+                <div className="relative z-10">
+                   <h1 className="text-5xl font-display font-bold mb-4 tracking-tight">Mission <span className="text-primary">Control</span></h1>
+                   <p className="opacity-60 max-w-lg text-lg leading-relaxed">The engine for your first 100 users. Deploy social radar, surgical search dorks, and AI-powered engagement from one dashboard.</p>
+                </div>
+                <div className="flex flex-wrap gap-4 relative z-10">
+                    <button onClick={() => setMode(AppMode.ICP_RECON)} className="btn bg-primary hover:bg-primary/90 border-none text-white px-8 h-14 rounded-2xl shadow-xl shadow-primary/20"><Activity size={20}/> Launch Recon</button>
+                    <button onClick={() => setMode(AppMode.ANSWERLY_RADAR)} className="btn bg-white/10 hover:bg-white/20 border-white/10 text-white px-8 h-14 rounded-2xl backdrop-blur-md"><ShieldCheck size={20}/> View Radar</button>
                 </div>
              </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div 
-                  onClick={() => setMode(AppMode.ROAST)}
-                  className="card bg-base-100 shadow-md hover:shadow-xl transition-all cursor-pointer border border-base-200 hover:border-accent/30"
-                >
-                    <div className="card-body">
-                       <Layout className="text-accent mb-2" size={32} />
-                       <h3 className="card-title">Conversion Roast</h3>
-                       <p className="text-sm opacity-70">Analyze your landing page for conversion killers.</p>
-                    </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <DashboardCard 
+                  onClick={() => setMode(AppMode.ICP_RECON)}
+                  icon={<Activity size={28} className="text-primary" />}
+                  title="ICP Recon Pulse"
+                  desc="Run surgical social searches."
+                  color="blue"
+                />
+                <DashboardCard 
+                  onClick={() => setMode(AppMode.ANSWERLY_RADAR)}
+                  icon={<ShieldCheck size={28} className="text-emerald-500" />}
+                  title="Unified Radar"
+                  desc="Manage leads and engagement."
+                  color="emerald"
+                />
+                <DashboardCard 
+                  onClick={() => setMode(AppMode.FORUM_LEADS)}
+                  icon={<Users size={28} className="text-amber-500" />}
+                  title="Forum Intel"
+                  desc="Find intent in Reddit/HN."
+                  color="amber"
+                />
+                <DashboardCard 
+                  onClick={() => setMode(AppMode.CONTENT_ENGINE)}
+                  icon={<Sparkles size={28} className="text-purple-500" />}
+                  title="Content Engine"
+                  desc="Generate trending content."
+                  color="purple"
+                />
+             </div>
+
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm">
+                   <div className="flex items-center justify-between mb-8">
+                      <div>
+                         <h3 className="text-xl font-bold text-gray-900">Operation Readiness</h3>
+                         <p className="text-sm text-gray-400 mt-1">Foundational tasks for a successful launch</p>
+                      </div>
+                      <ListChecks className="text-gray-200" size={32} />
+                   </div>
+                   <ReadinessWidget />
                 </div>
                 
-                <div 
-                  onClick={() => setMode(AppMode.DISTRIBUTION)}
-                  className="card bg-base-100 shadow-md hover:shadow-xl transition-all cursor-pointer border border-base-200 hover:border-secondary/30"
-                >
-                    <div className="card-body">
-                       <Globe className="text-secondary mb-2" size={32} />
-                       <h3 className="card-title">Distribution Channels</h3>
-                       <p className="text-sm opacity-70">Find high-traffic communities relevant to your niche.</p>
-                    </div>
-                </div>
-
-                <div 
-                  onClick={() => setMode(AppMode.OUTREACH)}
-                  className="card bg-base-100 shadow-md hover:shadow-xl transition-all cursor-pointer border border-base-200 hover:border-primary/30"
-                >
-                    <div className="card-body">
-                       <MessageSquarePlus className="text-primary mb-2" size={32} />
-                       <h3 className="card-title">Cold Outreach</h3>
-                       <p className="text-sm opacity-70">Generate personalized icebreakers for high-value prospects.</p>
-                    </div>
+                <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-8 rounded-[2rem] text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
+                   <div className="relative z-10">
+                      <Target className="mb-4 opacity-50" size={32} />
+                      <h3 className="text-2xl font-bold mb-2">Build Your Roadmap</h3>
+                      <p className="text-white/70 text-sm leading-relaxed">Don't fly blind. Generate an AI strategy tailored for your product's niche and audience.</p>
+                   </div>
+                   <button 
+                     onClick={() => setMode(AppMode.STRATEGY)}
+                     className="mt-8 w-full py-4 bg-white text-blue-700 rounded-2xl font-bold shadow-lg hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                   >
+                      Generate Strategy <ArrowRight size={18} />
+                   </button>
                 </div>
              </div>
           </div>
@@ -240,17 +313,21 @@ function App() {
               </div>
             </div>
 
-            <li className="menu-title opacity-50 uppercase text-xs tracking-wider mb-2 font-semibold">Tools</li>
-            {navItems.map((item) => (
-              <li key={item.id} className="mb-1">
-                <button 
-                  onClick={() => { setMode(item.id as any); if(window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                  className={`flex items-center gap-3 py-3 font-medium rounded-lg ${mode === item.id ? 'active bg-primary text-white' : 'hover:bg-base-200 text-slate-600'}`}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </button>
-              </li>
+            {navGroups.map((group) => (
+              <React.Fragment key={group.title}>
+                <li className="menu-title opacity-40 uppercase text-[10px] tracking-[0.2em] mt-6 mb-2 font-black">{group.title}</li>
+                {group.items.map((item) => (
+                  <li key={item.id} className="mb-0.5">
+                    <button 
+                      onClick={() => { setMode(item.id as any); if(window.innerWidth < 1024) setIsSidebarOpen(false); }}
+                      className={`flex items-center gap-3 py-2.5 font-bold rounded-xl transition-all ${mode === item.id ? 'active bg-gray-900 text-white shadow-lg shadow-gray-200' : 'hover:bg-base-200 text-slate-500'}`}
+                    >
+                      <span className={mode === item.id ? 'text-primary' : 'text-slate-400'}>{item.icon}</span>
+                      <span className="text-sm">{item.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </React.Fragment>
             ))}
           </div>
 
@@ -270,5 +347,20 @@ function App() {
     </div>
   );
 }
+
+const DashboardCard = ({ onClick, icon, title, desc, color }: any) => (
+  <div 
+    onClick={onClick}
+    className={`group p-6 rounded-[2rem] bg-white border border-gray-100 shadow-sm hover:shadow-xl hover:border-${color}-200 transition-all cursor-pointer flex flex-col gap-4`}
+  >
+      <div className={`w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center transition-all group-hover:scale-110 group-hover:rotate-3`}>
+         {icon}
+      </div>
+      <div>
+         <h3 className="font-bold text-gray-900">{title}</h3>
+         <p className="text-xs text-gray-400 mt-1 leading-relaxed">{desc}</p>
+      </div>
+  </div>
+);
 
 export default App;
