@@ -8,6 +8,10 @@ importScripts('LeadIntelligenceEngine.js');
 
 const LOG_TAG = "[Answerly]";
 
+// Global state for long-running processes
+let currentReconTimeout = null;
+let activeShadowWindowId = null;
+
 // 1. Initialize Alarms
 chrome.runtime.onInstalled.addListener(() => {
   console.log(LOG_TAG, "Engine Initialized.");
@@ -211,45 +215,96 @@ async function processEngagementQueue() {
     }
 }
 
-// 2. Listen for Manual Sync from Popup
+// 2. Main Message Listener Hub
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'forceCheck') {
-    executeFullSweep().then(result => {
-        sendResponse({ success: true, count: result?.count || 0 });
-    }).catch(err => {
-        sendResponse({ success: false, error: err.message });
-    });
-    return true; 
-  }
-  if (request.action === 'resetEngine') {
-    chrome.storage.local.set({ answerly_backoff_until: 0, answerly_engine_pulse: null }, () => {
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-  if (request.action === 'performReconSearch') {
-    console.log(LOG_TAG, "Received Recon Pulse! Executing Shadow Tab Search...", request.keywords);
-    // Pass the entire request object so executeReconSweep can see request.platforms
-    executeReconSweep(request).then((stats) => {
-        sendResponse({ success: true, platformStatus: stats });
-    }).catch(err => {
-        console.error(LOG_TAG, "Recon Sweep Error:", err);
-        sendResponse({ success: false, error: err.message, stack: err.stack });
-    });
-    return true;
-  }
-  if (request.action === 'QUEUE_FOR_ENGAGEMENT') {
-    console.log(LOG_TAG, "[ENGAGE] Queued:", request.lead?.url);
-    chrome.storage.local.get(['answerly_engagement_queue'], (result) => {
-        const queue = result.answerly_engagement_queue || [];
-        queue.push(request.lead);
-        chrome.storage.local.set({ answerly_engagement_queue: queue }, () => {
-            processEngagementQueue();
+    console.log(LOG_TAG, "Message received:", request.action);
+
+    if (request.action === 'forceCheck') {
+        executeFullSweep().then(result => {
+            sendResponse({ success: true, count: result?.count || 0 });
+        }).catch(err => {
+            sendResponse({ success: false, error: err.message });
         });
-    });
-    sendResponse({ queued: true });
-    return true;
-  }
+        return true; 
+    }
+
+    if (request.action === 'resetEngine') {
+        chrome.storage.local.set({ answerly_backoff_until: 0, answerly_engine_pulse: null }, () => {
+            sendResponse({ success: true });
+        });
+        return true;
+    }
+
+    if (request.action === 'performReconSearch') {
+        console.log(LOG_TAG, "Received Recon Pulse! Queueing mission...", request.keywords?.length);
+        const keywords = request.keywords || [];
+        const campaign = request.campaign || null;
+        
+        chrome.storage.local.get(['keyword_stats'], (res) => {
+            const stats = res.keyword_stats || {};
+            keywords.forEach(kw => {
+                const key = `${kw.platform}__${kw.query}`;
+                stats[key] = { 
+                    query: kw.query, 
+                    platform: kw.platform, 
+                    status: 'queued', 
+                    found: 0, 
+                    hot: 0, 
+                    warm: 0 
+                };
+            });
+            chrome.storage.local.set({ 
+                keyword_stats: stats,
+                recon_queue: keywords,
+                active_campaign: campaign,
+                stop_recon_mission: false
+            }, () => {
+                chrome.alarms.create("stealthCheck", { periodInMinutes: 15 });
+                chrome.alarms.create("queueProcessor", { periodInMinutes: 5 });
+                console.log(LOG_TAG, "Mission initialized. Starting first keyword...");
+                processNextReconKeyword();
+                sendResponse({ success: true });
+            });
+        });
+        return true;
+    }
+
+    if (request.action === 'STOP_RECON_MISSION') {
+        console.log(LOG_TAG, "Emergency Stop Signal Received!");
+        if (currentReconTimeout) {
+            clearTimeout(currentReconTimeout);
+            currentReconTimeout = null;
+        }
+        if (activeShadowWindowId) {
+            try { chrome.windows.remove(activeShadowWindowId); } catch(e) {}
+            activeShadowWindowId = null;
+        }
+        chrome.alarms.clear("queueProcessor");
+        chrome.alarms.clear("stealthCheck");
+
+        chrome.storage.local.set({ 
+            stop_recon_mission: true,
+            recon_queue: [],
+            active_campaign: null,
+            answerly_engine_pulse: { msg: "Mission Halted Manually", time: Date.now() }
+        }, () => {
+            sendResponse({ success: true, message: "Mission halted" });
+        });
+        return true;
+    }
+
+    if (request.action === 'QUEUE_FOR_ENGAGEMENT') {
+        console.log(LOG_TAG, "[ENGAGE] Queued:", request.lead?.url);
+        chrome.storage.local.get(['answerly_engagement_queue'], (result) => {
+            const queue = result.answerly_engagement_queue || [];
+            queue.push(request.lead);
+            chrome.storage.local.set({ answerly_engagement_queue: queue }, () => {
+                processEngagementQueue();
+            });
+        });
+        sendResponse({ queued: true });
+        return true;
+    }
 });
 
 // 2.5 Full Sweep (For manual triggers)
@@ -421,7 +476,8 @@ async function pollXWithShadowTab(target) {
                                         return { 
                                             id_str: tid, 
                                             full_text: text ? text.innerText : "New post found",
-                                            post_url: href.startsWith('http') ? href : `https://x.com${href}`
+                                            post_url: href.startsWith('http') ? href : `https://x.com${href}`,
+                                            interactionType: text ? 'Post' : 'Comment'
                                         };
                                     }).filter(Boolean);
                                 }
@@ -445,7 +501,7 @@ async function pollXWithShadowTab(target) {
             if (await isNewItem(`ans_x_${tweet.id_str}`)) {
                 foundNew++;
                 const postUrl = tweet.post_url || `https://x.com/${username}/status/${tweet.id_str}`;
-                saveResult('X', tweet.full_text, `https://x.com/${username}`, target.label, '', postUrl);
+                saveResult('X', tweet.full_text, `https://x.com/${username}`, target.label, '', postUrl, null, null, null, tweet.interactionType);
             }
         }
         return foundNew;
@@ -506,7 +562,8 @@ async function pollLinkedIn(target) {
                         return {
                             id: urn.split(':').pop(),
                             text: textEl ? textEl.innerText.substring(0, 200) : "New LinkedIn Post",
-                            url: `https://www.linkedin.com/feed/update/${urn}`
+                            url: `https://www.linkedin.com/feed/update/${urn}`,
+                            interactionType: textEl?.innerText.length < 150 ? 'Comment' : 'Post'
                         };
                     }).filter(Boolean);
                 }
@@ -526,7 +583,7 @@ async function pollLinkedIn(target) {
         for (const post of posts) {
             if (await isNewItem(`ans_li_${post.id}`)) {
                 foundNew++;
-                saveResult('LinkedIn', post.text, profileUrl, target.label, '', post.url);
+                saveResult('LinkedIn', post.text, profileUrl, target.label, '', post.url, null, null, null, post.interactionType);
             }
         }
         return foundNew;
@@ -592,7 +649,8 @@ async function pollReddit(target) {
                             return {
                                 id: link.getAttribute('href').split('/comments/')[1]?.split('/')[0],
                                 title: title ? title.innerText : "New Reddit Post",
-                                url: link.href.startsWith('http') ? link.href : `https://www.reddit.com${link.getAttribute('href')}`
+                                url: link.href.startsWith('http') ? link.href : `https://www.reddit.com${link.getAttribute('href')}`,
+                                interactionType: title?.innerText.length < 100 ? 'Comment' : 'Post'
                             };
                         }).filter(Boolean);
                     }
@@ -610,7 +668,8 @@ async function pollReddit(target) {
                             id: id || permalink.split('/comments/')[1]?.split('/')[0],
                             title: title || "New Reddit Post",
                             body,
-                            url: `https://www.reddit.com${permalink}`
+                            url: `https://www.reddit.com${permalink}`,
+                            interactionType: (title?.length + body?.length) < 150 ? 'Comment' : 'Post'
                         };
                     }).filter(Boolean);
                 }
@@ -631,7 +690,7 @@ async function pollReddit(target) {
             if (await isNewItem(`ans_rd_${post.id}`)) {
                 foundNew++;
                 // Store title as 'text' for extension popup, full body as 'body' for web app
-                saveResult('Reddit', post.title, targetUrl, target.label, post.body || '', post.url);
+                saveResult('Reddit', post.title, targetUrl, target.label, post.body || '', post.url, null, null, null, post.interactionType);
             }
         }
         return foundNew;
@@ -731,7 +790,7 @@ async function isNewItem(id) {
   return true;
 }
 
-async function saveResult(platform, text, url, creator, body = '', postUrl = '', campaignId = null, campaignName = null, intent = null) {
+async function saveResult(platform, text, url, creator, body = '', postUrl = '', campaignId = null, campaignName = null, intent = null, interactionType = 'Post') {
     // V4: Conflict Detection in Triage
     const conflictKeywords = ['agency', 'expert', 'consultant', 'freelancer', 'coach', 'guru', 'hire', 'service', 'solution', 'partner', 'specialist', 'advisor', 'mentor', 'trainer', 'firm', 'group'];
     const lowerText = (creator + ' ' + (text || '')).toLowerCase();
@@ -761,7 +820,8 @@ async function saveResult(platform, text, url, creator, body = '', postUrl = '',
         uuid: 'ans_' + Date.now() + Math.random(),
         campaignId,
         campaignName,
-        intent
+        intent,
+        interactionType
     });
     // Limit to 100 items for better triage visibility
     await chrome.storage.local.set({ answerly_history: history.slice(0, 100) });
@@ -801,12 +861,19 @@ async function executeReconSweep(request) {
     };
 
     try {
+        const depth = campaign?.reconDepth || 'surface';
+        
         if (xKeywords.length > 0) {
             const xRes = await runPipelineSweepX(xKeywords, campaign);
             stats.platforms['X'] = xRes;
             stats.intelligence.buyNow += (xRes.buyNow || 0);
             stats.intelligence.warm += (xRes.warm || 0);
             stats.intelligence.nurture += (xRes.nurture || 0);
+            
+            if (depth !== 'surface' && xRes.postsToDeepScan?.length > 0) {
+                await setPulse(`X Deep Scan: Analyzing ${xRes.postsToDeepScan.length} threads for relevant commenters...`);
+                await performEngagementDeepScan('X', xRes.postsToDeepScan, campaign);
+            }
         }
         
         if (liKeywords.length > 0) {
@@ -815,6 +882,11 @@ async function executeReconSweep(request) {
             stats.intelligence.buyNow += (liRes.buyNow || 0);
             stats.intelligence.warm += (liRes.warm || 0);
             stats.intelligence.nurture += (liRes.nurture || 0);
+
+            if (depth !== 'surface' && liRes.postsToDeepScan?.length > 0) {
+                await setPulse(`LinkedIn Deep Scan: Analyzing ${liRes.postsToDeepScan.length} threads...`);
+                await performEngagementDeepScan('LinkedIn', liRes.postsToDeepScan, campaign);
+            }
         }
         
         if (rdKeywords.length > 0) {
@@ -823,6 +895,11 @@ async function executeReconSweep(request) {
             stats.intelligence.buyNow += (rdRes.buyNow || 0);
             stats.intelligence.warm += (rdRes.warm || 0);
             stats.intelligence.nurture += (rdRes.nurture || 0);
+
+            if (depth !== 'surface' && rdRes.postsToDeepScan?.length > 0) {
+                await setPulse(`Reddit Deep Scan: Analyzing ${rdRes.postsToDeepScan.length} threads...`);
+                await performEngagementDeepScan('Reddit', rdRes.postsToDeepScan, campaign);
+            }
         }
     } catch (error) {
         console.error(LOG_TAG, "Sweep Error:", error);
@@ -833,12 +910,16 @@ async function executeReconSweep(request) {
     return stats;
 }
 
-async function savePipelineLead(platform, profileUrl, profileName, keyword, reason, postText = '', role = '', postUrl = '', campaign = null) {
+async function savePipelineLead(platform, profileUrl, profileName, keyword, reason, postText = '', role = '', postUrl = '', campaign = null, interactionType = 'Post', options = {}) {
     try {
         // V5: Deterministic Intelligence Scoring (18-Layer Pipeline)
         const intel = typeof processLeadIntelligence === 'function' 
             ? processLeadIntelligence({ postText, text: postText, name: profileName, role }, campaign)
             : { score: 50, tier: 'Nurture', signals: [] };
+
+        if (options.scoreOnly) {
+            return { success: false, score: intel.score, tier: intel.tier, signals: intel.signals };
+        }
 
         const res = await chrome.storage.local.get(['pipeline_leads', 'disqualified_signals']);
         let leads = res.pipeline_leads || [];
@@ -857,19 +938,26 @@ async function savePipelineLead(platform, profileUrl, profileName, keyword, reas
             return false;
         }
 
-        const exists = leads.some(l => l && l.url === profileUrl && l.tags && l.tags.includes(keyword));
-        if (exists) return false;
-
         // Ensure we NEVER fall back to profile URL if a post was intended
-        const finalPostUrl = (postUrl && postUrl.includes('/status/') || postUrl.includes('/update/') || postUrl.includes('/comments/')) 
+        const finalPostUrl = (postUrl && (postUrl.includes('/status/') || postUrl.includes('/update/') || postUrl.includes('/comments/'))) 
             ? postUrl 
             : (postUrl || profileUrl);
+
+        // V5: Multi-Signal Deduplication (Per-Campaign)
+        // A lead is a duplicate only if found in the SAME campaign with the SAME content
+        const campaignId = campaign?.id || 'default';
+        const exists = leads.some(l => l && 
+            (l.postUrl === finalPostUrl || (l.url === profileUrl && l.interactionType === interactionType)) && 
+            l.campaignId === campaignId
+        );
+        if (exists) return { success: false, reason: 'Duplicate' };
 
         leads.unshift({
             url: profileUrl,
             name: profileName || profileUrl.split('/').pop(),
             role: role || '',
-            relevance: intel.score, // Use deterministic score
+            campaignId: campaignId,
+            relevance: intel.score,
             intelligenceScore: intel.score,
             intelligenceTier: intel.tier,
             intelligenceSignals: intel.signals,
@@ -880,7 +968,8 @@ async function savePipelineLead(platform, profileUrl, profileName, keyword, reas
             tags: [keyword, platform],
             status: 'pending_verification', // V5: Intelligence Triage Required
             scannedAt: new Date().toISOString(),
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            interactionType
         });
         
         await chrome.storage.local.set({ pipeline_leads: leads.slice(0, 200) });
@@ -892,41 +981,71 @@ async function savePipelineLead(platform, profileUrl, profileName, keyword, reas
 }
 
 async function runPipelineSweepX(keywords, campaign = null) {
+    console.log(LOG_TAG, `[X Sweep] reconDepth="${campaign?.reconDepth}", keywords=${keywords.length}`);
     let totalFound = 0;
     let buyNow = 0;
     let warm = 0;
     let nurture = 0;
     let shadowWindow = null;
+
     try {
         shadowWindow = await chrome.windows.create({ 
             url: 'https://x.com', 
             type: 'popup', 
             state: 'normal', 
             focused: false,
-            width: 500,
-            height: 600,
-            left: 150,
-            top: 150
+            // Biometric Jitter: Randomize window size and position
+            width: 500 + Math.floor(Math.random() * 100),
+            height: 600 + Math.floor(Math.random() * 100),
+            left: 150 + Math.floor(Math.random() * 50),
+            top: 150 + Math.floor(Math.random() * 50)
         });
         
         const tabId = shadowWindow.tabs?.[0]?.id || (await chrome.tabs.query({ windowId: shadowWindow.id }))[0]?.id;
         if (!tabId) throw new Error("Shadow tab initialization failed.");
         
-        // Wait for base page to load before updates
-        await new Promise(r => setTimeout(r, 2000));
+        // Anti-block delay
+        await new Promise(r => setTimeout(r, 4000));
 
-        for (const kw of keywords) {
-            console.log(LOG_TAG, `X Pipeline: Searching "${kw.query}"`);
-            await chrome.tabs.update(tabId, { url: `https://x.com/search?q=${encodeURIComponent(kw.query)}&f=live` });
+        const sessionKeywords = keywords.slice(0, 15);
+        let keywordIndex = 0;
+
+        for (const kw of sessionKeywords) {
+            keywordIndex++;
+            console.log(LOG_TAG, `X Pipeline [${keywordIndex}/${sessionKeywords.length}]: Searching "${kw.query}"`);
             
+            // Stats init
+            const kwKey = `X__${kw.query}`;
+            const statsRes = await chrome.storage.local.get(['keyword_stats']);
+            const kwStats = statsRes.keyword_stats || {};
+            kwStats[kwKey] = { query: kw.query, platform: 'X', status: 'running', startedAt: new Date().toISOString(), found: 0, hot: 0, warm: 0 };
+            await chrome.storage.local.set({ keyword_stats: kwStats });
+
+            const monthAgo = new Date();
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+            const dateStr = monthAgo.toISOString().split('T')[0];
+            const filteredQuery = kw.query + ` since:${dateStr}`;
+
+            await chrome.tabs.update(tabId, { url: `https://x.com/search?q=${encodeURIComponent(filteredQuery)}&f=live` });
+            
+            let kwFound = 0;
+            let kwHot = 0;
+            let kwWarm = 0;
             let profiles = [];
+
             for (let i = 0; i < 15; i++) {
-                await setPulse(`X Pipeline: "${kw.query}" (${i}s)...`, { found: totalFound, scanned: totalFound + (i * 1) }); // Simulated scanned increase
+                await setPulse(`X Pipeline: "${kw.query}" (${i}s)...`, { found: totalFound, scanned: totalFound + (i * 1) });
                 
                 const results = await chrome.scripting.executeScript({
                     target: { tabId },
                     func: (query) => {
                         try {
+                            // SAFETY: Only scrape if we are actually on a search result page
+                            if (!window.location.href.includes('/search')) {
+                                console.log("Answerly: Not on search page yet, skipping scrape...");
+                                return [];
+                            }
+
                             const tweetElements = document.querySelectorAll('[data-testid="tweet"]');
                             if (tweetElements.length > 0) {
                                 return Array.from(tweetElements).map(t => {
@@ -936,12 +1055,9 @@ async function runPipelineSweepX(keywords, campaign = null) {
                                     const username = profileLink.getAttribute('href').replace('/', '');
                                     const displayNameEl = t.querySelector('[data-testid="User-Name"] span');
                                     const displayName = displayNameEl ? displayNameEl.innerText : username;
-                                    const isRetweet = t.innerText.includes('Retweeted');
                                     const tweetTextEl = t.querySelector('[data-testid="tweetText"]');
                                     const postText = tweetTextEl ? tweetTextEl.innerText : "";
 
-                                    // HARDENED Direct Post Extraction (V5)
-                                    // X status links follow the pattern: /username/status/123456789
                                     const allLinks = Array.from(t.querySelectorAll('a[href*="/status/"]'));
                                     const statusLink = allLinks.find(a => {
                                         const href = a.getAttribute('href') || '';
@@ -952,38 +1068,25 @@ async function runPipelineSweepX(keywords, campaign = null) {
                                     if (statusLink) {
                                         const href = statusLink.getAttribute('href');
                                         postUrl = href.startsWith('http') ? href : `https://x.com${href}`;
-                                    } else {
-                                        // Try time element specifically
-                                        const timeA = t.querySelector('time')?.closest('a');
-                                        if (timeA) {
-                                            const href = timeA.getAttribute('href');
-                                            postUrl = href.startsWith('http') ? href : `https://x.com${href}`;
-                                        }
                                     }
                                     
-                                    // V5: High-Fidelity Signal Extraction
-                                    const bioEl = t.querySelector('[data-testid="User-Name"]')?.parentElement?.parentElement?.querySelector('[data-testid="tweetText"]'); // Usually below
                                     const timeEl = t.querySelector('time');
                                     const timestamp = timeEl ? timeEl.getAttribute('datetime') : new Date().toISOString();
-                                    
-                                    // Engagement metrics
-                                    const replyEl = t.querySelector('[data-testid="reply"]');
-                                    const replies = replyEl ? parseInt(replyEl.innerText) || 0 : 0;
                                     
                                     return { 
                                         url: `https://x.com/${username}`, 
                                         name: username,
                                         role: displayName !== username ? displayName : '',
-                                        bio: '', // Bio requires profile hover or navigation, leaving for next layer
-                                        reason: isRetweet ? `Retweeted a post about "${query}"` : `Posted about "${query}"`,
-                                        postText: postText,
-                                        postUrl: postUrl,
-                                        timestamp: timestamp,
-                                        engagement: { replies }
+                                        reason: `Posted about "${query}"`,
+                                        postText,
+                                        postUrl,
+                                        timestamp,
+                                        platform: 'X'
                                     };
                                 }).filter(Boolean);
                             }
-                        } catch (e) { return []; }
+                        } catch (e) {}
+                        return [];
                     },
                     args: [kw.query]
                 });
@@ -995,16 +1098,76 @@ async function runPipelineSweepX(keywords, campaign = null) {
 
             if (profiles.length > 0) {
                 for (const p of profiles) {
-                    const saved = await savePipelineLead('X', p.url, p.name, kw.query, p.reason, p.postText, p.role, p.postUrl, campaign);
-                    await saveResult('X', p.postText || p.reason, p.url, p.name, '', p.postUrl, kw.campaignId, kw.campaignName, kw.intent);
-                    if (saved.success) {
-                        totalFound++;
-                        if (saved.tier === 'Buy Now') buyNow++;
-                        else if (saved.tier === 'Warm Opportunity') warm++;
-                        else nurture++;
+                    const reconDepth = campaign?.reconDepth || 'surface';
+                    let saved = { success: false };
+
+                    // Only save the main Post as a Lead if we are in 'surface' mode
+                    if (reconDepth === 'surface') {
+                        saved = await savePipelineLead('X', p.url, p.name, kw.query, p.reason, p.postText, p.role, p.postUrl, campaign, 'Post');
+                    } else {
+                        // In deep modes, we still "process" it for stats/history but don't commit to Pipeline yet
+                        // We will save commenters later in the Deep Scan phase
+                        saved = { success: true, tier: 'Nurture' }; 
                     }
+
+                    if (saved && saved.success) {
+                        totalFound++;
+                        kwFound++;
+                        if (saved.tier === 'Buy Now') { buyNow++; kwHot++; }
+                        else if (saved.tier === 'Warm Opportunity') { warm++; kwWarm++; }
+                        else nurture++;
+                        
+                        // LIVE UPDATE: Persist stats immediately
+                        const liveStatsRes = await chrome.storage.local.get(['keyword_stats']);
+                        const liveStats = liveStatsRes.keyword_stats || {};
+                        liveStats[kwKey] = { ...liveStats[kwKey], found: kwFound, hot: kwHot, warm: kwWarm };
+                        await chrome.storage.local.set({ keyword_stats: liveStats });
+                    }
+                    
+                    // Always save the result for history, but LEADS are selective
+                    await saveResult('X', p.postText || p.reason, p.url, p.name, '', p.postUrl, kw.campaignId, kw.campaignName, kw.intent);
+                }
+
+                // Prepare for Deep Scan if enabled
+                const reconDepth = campaign?.reconDepth || 'surface';
+                if (reconDepth !== 'surface') {
+                    const statusPosts = profiles.filter(p => p.postUrl && p.postUrl.includes('/status/'));
+                    postsToDeepScan.push(...statusPosts.map(p => ({ url: p.postUrl, platform: 'X', text: p.postText })));
                 }
             }
+                // ──────────────────────────────────────────────────────────────
+            }
+
+            // ─── PERSIST PER-KEYWORD STATS ───
+            const finalStatsRes = await chrome.storage.local.get(['keyword_stats']);
+            const finalStats = finalStatsRes.keyword_stats || {};
+            finalStats[kwKey] = {
+                ...finalStats[kwKey],
+                status: 'done',
+                completedAt: new Date().toISOString(),
+                found: kwFound,
+                hot: kwHot,
+                warm: kwWarm
+            };
+            await chrome.storage.local.set({ keyword_stats: finalStats });
+
+            // ─── ANTI-BLOCK: Human-like inter-keyword delay ───────────────────
+            // Gaussian delay: avg 40s, std 15s — mimics human reading between searches
+            const minDelay = 25000;
+            const maxDelay = 75000;
+            const gaussianDelay = Math.min(maxDelay, Math.max(minDelay,
+                (Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random())) * 15000 + 40000
+            ));
+            await setPulse(`X: Cooling down (${Math.round(gaussianDelay / 1000)}s)...`);
+            await new Promise(r => setTimeout(r, gaussianDelay));
+
+            // Session cool-down every 8 keywords (mimics human break)
+            if (keywordIndex % 8 === 0 && keywordIndex < sessionKeywords.length) {
+                const cooldown = 120000 + Math.random() * 120000; // 2-4 min
+                await setPulse(`X: Session break (${Math.round(cooldown / 60000)} min). Resuming shortly...`);
+                await new Promise(r => setTimeout(r, cooldown));
+            }
+            // ─────────────────────────────────────────────────────────────────
         }
     } finally {
         if (shadowWindow) try { await chrome.windows.remove(shadowWindow.id); } catch(e) {}
@@ -1018,6 +1181,7 @@ async function runPipelineSweepLinkedIn(keywords, campaign = null) {
     let warm = 0;
     let nurture = 0;
     let shadowWindow = null;
+    let postsToDeepScan = [];
     try {
         shadowWindow = await chrome.windows.create({ 
             url: 'https://www.linkedin.com', 
@@ -1035,7 +1199,8 @@ async function runPipelineSweepLinkedIn(keywords, campaign = null) {
 
         for (const kw of keywords) {
             console.log(LOG_TAG, `LinkedIn Pipeline: Searching "${kw.query}"`);
-            await chrome.tabs.update(tabId, { url: `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(kw.query)}` });
+            // Add LinkedIn 1-Month Recency Constraint (f_TPR=r2592000 is past 30 days)
+            await chrome.tabs.update(tabId, { url: `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(kw.query)}&f_TPR=r2592000` });
             
             let profiles = [];
             for (let i = 0; i < 15; i++) {
@@ -1044,6 +1209,9 @@ async function runPipelineSweepLinkedIn(keywords, campaign = null) {
                 const results = await chrome.scripting.executeScript({
                     target: { tabId },
                     func: (query) => {
+                        // SAFETY: Only scrape if we are on a search result page
+                        if (!window.location.href.includes('/search')) return [];
+                        
                         window.scrollTo(0, 1000);
                         const elements = document.querySelectorAll('.feed-shared-update-v2, .search-result__wrapper, .entity-result');
                         return Array.from(elements).map(el => {
@@ -1066,25 +1234,23 @@ async function runPipelineSweepLinkedIn(keywords, campaign = null) {
                             const textNode = el.querySelector('.update-components-text, .feed-shared-text, .search-result__snippet, .entity-result__content-summary');
                             const postText = textNode ? textNode.innerText : '';
                             
-                            // HARDENED LinkedIn Post Extraction (V5)
                             const allLinks = Array.from(el.querySelectorAll('a'));
                             const postLink = allLinks.find(a => 
                                 a.href.includes('/feed/update/urn:li:activity:') || 
                                 a.href.includes('/activity/')
                             );
                             
-                            let postUrl = actorLink.href.split('?')[0];
-                            if (postLink) {
-                                postUrl = postLink.href;
-                            }
+                            // SIMULATED CLICK: Expand LinkedIn Comments in-place
+                            const commentBtn = el.querySelector('button[aria-label*="comment"], .comment-button');
+                            if (commentBtn) commentBtn.click();
 
                             return {
                                 url: actorLink.href.split('?')[0],
                                 name: name,
-                                role: role,
+                                  role: role,
                                 reason: reason,
                                 postText: postText,
-                                postUrl: postUrl
+                                postUrl: postLink ? postLink.href : actorLink.href.split('?')[0]
                             };
                         }).filter(Boolean);
                     },
@@ -1097,14 +1263,38 @@ async function runPipelineSweepLinkedIn(keywords, campaign = null) {
             }
 
             if (profiles.length > 0) {
+                const depth = campaign?.reconDepth || 'surface';
+                const isEngagementMode = depth === 'engagement';
+
                 for (const p of profiles) {
-                    const saved = await savePipelineLead('LinkedIn', p.url, p.name, kw.query, p.reason, p.postText, p.role, p.postUrl, campaign);
+                    const scoreRes = await savePipelineLead('LinkedIn', p.url, p.name, kw.query, p.reason, p.postText, p.role, p.postUrl, campaign, 'Post', { scoreOnly: isEngagementMode });
+                    
+                    let saved = scoreRes;
+                    if (isEngagementMode && scoreRes.tier === 'Buy Now') {
+                        saved = await savePipelineLead('LinkedIn', p.url, p.name, kw.query, p.reason, p.postText, p.role, p.postUrl, campaign, 'Post');
+                    }
+
                     await saveResult('LinkedIn', p.postText || p.reason, p.url, p.name, '', p.postUrl, kw.campaignId, kw.campaignName, kw.intent);
-                    if (saved.success) {
+                    
+                    const canProceed = saved.success || (isEngagementMode && scoreRes.tier !== 'IGNORE');
+                    if (canProceed) {
                         totalFound++;
-                        if (saved.tier === 'Buy Now') buyNow++;
-                        else if (saved.tier === 'Warm Opportunity') warm++;
+                        kwFound++;
+                        const shouldDeepScan = (scoreRes.tier === 'Buy Now') || (isEngagementMode && scoreRes.tier !== 'IGNORE');
+
+                        if (shouldDeepScan) {
+                            if (saved.tier === 'Buy Now') { buyNow++; kwHot++; } else { warm++; kwWarm++; }
+                            postsToDeepScan.push({ url: p.postUrl, platform: 'LinkedIn' });
+                        }
+                        else if (saved.tier === 'Warm Opportunity') { warm++; kwWarm++; }
                         else nurture++;
+
+                        // LIVE UPDATE: Persist stats immediately for dashboard
+                        const liveStatsRes = await chrome.storage.local.get(['keyword_stats']);
+                        const liveStats = liveStatsRes.keyword_stats || {};
+                        const kwKey = `LinkedIn__${kw.query}`;
+                        liveStats[kwKey] = { ...liveStats[kwKey], found: kwFound, hot: kwHot, warm: kwWarm };
+                        await chrome.storage.local.set({ keyword_stats: liveStats });
                     }
                 }
             }
@@ -1112,7 +1302,120 @@ async function runPipelineSweepLinkedIn(keywords, campaign = null) {
     } finally {
         if (shadowWindow) try { await chrome.windows.remove(shadowWindow.id); } catch(e) {}
     }
-    return { found: totalFound, scanned: keywords.length * 10, status: 'complete', buyNow, warm, nurture };
+    return { found: totalFound, scanned: keywords.length * 10, status: 'complete', buyNow, warm, nurture, postsToDeepScan: postsToDeepScan.slice(0, 5) };
+}
+
+/**
+ * Deep Engagement Agent
+ * Click into threads to find commenters and reactors
+ */
+async function performEngagementDeepScan(platform, targets, campaign) {
+    const depth = campaign.reconDepth || 'deep';
+    let shadowWindow = null;
+    try {
+        shadowWindow = await chrome.windows.create({ 
+            url: 'about:blank', 
+            type: 'popup', 
+            state: 'normal', 
+            focused: false,
+            width: 500,
+            height: 600
+        });
+        const tabId = shadowWindow.tabs?.[0]?.id || (await chrome.tabs.query({ windowId: shadowWindow.id }))[0]?.id;
+        
+        for (const target of targets) {
+            const reconDepth = campaign.reconDepth || 'deep';
+            await setPulse(`Deep Recon: Entering ${platform} thread...`);
+            await chrome.tabs.update(tabId, { url: target.url });
+            
+            // Jittered hydration delay (5-9s)
+            await new Promise(r => setTimeout(r, 5000 + Math.random() * 4000)); 
+
+            // 1. Comment Mining
+            const commenters = await chrome.scripting.executeScript({
+                target: { tabId },
+                func: async (plt) => {
+                    // AGGRESSIVE & RANDOMIZED HYDRATION
+                    const scrolls = plt === 'X' ? 10 : 5;
+                    for(let i=0; i < scrolls; i++) {
+                        // Randomized scroll distance (1200-1800px)
+                        const dist = 1200 + Math.random() * 600;
+                        window.scrollBy(0, dist);
+                        // Randomized pause (1-2s) mimics human reading
+                        await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+                    }
+                    
+                    let items = [];
+                    if (plt === 'X') {
+                        // Better X selector: Skip the first tweet (main post)
+                        const allTweets = Array.from(document.querySelectorAll('[data-testid="tweet"]'));
+                        if (allTweets.length <= 1) return [];
+                        
+                        items = allTweets.slice(1).map(r => { 
+                            const userLink = r.querySelector('[data-testid="User-Name"] a');
+                            const tweetText = r.querySelector('[data-testid="tweetText"]');
+                            const timeLink = r.querySelector('time')?.parentElement;
+                            if (!userLink) return null;
+                            
+                            const nameBlock = userLink.innerText.split('\n');
+                            const displayName = nameBlock[0].trim();
+                            const handle = nameBlock[1]?.replace('@', '').trim() || '';
+                            
+                            return {
+                                url: `https://x.com/${handle}`,
+                                name: displayName,
+                                text: tweetText ? tweetText.innerText : 'Active in conversation',
+                                interactionType: 'Comment',
+                                commentUrl: (timeLink && timeLink.href) ? timeLink.href : userLink.href 
+                            };
+                        });
+                    } else if (plt === 'LinkedIn') {
+                        const comments = document.querySelectorAll('.comments-comment-item');
+                        items = Array.from(comments).map(c => {
+                            const link = c.querySelector('.comments-post-meta__actor-link');
+                            const text = c.querySelector('.comments-comment-item__main-content');
+                            const headline = c.querySelector('.comments-post-meta__headline');
+                            if (!link) return null;
+                            return {
+                                url: link.href.split('?')[0],
+                                name: link.innerText.split('\n')[0].trim(),
+                                role: headline ? headline.innerText.trim() : '',
+                                text: text ? text.innerText.trim() : 'Commented on LinkedIn',
+                                interactionType: 'Comment'
+                            };
+                        });
+                    }
+                    return items.filter(Boolean);
+                },
+                args: [platform]
+            });
+
+            for (const c of (commenters[0]?.result || [])) {
+                // Fixed: Pass role/headline to intelligence engine so it can perform Identity-Pass
+                const intel = typeof processLeadIntelligence === 'function' 
+                    ? processLeadIntelligence({ postText: c.text, text: c.text, name: c.name, role: c.role }, campaign)
+                    : { score: 50, tier: 'Warm Opportunity' };
+
+                if (intel.tier !== 'IGNORE') {
+                    const leadUrl = c.commentUrl || c.url;
+                    await savePipelineLead(platform, leadUrl, c.name, 'Comment Engagement', 
+                        `Commented on thread: "${(target.text || '').substring(0, 50)}..."`, 
+                        c.text, c.role || '', target.url, campaign, 'Comment');
+                }
+            }
+
+            // 2. Reactor Extraction (Atomic only)
+            if (depth === 'atomic') {
+                await setPulse(`Atomic Recon: Extracting reactors...`);
+                // Note: Actual clicking into likes requires complex biometric sequences
+                // For now, we capture visible reactors from the "Reactions" summary if possible
+                // or use platform specific modals.
+                // TODO: Full modal click-through in next version
+            }
+        }
+    } finally {
+        if (shadowWindow) try { await chrome.windows.remove(shadowWindow.id); } catch(e) {}
+    }
 }
 
 async function runPipelineSweepReddit(keywords, campaign = null) {
@@ -1138,7 +1441,19 @@ async function runPipelineSweepReddit(keywords, campaign = null) {
 
         for (const kw of keywords) {
             console.log(LOG_TAG, `Reddit Pipeline: Searching "${kw.query}"`);
-            await chrome.tabs.update(tabId, { url: `https://www.reddit.com/search/?q=${encodeURIComponent(kw.query)}&sort=new` });
+            
+            const kwKey = `Reddit__${kw.query}`;
+            const statsRes = await chrome.storage.local.get(['keyword_stats']);
+            const kwStats = statsRes.keyword_stats || {};
+            kwStats[kwKey] = { query: kw.query, platform: 'Reddit', status: 'running', startedAt: new Date().toISOString(), found: 0, hot: 0, warm: 0 };
+            await chrome.storage.local.set({ keyword_stats: kwStats });
+
+            let kwFound = 0;
+            let kwHot = 0;
+            let kwWarm = 0;
+
+            // Reddit 1-Month Recency Filter (t=month)
+            await chrome.tabs.update(tabId, { url: `https://www.reddit.com/search/?q=${encodeURIComponent(kw.query)}&t=month&sort=new` });
             
             let profiles = [];
             for (let i = 0; i < 15; i++) {
@@ -1147,6 +1462,9 @@ async function runPipelineSweepReddit(keywords, campaign = null) {
                 const results = await chrome.scripting.executeScript({
                     target: { tabId },
                     func: (query) => {
+                        // SAFETY: Only scrape if we are actually on a search page
+                        if (!window.location.href.includes('/search')) return [];
+
                         const elements = document.querySelectorAll('shreddit-post, .Post');
                         return Array.from(elements).map(el => {
                             const author = el.getAttribute('author') || el.querySelector('[data-testid="post_author_link"]')?.innerText?.replace('u/', '');
@@ -1164,7 +1482,6 @@ async function runPipelineSweepReddit(keywords, campaign = null) {
 
                             // V5: High-Fidelity Signal Extraction
                             const timestamp = el.getAttribute('created-at') || new Date().toISOString();
-                            const score = el.getAttribute('score') || 0;
                             
                             return {
                                 url: `https://www.reddit.com/user/${author}`,
@@ -1173,8 +1490,7 @@ async function runPipelineSweepReddit(keywords, campaign = null) {
                                 reason: `Posted in ${subreddit || 'Reddit'} about "${query}"`,
                                 postText: postText,
                                 postUrl: postUrl,
-                                timestamp: timestamp,
-                                engagement: { replies: score }
+                                timestamp: timestamp
                             };
                         }).filter(Boolean);
                     },
@@ -1189,14 +1505,36 @@ async function runPipelineSweepReddit(keywords, campaign = null) {
             if (profiles.length > 0) {
                 for (const p of profiles) {
                     const saved = await savePipelineLead('Reddit', p.url, p.name, kw.query, p.reason, p.postText, p.role, p.postUrl, campaign);
-                    if (saved.success) {
+                    if (saved && saved.success) {
                         totalFound++;
-                        if (saved.tier === 'Buy Now') buyNow++;
-                        else if (saved.tier === 'Warm Opportunity') warm++;
+                        kwFound++;
+                        if (saved.tier === 'Buy Now') { buyNow++; kwHot++; }
+                        else if (saved.tier === 'Warm Opportunity') { warm++; kwWarm++; }
                         else nurture++;
+
+                        // LIVE UPDATE: Persist stats immediately for dashboard
+                        const liveStatsRes = await chrome.storage.local.get(['keyword_stats']);
+                        const liveStats = liveStatsRes.keyword_stats || {};
+                        liveStats[kwKey] = { ...liveStats[kwKey], found: kwFound, hot: kwHot, warm: kwWarm };
+                        await chrome.storage.local.set({ keyword_stats: liveStats });
                     }
                 }
             }
+
+            // Mark this keyword as done
+            const finalStatsRes = await chrome.storage.local.get(['keyword_stats']);
+            const finalStats = finalStatsRes.keyword_stats || {};
+            finalStats[kwKey] = {
+                ...finalStats[kwKey],
+                status: 'done',
+                completedAt: new Date().toISOString(),
+                found: kwFound,
+                hot: kwHot,
+                warm: kwWarm
+            };
+            await chrome.storage.local.set({ keyword_stats: finalStats });
+
+            await new Promise(r => setTimeout(r, 8000 + Math.random() * 4000));
         }
     } finally {
         if (shadowWindow) try { await chrome.windows.remove(shadowWindow.id); } catch(e) {}
@@ -1204,42 +1542,24 @@ async function runPipelineSweepReddit(keywords, campaign = null) {
     return { found: totalFound, scanned: keywords.length * 10, status: 'complete', buyNow, warm, nurture };
 }
 
-// ─── Messaging ───────────────────────────────────────────────────────────────
-
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'performReconSearch') {
-        console.log(LOG_TAG, "Recon Mission Queued:", request.keywords?.length, "keywords");
-        
-        // V5: Don't execute immediately. Add to queue for Stealth Trickle.
-        chrome.storage.local.get(['recon_queue'], (res) => {
-            const existing = res.recon_queue || [];
-            chrome.storage.local.set({ 
-                recon_queue: [...existing, ...request.keywords] 
-            });
-        });
-
-        sendResponse({ success: true, queued: true });
-        return true;
-    }
-
-    if (request.action === 'QUEUE_FOR_ENGAGEMENT') {
-        console.log(LOG_TAG, "Queueing engagement:", request.lead?.url);
-        chrome.storage.local.get(['answerly_engagement_queue'], (result) => {
-            const queue = result.answerly_engagement_queue || [];
-            queue.push(request.lead);
-            chrome.storage.local.set({ answerly_engagement_queue: queue }, () => {
-                sendResponse({ success: true, queueLength: queue.length });
-                processEngagementQueue();
-            });
-        });
-        return true;
-    }
-});
+// ─── Reconnaissance Loop ───────────────────────────────────────────────────
 
 async function processNextReconKeyword() {
-    const res = await chrome.storage.local.get(['recon_queue', 'active_campaign']);
+    const res = await chrome.storage.local.get(['recon_queue', 'active_campaign', 'stop_recon_mission']);
+    
+    // Safety: If stop flag is true OR active_campaign is missing, HALT EVERYTHING
+    if (res.stop_recon_mission || !res.active_campaign) {
+        console.log(LOG_TAG, "Mission stop flag detected or no active campaign. Halting trickle loop.");
+        return;
+    }
+
     let queue = res.recon_queue || [];
-    if (queue.length === 0) return;
+    if (queue.length === 0) {
+        console.log(LOG_TAG, "Queue empty. Mission complete.");
+        chrome.alarms.clear("queueProcessor");
+        await setPulse("Recon Mission Complete. All keywords processed.");
+        return;
+    }
 
     // Pick a random keyword to simulate human unpredictability
     const randomIndex = Math.floor(Math.random() * queue.length);
@@ -1248,6 +1568,13 @@ async function processNextReconKeyword() {
     await chrome.storage.local.set({ recon_queue: queue });
     
     console.log(LOG_TAG, `Stealth Trickle: Searching "${nextKw.query}" (${queue.length} left in queue)`);
+
+    // Mark keyword as 'running' in keyword_stats
+    const kwStatsRes = await chrome.storage.local.get(['keyword_stats']);
+    const kwStats = kwStatsRes.keyword_stats || {};
+    const kwKey = `${nextKw.platform}__${nextKw.query}`;
+    kwStats[kwKey] = { ...kwStats[kwKey], query: nextKw.query, platform: nextKw.platform, status: 'running', startedAt: new Date().toISOString(), found: 0, hot: 0, warm: 0 };
+    await chrome.storage.local.set({ keyword_stats: kwStats });
     
     // Update stats for Dashboard visibility
     chrome.storage.local.get(['stealth_mission_stats'], (s) => {
@@ -1261,8 +1588,35 @@ async function processNextReconKeyword() {
         });
     });
 
-    await executeReconSweep({ 
-        keywords: [nextKw],
-        campaign: res.active_campaign 
-    });
+    try {
+        const result = await executeReconSweep({ 
+            keywords: [nextKw],
+            campaign: res.active_campaign 
+        });
+
+        // Save per-keyword results back to keyword_stats
+        const kwStatsRes2 = await chrome.storage.local.get(['keyword_stats']);
+        const kwStats2 = kwStatsRes2.keyword_stats || {};
+        const platformResult = result?.platforms?.[nextKw.platform] || {};
+        kwStats2[kwKey] = {
+            ...kwStats2[kwKey],
+            status: 'done',
+            completedAt: new Date().toISOString(),
+            found: (platformResult.found || 0),
+            hot: (platformResult.buyNow || 0),
+            warm: (platformResult.warm || 0),
+        };
+        await chrome.storage.local.set({ keyword_stats: kwStats2 });
+    } catch (err) {
+        console.error(LOG_TAG, "Stealth Trickle Error:", err);
+    } finally {
+        // RECURSION: Process next keyword after a brief 'human-like' delay
+        const check = await chrome.storage.local.get(['stop_recon_mission']);
+        if (!check.stop_recon_mission) {
+            const nextDelay = 12000 + Math.random() * 5000; 
+            currentReconTimeout = setTimeout(() => processNextReconKeyword(), nextDelay);
+        } else {
+            console.log(LOG_TAG, "Mission Halted. Recursion cancelled.");
+        }
+    }
 }

@@ -202,6 +202,10 @@ export interface ICPReconCampaign {
   interests: string[];
   negativeKeywords: string[];
   platforms: string[];
+  customParameters?: Record<string, string>;
+  reconDepth?: 'surface' | 'engagement';
+  campaignType?: 'intent' | 'pain' | 'growth' | 'engagement';
+  funnelStage?: 'tofu' | 'mofu' | 'bofu' | 'all';
   originalBrief?: string;
   lastRun?: string;
   queries?: ICPTrackingKeyword[];

@@ -617,17 +617,27 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                                 )}
                                             </div>
                                             
-                                            <div className="p-3 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Relevance Breakdown</span>
-                                                    <span className="text-[10px] font-bold text-emerald-600">88% Match</span>
+                                            <div className="p-3 bg-gray-50 rounded-2xl border border-gray-100 space-y-2 relative overflow-hidden group/card hover:bg-white transition-all">
+                                                {/* Heat Ribbon */}
+                                                <div className={`absolute top-0 left-0 w-1 h-full ${signal.relevance >= 85 ? 'bg-red-500' : signal.relevance >= 60 ? 'bg-orange-500' : 'bg-slate-300'}`}></div>
+                                                
+                                                <div className="flex justify-between items-center pl-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${signal.relevance >= 85 ? 'bg-red-500 text-white' : signal.relevance >= 60 ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                                            {signal.relevance >= 85 ? '🔥 HOT' : signal.relevance >= 60 ? '⚡ WARM' : '❄️ COLD'}
+                                                        </span>
+                                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 opacity-60">
+                                                            {signal.interactionType === 'Comment' ? '💬 COMMENT' : '📣 POST'}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-emerald-600">{signal.relevance || 88}% Match</span>
                                                 </div>
-                                                <p className="text-[11px] text-gray-600 leading-relaxed italic line-clamp-3">
+                                                <p className="text-[11px] text-gray-600 leading-relaxed italic line-clamp-3 pl-3">
                                                     "{signal.text || signal.body}"
                                                 </p>
-                                                <div className="pt-1 flex items-center gap-1.5">
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                                                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600/70">Found via Pain Signal: {signal.intent?.split(':')[1] || 'Keyword Match'}</span>
+                                                <div className="pt-1 flex items-center gap-1.5 pl-3">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 opacity-40"></div>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600/70">Found via: {signal.intent || 'Keyword Match'}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -726,8 +736,18 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                             )}
 
                                             {interactionCount > 0 && (
-                                                <span className="text-[10px] text-gray-400">{interactionCount} interaction{interactionCount > 1 ? 's' : ''}</span>
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md flex items-center gap-1.5 border border-blue-100">
+                                                    🤝 {interactionCount} Interactions
+                                                </span>
                                             )}
+
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest flex items-center gap-1 ${lead.relevance >= 85 ? 'bg-red-500 text-white shadow-sm' : lead.relevance >= 60 ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-500'}`}>
+                                                {lead.relevance >= 85 ? '🔥 HOT' : lead.relevance >= 60 ? '⚡ WARM' : '❄️ COLD'}
+                                            </span>
+                                            
+                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 uppercase tracking-widest border border-slate-200">
+                                                {lead.interactionType === 'Comment' ? '💬 COMMENT' : '📣 POST'}
+                                            </span>
                                         </div>
                                         <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">
                                             {lead.postText || lead.text || lead.why}

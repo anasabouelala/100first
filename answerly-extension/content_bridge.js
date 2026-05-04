@@ -86,6 +86,18 @@ window.addEventListener('answerly_recon_pulse', (event) => {
     }
 });
 
+// 4.5.1 Stop Recon Mission Relay
+window.addEventListener('answerly_recon_stop', () => {
+    console.log("[Answerly Bridge] Stop signal detected! Relaying to Engine...");
+    chrome.runtime.sendMessage({ action: 'STOP_RECON_MISSION' }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.error("[Answerly Bridge] Stop relay failed:", chrome.runtime.lastError.message);
+            return;
+        }
+        console.log("[Answerly Bridge] Engine confirmed mission halt.", response);
+    });
+});
+
 // 4.6 Stealth Engagement Bridge (Like / Comment buttons in the pipeline)
 window.addEventListener('pipeline_queue_engagement', (event) => {
     const lead = event.detail?.lead;

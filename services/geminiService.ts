@@ -2,63 +2,63 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import * as cheerio from 'cheerio';
 import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, GeneratedContent, ChannelAnalysis, CompetitorData, CompetitorDeepDive, OutreachResponse, MarketOpportunity, ReplyDraft, IndustryBenchmark, SearchDork } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 // Helper: Validate and enrich opportunity with real page title
 const validateOpportunity = async (opp: MarketOpportunity): Promise<MarketOpportunity | null> => {
-    try {
-        // 1. Basic URL check
-        if (!opp.url || !opp.url.startsWith('http')) return null;
-        if (opp.url.includes('google.com/search')) return null;
+  try {
+    // 1. Basic URL check
+    if (!opp.url || !opp.url.startsWith('http')) return null;
+    if (opp.url.includes('google.com/search')) return null;
 
-        // 2. Fetch the page (with timeout and user-agent)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
-        
-        const response = await fetch(opp.url, {
-            method: 'GET',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            },
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
+    // 2. Fetch the page (with timeout and user-agent)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
 
-        // 3. Handle status codes
-        if (response.status === 404) {
-            console.log(`[Validator] Dead Link (404): ${opp.url}`);
-            return null;
-        }
-        
-        // 4. If successful, try to parse title
-        if (response.ok) {
-            const html = await response.text();
-            const $ = cheerio.load(html);
-            const pageTitle = $('title').text().trim();
-            
-            // Check for generic error pages
-            if (pageTitle.includes('404') || pageTitle.includes('Not Found') || pageTitle.includes('Page not found')) {
-                console.log(`[Validator] Soft 404: ${opp.url}`);
-                return null;
-            }
+    const response = await fetch(opp.url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
 
-            // Update headline with real title if it seems valid
-            if (pageTitle && pageTitle.length > 5 && !pageTitle.includes('Captcha') && !pageTitle.includes('Access Denied')) {
-                console.log(`[Validator] Verified: ${opp.url} -> "${pageTitle}"`);
-                return { ...opp, headline: pageTitle };
-            }
-        }
-        
-        // If we got here (e.g. 403 Forbidden or no title found), we keep the original opportunity 
-        // but mark it as potentially unverified if needed. For now, we assume it's okay if not 404.
-        return opp;
-
-    } catch (error) {
-        // Network error or timeout - usually means the site exists but blocked us or is slow.
-        // We'll keep it but log the error.
-        console.log(`[Validator] Fetch Error (${opp.url}):`, error);
-        return opp; 
+    // 3. Handle status codes
+    if (response.status === 404) {
+      console.log(`[Validator] Dead Link (404): ${opp.url}`);
+      return null;
     }
+
+    // 4. If successful, try to parse title
+    if (response.ok) {
+      const html = await response.text();
+      const $ = cheerio.load(html);
+      const pageTitle = $('title').text().trim();
+
+      // Check for generic error pages
+      if (pageTitle.includes('404') || pageTitle.includes('Not Found') || pageTitle.includes('Page not found')) {
+        console.log(`[Validator] Soft 404: ${opp.url}`);
+        return null;
+      }
+
+      // Update headline with real title if it seems valid
+      if (pageTitle && pageTitle.length > 5 && !pageTitle.includes('Captcha') && !pageTitle.includes('Access Denied')) {
+        console.log(`[Validator] Verified: ${opp.url} -> "${pageTitle}"`);
+        return { ...opp, headline: pageTitle };
+      }
+    }
+
+    // If we got here (e.g. 403 Forbidden or no title found), we keep the original opportunity 
+    // but mark it as potentially unverified if needed. For now, we assume it's okay if not 404.
+    return opp;
+
+  } catch (error) {
+    // Network error or timeout - usually means the site exists but blocked us or is slow.
+    // We'll keep it but log the error.
+    console.log(`[Validator] Fetch Error (${opp.url}):`, error);
+    return opp;
+  }
 };
 
 // ... existing generateLaunchStrategy ...
@@ -68,7 +68,7 @@ export const generateLaunchStrategy = async (
   audience: string
 ): Promise<StrategyPlan> => {
   const model = "gemini-3-flash-preview";
-  
+
   const schema: Schema = {
     type: Type.OBJECT,
     properties: {
@@ -137,8 +137,8 @@ export const generateLaunchStrategy = async (
 export const roastLandingPage = async (
   base64Image: string
 ): Promise<RoastResult> => {
-  const model = "gemini-2.5-flash-image";
-  
+  const model = "gemini-flash-latest";
+
   const prompt = `
     Look at this landing page screenshot. 
     1. Give it a conversion score out of 100.
@@ -165,10 +165,10 @@ export const roastLandingPage = async (
     });
 
     const text = response.text || "";
-    
+
     const scoreMatch = text.match(/SCORE:\s*(\d+)/i);
     const score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
-    
+
     const roastMatch = text.match(/ROAST:\s*([\s\S]*?)(?=IMPROVEMENT)/i);
     const roast = roastMatch ? roastMatch[1].trim() : "Could not generate roast.";
 
@@ -192,7 +192,7 @@ export const findDistributionChannels = async (
   appDescription: string,
   category: string
 ): Promise<DistributionChannel[]> => {
-  const model = "gemini-3-flash-preview";
+  const model = "gemini-flash-latest";
 
   const schema: Schema = {
     type: Type.ARRAY,
@@ -276,7 +276,7 @@ export const getIndustryBenchmarks = async (
   category: string
 ): Promise<IndustryBenchmark[]> => {
   const model = "gemini-3-flash-preview";
-  
+
   const schema: Schema = {
     type: Type.ARRAY,
     items: {
@@ -341,48 +341,48 @@ export const analyzeChannel = async (
     type: Type.OBJECT,
     properties: {
       summary: { type: Type.STRING, description: "Brief overview of what this community is about." },
-      rules: { 
-        type: Type.ARRAY, 
+      rules: {
+        type: Type.ARRAY,
         items: { type: Type.STRING },
         description: "3-5 most critical rules regarding self-promotion."
       },
       audienceVibe: { type: Type.STRING, description: "e.g. 'Supportive of makers', 'Ruthlessly technical', 'Hates spam'" },
-      successfulPostTypes: { 
-        type: Type.ARRAY, 
+      successfulPostTypes: {
+        type: Type.ARRAY,
         items: { type: Type.STRING },
-        description: "What formats work best? e.g. 'Long stories', 'Video demos', 'Open source repos'" 
+        description: "What formats work best? e.g. 'Long stories', 'Video demos', 'Open source repos'"
       },
       moderationStrictness: { type: Type.STRING, enum: ["Low", "Medium", "High", "Brutal"] },
       verdict: { type: Type.STRING, description: "Final strategic advice on how to win here." },
       saasKpis: {
         type: Type.ARRAY,
         items: {
-            type: Type.OBJECT,
-            properties: {
-                label: { type: Type.STRING, description: "Metric name e.g. 'Benchmark CPC' or 'Signup Rate'"},
-                value: { type: Type.STRING, description: "Value e.g. '$2.50' or '4%'"},
-                trend: { type: Type.STRING, enum: ["Up", "Down", "Stable"]},
-                context: { type: Type.STRING, description: "Contextual note"}
-            },
-            required: ["label", "value", "trend", "context"]
+          type: Type.OBJECT,
+          properties: {
+            label: { type: Type.STRING, description: "Metric name e.g. 'Benchmark CPC' or 'Signup Rate'" },
+            value: { type: Type.STRING, description: "Value e.g. '$2.50' or '4%'" },
+            trend: { type: Type.STRING, enum: ["Up", "Down", "Stable"] },
+            context: { type: Type.STRING, description: "Contextual note" }
+          },
+          required: ["label", "value", "trend", "context"]
         }
       },
       algorithmSecrets: {
         type: Type.ARRAY,
         items: {
-            type: Type.OBJECT,
-            properties: {
-                trigger: { type: Type.STRING, description: "The action that triggers growth"},
-                tactic: { type: Type.STRING, description: "What you should do"},
-                impact: { type: Type.STRING, description: "Expected result"}
-            },
-            required: ["trigger", "tactic", "impact"]
+          type: Type.OBJECT,
+          properties: {
+            trigger: { type: Type.STRING, description: "The action that triggers growth" },
+            tactic: { type: Type.STRING, description: "What you should do" },
+            impact: { type: Type.STRING, description: "Expected result" }
+          },
+          required: ["trigger", "tactic", "impact"]
         }
       },
       contentHooks: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING },
-          description: "Specific headlines or hooks that work on this platform."
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "Specific headlines or hooks that work on this platform."
       }
     },
     required: ["summary", "rules", "audienceVibe", "successfulPostTypes", "moderationStrictness", "verdict", "saasKpis", "algorithmSecrets", "contentHooks"]
@@ -436,10 +436,10 @@ export const generateChannelContent = async (
       subject: { type: Type.STRING, description: "Title or Headline of the post" },
       body: { type: Type.STRING, description: "The main content/post body" },
       firstComment: { type: Type.STRING, description: "Optional: A first comment to kickstart engagement" },
-      postingTips: { 
-        type: Type.ARRAY, 
+      postingTips: {
+        type: Type.ARRAY,
         items: { type: Type.STRING },
-        description: "3 specific tips to avoid getting banned and maximize clicks" 
+        description: "3 specific tips to avoid getting banned and maximize clicks"
       }
     },
     required: ["subject", "body", "postingTips"]
@@ -479,7 +479,7 @@ export const findCompetitors = async (
   appDescription: string
 ): Promise<CompetitorData[]> => {
   const model = "gemini-3-flash-preview";
-  
+
   const schema: Schema = {
     type: Type.ARRAY,
     items: {
@@ -595,8 +595,8 @@ export const analyzeCompetitorStrategy = async (
       founderQuote: { type: Type.STRING },
       techStack: { type: Type.ARRAY, items: { type: Type.STRING } },
       pricingModel: { type: Type.STRING },
-      marketingHooks: { 
-        type: Type.ARRAY, 
+      marketingHooks: {
+        type: Type.ARRAY,
         items: { type: Type.STRING },
         description: "Key phrases they use to convert users"
       },
@@ -761,48 +761,48 @@ export const findChannelOpportunities = async (
 
     const text = response.text;
     if (!text) throw new Error("No opportunities found");
-    
+
     let opportunities = JSON.parse(text) as MarketOpportunity[];
-    
+
     // VERIFICATION STEP:
     // The model sometimes hallucinates URLs even with search. 
     // We can cross-reference with groundingChunks (the actual search results) to ensure validity.
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks as GroundingChunk[] | undefined;
-    
+
     if (chunks && chunks.length > 0) {
-        // Create a map of valid URLs from search results
-        const validUrls = new Set(chunks.map(c => c.web?.uri).filter(u => u));
-        
-        opportunities = opportunities.map(opp => {
-            // 1. If the URL is already in the valid list, keep it.
-            if (validUrls.has(opp.url)) return opp;
+      // Create a map of valid URLs from search results
+      const validUrls = new Set(chunks.map(c => c.web?.uri).filter(u => u));
 
-            // 2. If not, try to find a fuzzy match in the chunks based on title/headline
-            const match = chunks.find(c => 
-                c.web?.title && (
-                    c.web.title.includes(opp.headline) || 
-                    opp.headline.includes(c.web.title) ||
-                    (c.web.uri && opp.url.includes(c.web.uri)) // Partial URL match
-                )
-            );
+      opportunities = opportunities.map(opp => {
+        // 1. If the URL is already in the valid list, keep it.
+        if (validUrls.has(opp.url)) return opp;
 
-            if (match && match.web?.uri) {
-                console.log(`Corrected URL for "${opp.headline}": ${opp.url} -> ${match.web.uri}`);
-                return { ...opp, url: match.web.uri };
-            }
+        // 2. If not, try to find a fuzzy match in the chunks based on title/headline
+        const match = chunks.find(c =>
+          c.web?.title && (
+            c.web.title.includes(opp.headline) ||
+            opp.headline.includes(c.web.title) ||
+            (c.web.uri && opp.url.includes(c.web.uri)) // Partial URL match
+          )
+        );
 
-            // 3. If still no match, flag it or keep it (it might be a sub-page not explicitly in chunks but valid)
-            // Ideally, we filter out completely invalid ones, but for now let's keep it but warn.
-            return opp;
-        });
+        if (match && match.web?.uri) {
+          console.log(`Corrected URL for "${opp.headline}": ${opp.url} -> ${match.web.uri}`);
+          return { ...opp, url: match.web.uri };
+        }
+
+        // 3. If still no match, flag it or keep it (it might be a sub-page not explicitly in chunks but valid)
+        // Ideally, we filter out completely invalid ones, but for now let's keep it but warn.
+        return opp;
+      });
     }
 
     // Filter out obviously bad URLs (search pages, 404s patterns)
-    const filteredOpps = opportunities.filter(opp => 
-        opp.url && 
-        !opp.url.includes('google.com/search') && 
-        !opp.url.includes('search?q=') &&
-        opp.url.startsWith('http')
+    const filteredOpps = opportunities.filter(opp =>
+      opp.url &&
+      !opp.url.includes('google.com/search') &&
+      !opp.url.includes('search?q=') &&
+      opp.url.startsWith('http')
     );
 
     // FINAL VALIDATION: Ping the URLs to ensure they are alive (200 OK)
@@ -869,25 +869,25 @@ export const generateOpportunityReply = async (
 };
 
 export const generateLeadDorks = async (
-    targetAudience: string,
-    platform: string
+  targetAudience: string,
+  platform: string
 ): Promise<SearchDork[]> => {
-    const model = "gemini-3-flash-preview";
+  const model = "gemini-3-flash-preview";
 
-    const schema: Schema = {
-        type: Type.ARRAY,
-        items: {
-            type: Type.OBJECT,
-            properties: {
-                label: { type: Type.STRING, description: "What this search finds (e.g. 'CEOs hiring now')"},
-                query: { type: Type.STRING, description: "The Google search query string." },
-                explanation: { type: Type.STRING, description: "Why this syntax works."}
-            },
-            required: ["label", "query", "explanation"]
-        }
+  const schema: Schema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        label: { type: Type.STRING, description: "What this search finds (e.g. 'CEOs hiring now')" },
+        query: { type: Type.STRING, description: "The Google search query string." },
+        explanation: { type: Type.STRING, description: "Why this syntax works." }
+      },
+      required: ["label", "query", "explanation"]
     }
+  }
 
-    const prompt = `
+  const prompt = `
         Generate 3 advanced Google Search Dorks (Boolean Search Strings) to find leads for: "${targetAudience}" on Platform: "${platform}".
         
         Techniques:
@@ -900,41 +900,41 @@ export const generateLeadDorks = async (
         Return the raw search query string that I can paste into Google.
     `;
 
-    try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: schema
-          }
-        });
-    
-        const text = response.text;
-        if (!text) throw new Error("No dorks generated");
-        return JSON.parse(text) as SearchDork[];
-      } catch (error) {
-        console.error("Dork Gen Error:", error);
-        throw error;
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema
       }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No dorks generated");
+    return JSON.parse(text) as SearchDork[];
+  } catch (error) {
+    console.error("Dork Gen Error:", error);
+    throw error;
+  }
 }
 // Restored Answerly & ICP Recon Functions
 export const generateICPReconQueries = async (campaign: ICPReconCampaign): Promise<ICPTrackingKeyword[]> => {
-    const model = "gemini-3-flash-preview";
-    const schema: Schema = {
-        type: Type.ARRAY,
-        items: {
-            type: Type.OBJECT,
-            properties: {
-                platform: { type: Type.STRING },
-                query: { type: Type.STRING },
-                intent: { type: Type.STRING }
-            },
-            required: ["platform", "query", "intent"]
-        }
-    };
+  const model = "gemini-flash-latest";
+  const schema: Schema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        platform: { type: Type.STRING },
+        query: { type: Type.STRING },
+        intent: { type: Type.STRING }
+      },
+      required: ["platform", "query", "intent"]
+    }
+  };
 
-    const prompt = `
+  const prompt = `
 You are an Intent-Based Keyword Architect for 2026. Your mission is to translate a founder's lead generation brief into surgically precise Boolean search strings. 
 
 ### THE BUYER vs SELLER RULE
@@ -947,239 +947,276 @@ Product Name: ${campaign.name}
 Full Brief: "${campaign.originalBrief || 'N/A'}"
 Target Personas: ${campaign.roles.join(', ')}
 Key Pain Points: ${campaign.painPoints.join(', ')}
+Mission Archetype: ${campaign.campaignType || 'Balanced'}
+Funnel Intent: ${campaign.funnelStage || 'Full Funnel'}
 Manual Negative Keywords (EXCLUDE THESE): ${(campaign.negativeKeywords || []).join(', ')}
+Custom Mission Constraints: ${Object.entries(campaign.customParameters || {}).map(([k, v]) => `${k}: ${v}`).join(', ') || 'None'}
 
 ### THE TASK
-Generate a MASSIVE matrix of 30-50 surgically precise search dorks.
-Spread them across these platforms: ${campaign.platforms.join(', ')}.
+Generate exactly 50 surgically precise search keywords/dorks. 
+Do NOT include explanations or details. 
+Focus purely on variety and precision.
 
-The matrix MUST cover the following 18-layer signal clusters:
-- Intent Cluster: (recommend, looking for, buying, budget)
-- Pain Cluster: (broken, slow, expensive, losing leads)
-- Urgency Cluster: (asap, today, urgent, launch)
-- Switch Cluster: (alternatives, cancelling, leaving, hate)
-- Growth Cluster: (hiring, expansion, fundraising)
-- Authority Cluster: (founder, CEO, director, head of)
+### GOAL CALIBRATION (MANDATORY)
+Current Goal: ${campaign.campaignType || 'intent'}
+Current Funnel: ${campaign.funnelStage || 'tofu'}
 
-Return a JSON array of 30-50 objects.
+- If Goal is 'intent': Focus 100% on "Looking for", "Need", "Recommend".
+- If Goal is 'pain': Focus 100% on "Broken", "Hate", "Failing", "Problem".
+- If Goal is 'competitor': Focus 100% on "Alternative to", "Switching from [Competitor]".
+- If Goal is 'growth': Focus 100% on "Hiring", "Funding", "New".
+
+Spread them across: ${campaign.platforms.join(', ')}.
+Each keyword must be a valid search string for the platform.
+
+Return a JSON array of 50 objects.
 `;
 
-    try {
-        const response = await ai.models.generateContent({
-            model,
-            contents: prompt,
-            config: { responseMimeType: "application/json", responseSchema: schema }
-        });
-        return JSON.parse(response.text) as ICPTrackingKeyword[];
-    } catch (error) {
-        console.error("ICP Recon Gen Error:", error);
-        return campaign.painPoints.map(pp => ({
-            platform: campaign.platforms[0],
-            query: pp,
-            intent: "Fallback Keyword Search"
-        }));
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: { responseMimeType: "application/json", responseSchema: schema }
+    });
+    return JSON.parse(response.text) as ICPTrackingKeyword[];
+  } catch (error: any) {
+    console.error("[Gemini] ICP Recon Gen Error:", error);
+    
+    // V6: ULTIMATE GOAL-AWARE Fallback (Ensures 50 keywords even if AI is offline)
+    const goalModifiers: Record<string, string[]> = {
+        intent: ['recommendations', 'looking for', 'need help', 'best tool for', 'anyone using', 'budget for'],
+        pain: ['broken', 'not working', 'failing', 'slow', 'hate', 'problems with', 'stuck with'],
+        competitor: ['alternative to', 'switching from', 'vs', 'leaving', 'better than', 'is it worth it'],
+        growth: ['hiring', 'new office', 'funding', 'expansion', 'scaling'],
+        engagement: ['anyone else', 'share link', 'what do you think', 'thoughts on']
+    };
+    
+    const intentModifiers = goalModifiers[campaign.campaignType || 'intent'] || goalModifiers.intent;
+    const fallbackQueries: ICPTrackingKeyword[] = [];
+    const sourceKeywords = campaign.painPoints.length > 0 ? campaign.painPoints : (campaign.interests.length > 0 ? campaign.interests : ['growth']);
+    
+    let count = 0;
+    while (count < 50) {
+        for (const kw of sourceKeywords) {
+            for (const platform of campaign.platforms) {
+                for (const mod of intentModifiers) {
+                    if (count >= 50) break;
+                    fallbackQueries.push({
+                        platform,
+                        query: `${mod} ${kw}`,
+                        intent: `Goal: ${campaign.campaignType} Fallback`
+                    });
+                    count++;
+                }
+                if (count >= 50) break;
+            }
+            if (count >= 50) break;
+        }
     }
+
+    return fallbackQueries;
+  }
 };
 
 export const generateContentEnginePost = async (params: any): Promise<ContentEnginePost> => {
-    const model = "gemini-3-flash-preview";
-    const schema: Schema = {
-        type: Type.OBJECT,
-        properties: {
-            title: { type: Type.STRING },
-            hook: { type: Type.STRING },
-            body: { type: Type.STRING },
-            tags: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["title", "hook", "body", "tags"]
-    };
-    const prompt = `Generate a high-engagement social post for ${params.platform}. Topic: ${params.topic}. Target: ${params.audience}.`;
-    const response = await ai.models.generateContent({
-        model, contents: prompt,
-        config: { responseMimeType: "application/json", responseSchema: schema }
-    });
-    return JSON.parse(response.text) as ContentEnginePost;
+  const model = "gemini-flash-latest";
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING },
+      hook: { type: Type.STRING },
+      body: { type: Type.STRING },
+      tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+    },
+    required: ["title", "hook", "body", "tags"]
+  };
+  const prompt = `Generate a high-engagement social post for ${params.platform}. Topic: ${params.topic}. Target: ${params.audience}.`;
+  const response = await ai.models.generateContent({
+    model, contents: prompt,
+    config: { responseMimeType: "application/json", responseSchema: schema }
+  });
+  return JSON.parse(response.text) as ContentEnginePost;
 };
 
 export const getPlatformInsights = async (platform: string): Promise<PlatformInsight> => {
-    const model = "gemini-3-flash-preview";
-    const schema: Schema = {
-        type: Type.OBJECT,
-        properties: {
-            platform: { type: Type.STRING },
-            trend: { type: Type.STRING },
-            intensity: { type: Type.NUMBER },
-            opportunities: { type: Type.ARRAY, items: { type: Type.STRING } },
-            threats: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["platform", "trend", "intensity", "opportunities", "threats"]
-    };
-    const response = await ai.models.generateContent({
-        model, contents: `Analyze current trends and opportunities for developers/founders on ${platform}.`,
-        config: { responseMimeType: "application/json", responseSchema: schema }
-    });
-    return JSON.parse(response.text) as PlatformInsight;
+  const model = "gemini-flash-latest";
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      platform: { type: Type.STRING },
+      trend: { type: Type.STRING },
+      intensity: { type: Type.NUMBER },
+      opportunities: { type: Type.ARRAY, items: { type: Type.STRING } },
+      threats: { type: Type.ARRAY, items: { type: Type.STRING } }
+    },
+    required: ["platform", "trend", "intensity", "opportunities", "threats"]
+  };
+  const response = await ai.models.generateContent({
+    model, contents: `Analyze current trends and opportunities for developers/founders on ${platform}.`,
+    config: { responseMimeType: "application/json", responseSchema: schema }
+  });
+  return JSON.parse(response.text) as PlatformInsight;
 };
 
 export const generateSmartEngagementComment = async (postText: string, appDesc: string, title: string): Promise<SmartComment> => {
-    const model = "gemini-3-flash-preview";
-    const schema: Schema = {
-        type: Type.OBJECT,
-        properties: {
-            options: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        body: { type: Type.STRING },
-                        why: { type: Type.STRING }
-                    },
-                    required: ["body", "why"]
-                }
-            }
-        },
-        required: ["options"]
-    };
-    try {
-        const response = await ai.models.generateContent({
-            model,
-            contents: `Generate 3 smart, non-spammy engagement comments for lead @${title}. Their post: "${postText}". My product: "${appDesc}". Under 200 chars each, conversational.`,
-            config: { responseMimeType: "application/json", responseSchema: schema }
-        });
-        return JSON.parse(response.text) as SmartComment;
-    } catch {
-        return { options: [{ body: "Great perspective! Would love to connect.", why: "Neutral opener" }] };
-    }
+  const model = "gemini-flash-latest";
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      options: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            body: { type: Type.STRING },
+            why: { type: Type.STRING }
+          },
+          required: ["body", "why"]
+        }
+      }
+    },
+    required: ["options"]
+  };
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: `Generate 3 smart, non-spammy engagement comments for lead @${title}. Their post: "${postText}". My product: "${appDesc}". Under 200 chars each, conversational.`,
+      config: { responseMimeType: "application/json", responseSchema: schema }
+    });
+    return JSON.parse(response.text) as SmartComment;
+  } catch {
+    return { options: [{ body: "Great perspective! Would love to connect.", why: "Neutral opener" }] };
+  }
 };
 
 export const evaluateHNOpportunities = async (items: any[]): Promise<ForumOpportunity[]> => {
-    const model = "gemini-3-flash-preview";
-    const response = await ai.models.generateContent({
-        model,
-        contents: `Evaluate these Hacker News items for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
-        config: { responseMimeType: "application/json" }
-    });
-    return JSON.parse(response.text);
+  const model = "gemini-flash-latest";
+  const response = await ai.models.generateContent({
+    model,
+    contents: `Evaluate these Hacker News items for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
+    config: { responseMimeType: "application/json" }
+  });
+  return JSON.parse(response.text);
 };
 
 export const evaluatePHOpportunities = async (items: any[]): Promise<ForumOpportunity[]> => {
-    const model = "gemini-3-flash-preview";
-    const response = await ai.models.generateContent({
-        model,
-        contents: `Evaluate these Product Hunt items for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
-        config: { responseMimeType: "application/json" }
-    });
-    return JSON.parse(response.text);
+  const model = "gemini-flash-latest";
+  const response = await ai.models.generateContent({
+    model,
+    contents: `Evaluate these Product Hunt items for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
+    config: { responseMimeType: "application/json" }
+  });
+  return JSON.parse(response.text);
 };
 
 export const evaluateRedditOpportunities = async (items: any[]): Promise<ForumOpportunity[]> => {
-    const model = "gemini-3-flash-preview";
-    const response = await ai.models.generateContent({
-        model,
-        contents: `Evaluate these Reddit posts for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
-        config: { responseMimeType: "application/json" }
-    });
-    return JSON.parse(response.text);
+  const model = "gemini-flash-latest";
+  const response = await ai.models.generateContent({
+    model,
+    contents: `Evaluate these Reddit posts for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
+    config: { responseMimeType: "application/json" }
+  });
+  return JSON.parse(response.text);
 };
 
 export const generateBuyerPersonas = async (appName: string, appDesc: string, category: string): Promise<BuyerPersonaAnalysis> => {
-    const model = "gemini-3-flash-preview";
-    const schema: Schema = {
-        type: Type.OBJECT,
-        properties: {
-            marketOverview: { type: Type.STRING },
-            personas: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        name: { type: Type.STRING },
-                        role: { type: Type.STRING },
-                        demographics: { type: Type.STRING },
-                        realWorldQuote: { type: Type.STRING },
-                        painPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        goals: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        whereTheyHangOut: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        contentTheyConsume: { type: Type.ARRAY, items: { type: Type.STRING } }
-                    },
-                    required: ["name","role","demographics","painPoints","goals","whereTheyHangOut","contentTheyConsume"]
-                }
-            }
-        },
-        required: ["marketOverview", "personas"]
-    };
-    const response = await ai.models.generateContent({
-        model,
-        contents: `Generate 3 detailed buyer personas for "${appName}" - a ${category} product. Description: "${appDesc}". Include market overview, demographics, pain points, goals, where they hang out online, and content they consume.`,
-        config: { responseMimeType: "application/json", responseSchema: schema }
-    });
-    return JSON.parse(response.text) as BuyerPersonaAnalysis;
+  const model = "gemini-flash-latest";
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      marketOverview: { type: Type.STRING },
+      personas: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            role: { type: Type.STRING },
+            demographics: { type: Type.STRING },
+            realWorldQuote: { type: Type.STRING },
+            painPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+            goals: { type: Type.ARRAY, items: { type: Type.STRING } },
+            whereTheyHangOut: { type: Type.ARRAY, items: { type: Type.STRING } },
+            contentTheyConsume: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ["name", "role", "demographics", "painPoints", "goals", "whereTheyHangOut", "contentTheyConsume"]
+        }
+      }
+    },
+    required: ["marketOverview", "personas"]
+  };
+  const response = await ai.models.generateContent({
+    model,
+    contents: `Generate 3 detailed buyer personas for "${appName}" - a ${category} product. Description: "${appDesc}". Include market overview, demographics, pain points, goals, where they hang out online, and content they consume.`,
+    config: { responseMimeType: "application/json", responseSchema: schema }
+  });
+  return JSON.parse(response.text) as BuyerPersonaAnalysis;
 };
 
 export const parseReconBrief = async (brief: string): Promise<{
-    name: string;
-    roles: string[];
-    painPoints: string[];
-    negativeKeywords: string[];
-    platforms: string[];
+  name: string;
+  roles: string[];
+  painPoints: string[];
+  negativeKeywords: string[];
+  platforms: string[];
 }> => {
-    try {
-        // V5: Upgraded to latest flash for faster synthesis
-        const modelName = "gemini-1.5-flash-latest"; 
-        
-        const schema: Schema = {
-            type: Type.OBJECT,
-            properties: {
-                name: { type: Type.STRING },
-                roles: { type: Type.ARRAY, items: { type: Type.STRING } },
-                painPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-                negativeKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-                platforms: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ["name", "roles", "painPoints", "negativeKeywords", "platforms"]
-        };
+  try {
+    // V5: Upgraded to latest flash for faster synthesis
+    const modelName = "gemini-3-flash";
 
-        const generativeModel = ai.getGenerativeModel({ model: modelName });
-        const response = await generativeModel.generateContent({
-            contents: [{
-                role: 'user',
-                parts: [{
-                    text: `Act as a High-Precision ICP Recon DNA Parser. 
+    const schema: Schema = {
+      type: Type.OBJECT,
+      properties: {
+        name: { type: Type.STRING },
+        roles: { type: Type.ARRAY, items: { type: Type.STRING } },
+        painPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+        negativeKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+        platforms: { type: Type.ARRAY, items: { type: Type.STRING } }
+      },
+      required: ["name", "roles", "painPoints", "negativeKeywords", "platforms"]
+    };
+
+    const generativeModel = ai.getGenerativeModel({ model: modelName });
+    const response = await generativeModel.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [{
+          text: `Act as a High-Precision ICP Recon DNA Parser. 
                     Given the following user brief, extract a structured campaign identity.
                     
                     ### CRITICAL: THE BUYER vs SELLER POLARITY
                     Identify "SELLERS" (specialists, agencies, consultants, experts) and add them to negativeKeywords.
                     
                     Brief: "${brief}"`
-                }]
-            }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: schema
-            }
-        });
+        }]
+      }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema
+      }
+    });
 
-        const result = JSON.parse(response.response.text());
-        return {
-            name: result.name || brief.substring(0, 20),
-            roles: (result.roles || []).filter((r: string) => r.length > 2),
-            painPoints: (result.painPoints || []).filter((p: string) => p.length > 2),
-            negativeKeywords: [...new Set([...(result.negativeKeywords || []), "agency", "expert", "consultant"])],
-            platforms: (result.platforms || []).length > 0 ? result.platforms : ["X", "LinkedIn", "Reddit"]
-        };
-    } catch (e) {
-        console.error("[Gemini] Brief Parsing Failed:", e);
-        // ENHANCED FALLBACK: Use a more intelligent 'reasoning' approach even in failure
-        const stopWords = new Set(['looking', 'for', 'people', 'facing', 'with', 'their', 'the', 'and', 'this']);
-        const words = brief.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !stopWords.has(w));
-        
-        return {
-            name: "Campaign: " + (words[0] || "Targeting"),
-            roles: words.length > 0 ? [words[0].charAt(0).toUpperCase() + words[0].slice(1) + " Professional"] : ["Target Persona"],
-            painPoints: words.length > 1 ? [words.slice(1, 3).join(' ') + " Issues"] : ["Operational Friction"],
-            negativeKeywords: ["agency", "consultant", "expert", "freelancer"],
-            platforms: ["X", "LinkedIn", "Reddit"]
-        };
-    }
+    const result = JSON.parse(response.response.text());
+    return {
+      name: result.name || brief.substring(0, 20),
+      roles: (result.roles || []).filter((r: string) => r.length > 2),
+      painPoints: (result.painPoints || []).filter((p: string) => p.length > 2),
+      negativeKeywords: [...new Set([...(result.negativeKeywords || []), "agency", "expert", "consultant"])],
+      platforms: (result.platforms || []).length > 0 ? result.platforms : ["X", "LinkedIn", "Reddit"]
+    };
+  } catch (e) {
+    console.error("[Gemini] Brief Parsing Failed:", e);
+    // ENHANCED FALLBACK: Use a more intelligent 'reasoning' approach even in failure
+    const stopWords = new Set(['looking', 'for', 'people', 'facing', 'with', 'their', 'the', 'and', 'this']);
+    const words = brief.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !stopWords.has(w));
+
+    return {
+      name: "Campaign: " + (words[0] || "Targeting"),
+      roles: words.length > 0 ? [words[0].charAt(0).toUpperCase() + words[0].slice(1) + " Professional"] : ["Target Persona"],
+      painPoints: words.length > 1 ? [words.slice(1, 3).join(' ') + " Issues"] : ["Operational Friction"],
+      negativeKeywords: ["agency", "consultant", "expert", "freelancer"],
+      platforms: ["X", "LinkedIn", "Reddit"]
+    };
+  }
 };
 

@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Activity, 
-    Target, 
-    Zap, 
-    ArrowUpRight, 
-    Globe, 
-    Cpu, 
-    TrendingUp, 
-    ArrowLeft, 
-    Loader2,
-    Check,
-    ExternalLink,
-    Clock,
-    Terminal
+    ArrowLeft, ArrowUpRight, Loader2, Play, Clock, CheckCircle2, 
+    AlertCircle, Search, Zap, Flame, TrendingUp, Users, Target,
+    BarChart2, RefreshCw, ExternalLink, Trash2
 } from 'lucide-react';
 import { ICPReconCampaign, ICPTrackingKeyword } from '../types';
+
+interface KeywordStat {
+    query: string;
+    platform: string;
+    status: 'queued' | 'running' | 'done' | 'error';
+    found: number;
+    hot: number;
+    warm: number;
+    startedAt?: string;
+    completedAt?: string;
+}
 
 interface ICPReconDashboardProps {
     campaign: ICPReconCampaign;
@@ -30,357 +31,283 @@ interface ICPReconDashboardProps {
     };
     onBack: () => void;
     onNewMission: () => void;
+    onDelete?: () => void;
 }
 
-export const ICPReconDashboard: React.FC<ICPReconDashboardProps> = ({ campaign, queries, stats, onBack, onNewMission }) => {
+const platformColor: Record<string, string> = {
+    X: 'bg-black text-white',
+    LinkedIn: 'bg-blue-600 text-white',
+    Reddit: 'bg-orange-500 text-white',
+};
+
+const platformBg: Record<string, string> = {
+    X: 'bg-black/5 text-black',
+    LinkedIn: 'bg-blue-50 text-blue-700',
+    Reddit: 'bg-orange-50 text-orange-700',
+};
+
+const statusConfig = {
+    queued:  { icon: <Clock size={12} />,        label: 'Queued',  color: 'text-slate-400',  bg: 'bg-slate-50'  },
+    running: { icon: <Loader2 size={12} className="animate-spin" />, label: 'Running', color: 'text-blue-600', bg: 'bg-blue-50' },
+    done:    { icon: <CheckCircle2 size={12} />,  label: 'Done',    color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    error:   { icon: <AlertCircle size={12} />,   label: 'Error',   color: 'text-red-500',    bg: 'bg-red-50'    },
+};
+
+export const ICPReconDashboard: React.FC<ICPReconDashboardProps> = ({ campaign, queries, stats, onBack, onNewMission, onDelete }) => {
     const [prospects, setProspects] = useState<any[]>([]);
+    const [kwStats, setKwStats] = useState<Record<string, KeywordStat>>({});
+    const [queueLen, setQueueLen] = useState(0);
+    const [activeTab, setActiveTab] = useState<'keywords' | 'prospects'>('keywords');
 
     useEffect(() => {
-        const fetchProspects = () => {
-            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.get(['found_prospects'], (res) => {
-                    const all = res.found_prospects || [];
-                    const missionProspects = all.filter((p: any) => p.campaignId === campaign.id);
-                    setProspects(missionProspects.sort((a: any, b: any) => (b.score || 0) - (a.score || 0)));
-                });
-            }
+        const fetchAll = () => {
+            if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
+            chrome.storage.local.get(['pipeline_leads', 'keyword_stats', 'recon_queue'], (res) => {
+                // Leads
+                const all: any[] = res.pipeline_leads || [];
+                const missionLeads = all.filter((p: any) => p.tags?.includes(campaign.id) || true); // show all for now
+                setProspects(missionLeads.slice(0, 50));
+
+                // Keyword stats
+                setKwStats(res.keyword_stats || {});
+
+                // Queue length
+                setQueueLen((res.recon_queue || []).length);
+            });
         };
 
-        fetchProspects();
-        const interval = setInterval(fetchProspects, 5000);
-        return () => clearInterval(interval);
+        fetchAll();
+        const iv = setInterval(fetchAll, 3000);
+        return () => clearInterval(iv);
     }, [campaign.id]);
 
-    const relevanceRate = stats.scanned > 0 ? ((stats.found / stats.scanned) * 100).toFixed(1) : '0.0';
-    
+    // Build keyword rows: merge queries with their live stats
+    const keywordRows = queries.map((q) => {
+        const key = `${q.platform}__${q.query}`;
+        const liveStats = kwStats[key];
+        const status: KeywordStat['status'] = liveStats?.status || 'queued';
+        return {
+            query: q.query,
+            platform: q.platform,
+            intent: q.intent,
+            status,
+            found: liveStats?.found || 0,
+            hot: liveStats?.hot || 0,
+            warm: liveStats?.warm || 0,
+            startedAt: liveStats?.startedAt,
+            completedAt: liveStats?.completedAt,
+        };
+    });
+
+    const totalFound = keywordRows.reduce((s, r) => s + r.found, 0);
+    const totalHot = keywordRows.reduce((s, r) => s + r.hot, 0);
+    const totalWarm = keywordRows.reduce((s, r) => s + r.warm, 0);
+    const done = keywordRows.filter(r => r.status === 'done').length;
+    const queuedCount = keywordRows.filter(r => r.status === 'queued').length;
+    const progress = queries.length > 0 ? Math.round((done / queries.length) * 100) : 0;
+
     return (
-        <div className="min-h-screen p-6 space-y-8 animate-fade-in-up max-w-7xl mx-auto">
-            {/* Header / Control Bar */}
-            <div className="flex items-center justify-between glass-morphism p-4 rounded-[2.5rem] shadow-obsidian border-white/5">
-                <div className="flex items-center gap-4">
-                    <button 
-                        onClick={onBack}
-                        className="p-4 hover:bg-slate-100 rounded-2xl text-slate-400 hover:text-slate-900 transition-all border border-transparent hover:border-slate-200"
-                    >
-                        <ArrowLeft size={20} />
-                    </button>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${stats.status === 'searching' ? 'bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'bg-emerald-500'}`}></div>
-                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">
-                                {stats.status === 'searching' ? 'Active Recon Mission' : 'Intelligence Secured'}
-                            </span>
-                        </div>
-                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{campaign.name}</h2>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-3 pr-2">
-                    {stats.status === 'searching' && (
-                        <div className="flex items-center gap-4 px-4 py-2 bg-slate-50 border border-slate-100 rounded-[1.5rem]">
-                            <div className="flex flex-col">
-                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Mission Progress</span>
-                                <span className="text-[11px] font-bold text-slate-900">{stats.scanned} / {queries.length} Vectors</span>
+        <div className="min-h-screen bg-[#f5f5f7] text-slate-900 font-sans">
+            {/* Top Nav */}
+            <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+                <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <button onClick={onBack} className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 transition-all">
+                            <ArrowLeft size={16} />
+                        </button>
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm font-black uppercase tracking-tight text-slate-900">{campaign.name || 'Campaign'}</span>
+                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 ${stats.status === 'searching' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                    {stats.status === 'searching' ? <><Loader2 size={8} className="animate-spin" />Running</> : <><CheckCircle2 size={8} />Complete</>}
+                                </span>
                             </div>
-                            <div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                <div 
-                                    className="h-full bg-blue-500 transition-all duration-1000" 
-                                    style={{ width: `${(stats.scanned / (queries.length || 1)) * 100}%` }}
-                                ></div>
-                            </div>
-                        </div>
-                    )}
-                    <button 
-                        onClick={onNewMission}
-                        className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-slate-900/10"
-                    >
-                        Abort & New
-                    </button>
-                </div>
-            </div>
-
-            {/* Metrics Ribbon */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                <MetricSmall title="Buy Now" value={stats.buyNow || 0} icon={<Zap size={16} />} color="rose" glow />
-                <MetricSmall title="Hot Opps" value={stats.warm || 0} icon={<TrendingUp size={16} />} color="orange" />
-                <MetricSmall title="Strong" value={Math.floor((stats.found || 0) * 0.4)} icon={<Target size={16} />} color="blue" />
-                <MetricSmall title="Total Found" value={stats.found} icon={<Globe size={16} />} color="indigo" />
-                <MetricSmall title="Precision" value={`${relevanceRate}%`} icon={<Activity size={16} />} color="emerald" />
-            </div>
-
-            <div className="grid lg:grid-cols-12 gap-8">
-                {/* Main: Vector Grid & Live Pulse */}
-                <div className="lg:col-span-8 space-y-10">
-                    {/* Active Vectors */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between px-2">
-                            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Mission Vector Grid</h3>
-                            <div className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest">Multi-Platform Sync</div>
-                        </div>
-                        <div className="grid md:grid-cols-2 gap-4">
-                            {queries.length === 0 ? (
-                                <>
-                                    <div className="md:col-span-2 glass-morphism p-12 rounded-[2.5rem] border-blue-500/10 flex flex-col items-center justify-center space-y-6 bg-blue-50/20">
-                                        <div className="relative">
-                                            <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-2xl animate-pulse"></div>
-                                            <Loader2 size={48} className="text-blue-600 animate-spin relative z-10" />
-                                        </div>
-                                        <div className="text-center space-y-2">
-                                            <h4 className="text-sm font-black uppercase tracking-[0.3em] text-slate-900">AI Vector Synthesis</h4>
-                                            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Translating DNA into surgically precise Boolean strings...</p>
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                queries.map((q, idx) => {
-                                    const platformStats = stats.platformBreakdown[q.platform] || { status: 'pending', found: 0, scanned: 0 };
-                                    return (
-                                        <VectorCard key={idx} query={q} stats={platformStats} />
-                                    );
-                                })
-                            )}
+                            <p className="text-[10px] text-slate-400 font-medium">{queuedCount} keywords queued · {done}/{queries.length} scanned</p>
                         </div>
                     </div>
-                    
-                    {/* Active Intelligence Pipeline (18-Layer Indicator) */}
-                    {stats.status === 'searching' && (
-                        <div className="glass-morphism p-6 rounded-[2.5rem] border-white/5 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">18-Layer Intelligence Execution</h3>
-                                <div className="flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                                    <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest">Global Pipeline Active</span>
-                                </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-9 gap-2">
-                                {[
-                                    'Ingestion', 'Normalization', 'Extraction', 
-                                    'Topic Filter', 'Intent Engine', 'Pain Engine', 
-                                    'Urgency', 'Authority', 'Co. Quality', 
-                                    'ICP Match', 'Time Decay', 'Social Proof',
-                                    'Scoring', 'Tiering', 'Boosts',
-                                    'Fraud Filter', 'Deduplication', 'Outreach Brain'
-                                ].map((step, i) => (
-                                    <div key={i} className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-slate-50/50 border border-slate-100">
-                                        <div className={`w-1.5 h-1.5 rounded-full ${i <= (stats.scanned % 18) ? 'bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.5)]' : 'bg-slate-200'}`}></div>
-                                        <span className="text-[7px] font-black uppercase tracking-tight text-slate-400 text-center truncate w-full">{step}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            <p className="text-[9px] text-slate-400 text-center font-medium uppercase tracking-widest">Processing Layer {(stats.scanned % 18) + 1}: Automated Decision Logic in Progress.</p>
-                        </div>
-                    )}
-
-                    {/* Lead Intelligence Feed: The Triage Room */}
-                    <div className="space-y-6 pt-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-900 tracking-tight">Intelligence Triage</h3>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Found {prospects.length} High-Fidelity Opportunities</p>
-                            </div>
-                        </div>
-
-                        <div className="grid gap-4">
-                            {prospects.length === 0 ? (
-                                <div className="p-12 bg-slate-50 rounded-[2.5rem] border border-dashed border-slate-200 text-center flex flex-col items-center gap-3">
-                                    <Terminal className="text-slate-300" size={32} />
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Listening for signals across the 18-layer spectrum...</p>
-                                </div>
-                            ) : (
-                                prospects.map((p, idx) => (
-                                    <div key={idx} className="glass-morphism p-6 rounded-[2.5rem] border-white/5 shadow-obsidian group hover:bg-white/[0.03] transition-all">
-                                        <div className="flex flex-col md:flex-row gap-6">
-                                            {/* Lead Identity */}
-                                            <div className="flex-1 space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm">
-                                                            {p.author?.name?.charAt(0) || 'U'}
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="text-sm font-bold text-slate-900">{p.author?.name || 'Unknown Prospect'}</h4>
-                                                            <p className="text-[10px] text-slate-400 font-medium">@{p.author?.handle || 'anonymous'}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg ${
-                                                        p.tier === 'Buy Now' ? 'bg-rose-500 text-white shadow-rose-900/20' :
-                                                        p.tier === 'Hot' ? 'bg-orange-500 text-white shadow-orange-900/20' :
-                                                        'bg-emerald-500 text-white shadow-emerald-900/20'
-                                                    }`}>
-                                                        {p.tier} • {p.score}% Match
-                                                    </div>
-                                                </div>
-
-                                                <p className="text-xs text-slate-700 leading-relaxed font-medium bg-slate-50 p-4 rounded-2xl italic">"{p.text}"</p>
-                                                
-                                                {/* 18-Layer Pulse Visualization */}
-                                                <div className="flex flex-wrap gap-2 pt-2">
-                                                    {(p.reasoning || []).map((layer: string, i: number) => (
-                                                        <span key={i} className="px-3 py-1 bg-white border border-slate-100 text-[8px] font-black uppercase tracking-widest text-slate-500 rounded-lg flex items-center gap-1.5 shadow-sm">
-                                                            <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></div>
-                                                            {layer}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Action Sidebar */}
-                                            <div className="md:w-48 flex flex-col justify-center gap-2">
-                                                <button className="w-full py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-slate-900/10">Approve</button>
-                                                <button className="w-full py-3 bg-slate-50 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-red-500 hover:bg-red-50 transition-all">Discard</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Sidebar: Intelligence Summary */}
-                <div className="lg:col-span-4 space-y-6">
-                    <div className="glass-morphism p-8 rounded-[2.5rem] space-y-8 border-white/5 shadow-obsidian sticky top-6">
-                        <div className="flex items-center justify-between">
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-500 flex items-center gap-2">
-                                <Zap size={14} className="text-blue-400" fill="currentColor" /> Intel DNA
-                            </h4>
-                            <Clock size={14} className="text-gray-600" />
-                        </div>
+                    <div className="flex items-center gap-3">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{campaign.platforms.join(' · ')}</div>
                         
-                        <div className="space-y-6">
-                            <DNASection title="Target Audience" items={campaign.roles} color="blue" />
-                            <DNASection title="Pain Signals" items={campaign.painPoints} color="rose" />
-                            {campaign.industries.length > 0 && <DNASection title="Industries" items={campaign.industries} color="amber" />}
-                        </div>
+                        {stats.status === 'searching' && (
+                            <button 
+                                onClick={() => {
+                                    window.dispatchEvent(new CustomEvent('answerly_recon_stop'));
+                                }}
+                                title="Stop Mission"
+                                className="px-5 py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-all"
+                            >
+                                Stop
+                            </button>
+                        )}
 
-                        <div className="pt-8 border-t border-white/5 space-y-4">
-                            <div className="flex justify-between items-center">
-                                <div className="space-y-1">
-                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] block">Bot Reliability</span>
-                                    <span className="text-[10px] font-bold text-slate-900">99.8% Uptime</span>
-                                </div>
-                                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                                    <ShieldCheck size={20} className="text-blue-500" />
-                                </div>
-                            </div>
-                            <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
-                                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full w-[99.8%] shadow-[0_0_10px_rgba(59,130,246,0.3)]"></div>
-                            </div>
-                        </div>
+                        {onDelete && (
+                            <button 
+                                onClick={() => {
+                                    if (window.confirm("Are you sure you want to delete this campaign? This will remove all leads and stats.")) {
+                                        onDelete();
+                                    }
+                                }}
+                                title="Delete Campaign"
+                                className="p-2.5 bg-slate-50 text-slate-400 border border-slate-100 rounded-xl hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        )}
 
-                        <div className="p-5 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl text-white shadow-xl shadow-blue-900/20 group cursor-pointer overflow-hidden relative">
-                            <div className="absolute top-0 right-0 p-4 opacity-10 -rotate-12 group-hover:rotate-0 transition-transform duration-500">
-                                <Sparkles size={64} fill="white" />
-                            </div>
-                            <h5 className="text-xs font-black uppercase tracking-widest mb-1 relative z-10">AI Optimization</h5>
-                            <p className="text-[10px] text-blue-100 font-medium relative z-10">Gemini is auto-tuning vectors based on live relevance.</p>
-                        </div>
+                        <button onClick={onNewMission} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all">
+                            New Campaign
+                        </button>
                     </div>
                 </div>
             </div>
-        </div>
-    );
-};
 
-const MetricSmall = ({ title, value, icon, color, glow }: any) => {
-    const colorMap: any = {
-        rose: { bg: 'bg-rose-500', text: 'text-rose-400', border: 'hover:border-rose-500/30' },
-        orange: { bg: 'bg-orange-500', text: 'text-orange-400', border: 'hover:border-orange-500/30' },
-        blue: { bg: 'bg-blue-500', text: 'text-blue-400', border: 'hover:border-blue-500/30' },
-        emerald: { bg: 'bg-emerald-500', text: 'text-emerald-400', border: 'hover:border-emerald-500/30' },
-        indigo: { bg: 'bg-indigo-500', text: 'text-indigo-400', border: 'hover:border-indigo-500/30' }
-    };
-    const c = colorMap[color] || colorMap.blue;
-
-    return (
-        <div className={`glass-morphism p-6 rounded-[2rem] border-white/5 shadow-obsidian group ${c.border} transition-all duration-500 ${glow ? 'shadow-emerald-500/20' : ''}`}>
-            <div className="flex items-center gap-3 mb-3">
-                <div className={`p-2.5 ${c.bg}/10 rounded-xl ${c.text} group-hover:scale-110 transition-transform`}>
-                    {icon}
+            <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+                {/* KPI Row — real data */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {[
+                        { label: 'Total Leads', value: totalFound, icon: <Users size={16} />, accent: 'text-slate-900' },
+                        { label: 'Hot 🔥', value: totalHot, icon: <Flame size={16} />, accent: 'text-red-500' },
+                        { label: 'Warm ⚡', value: totalWarm, icon: <Zap size={16} />, accent: 'text-orange-500' },
+                        { label: 'Keywords Done', value: `${done}/${queries.length}`, icon: <CheckCircle2 size={16} />, accent: 'text-emerald-600' },
+                        { label: 'Queued', value: queuedCount, icon: <Clock size={16} />, accent: 'text-blue-500' },
+                    ].map((kpi, i) => (
+                        <div key={i} className="bg-white rounded-2xl border border-slate-200 p-5">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{kpi.label}</span>
+                                <span className={`${kpi.accent}`}>{kpi.icon}</span>
+                            </div>
+                            <div className={`text-3xl font-black tracking-tight ${kpi.accent}`}>{kpi.value}</div>
+                        </div>
+                    ))}
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{title}</span>
-            </div>
-            <div className="text-3xl font-bold text-white tracking-tight">{typeof value === 'number' ? value.toLocaleString() : value}</div>
-        </div>
-    );
-};
 
-const VectorCard = ({ query, stats }: any) => {
-    const isScanning = stats.status !== 'ok';
-    return (
-        <div className="glass-morphism p-5 rounded-[2rem] border-white/5 shadow-obsidian space-y-5 group hover:bg-white/[0.02] transition-all">
-            <div className="flex justify-between items-start">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shadow-lg ${
-                    query.platform.toLowerCase().includes('x') ? 'bg-white text-black' :
-                    query.platform.toLowerCase().includes('linked') ? 'bg-blue-600 text-white shadow-blue-900/20' :
-                    'bg-orange-600 text-white shadow-orange-900/20'
-                }`}>
-                    {query.platform.charAt(0)}
+                {/* Progress Bar */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Campaign Progress</span>
+                        <span className="text-[10px] font-black text-slate-900">{progress}%</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-slate-900 rounded-full transition-all duration-700"
+                            style={{ width: `${progress}%` }}
+                        />
+                    </div>
+                    {stats.pulse?.msg && (
+                        <p className="mt-2 text-[9px] text-slate-400 font-medium flex items-center gap-1.5">
+                            <Loader2 size={9} className="animate-spin" />
+                            {stats.pulse.msg}
+                        </p>
+                    )}
                 </div>
-                {isScanning ? (
-                    <div className="flex items-center gap-2 text-blue-400 bg-blue-400/5 px-3 py-1.5 rounded-full border border-blue-400/10">
-                        <Loader2 size={12} className="animate-spin" />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Active</span>
+
+                {/* Tabs */}
+                <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 w-fit">
+                    {(['keywords', 'prospects'] as const).map(tab => (
+                        <button key={tab} onClick={() => setActiveTab(tab)}
+                            className={`px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'}`}>
+                            {tab === 'keywords' ? `Keywords (${queries.length})` : `Prospects (${prospects.length})`}
+                        </button>
+                    ))}
+                </div>
+
+                {activeTab === 'keywords' ? (
+                    /* ── KEYWORD TABLE (Meta-style) ── */
+                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-slate-100">
+                                    <th className="text-left px-5 py-4 text-[9px] font-black uppercase tracking-widest text-slate-400 w-8">#</th>
+                                    <th className="text-left px-5 py-4 text-[9px] font-black uppercase tracking-widest text-slate-400">Keyword</th>
+                                    <th className="text-left px-4 py-4 text-[9px] font-black uppercase tracking-widest text-slate-400">Platform</th>
+                                    <th className="text-left px-4 py-4 text-[9px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                                    <th className="text-right px-4 py-4 text-[9px] font-black uppercase tracking-widest text-slate-400">Leads</th>
+                                    <th className="text-right px-4 py-4 text-[9px] font-black uppercase tracking-widest text-slate-400">Hot 🔥</th>
+                                    <th className="text-right px-4 py-4 text-[9px] font-black uppercase tracking-widest text-slate-400">Warm ⚡</th>
+                                    <th className="text-right px-5 py-4 text-[9px] font-black uppercase tracking-widest text-slate-400">Scanned At</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {keywordRows.map((row, i) => {
+                                    const sc = statusConfig[row.status];
+                                    return (
+                                        <tr key={i} className={`border-b border-slate-50 hover:bg-slate-50/80 transition-colors ${row.status === 'running' ? 'bg-blue-50/30' : ''}`}>
+                                            <td className="px-5 py-3.5 text-[10px] font-bold text-slate-300">{i + 1}</td>
+                                            <td className="px-5 py-3.5">
+                                                <div className="flex items-center gap-2">
+                                                    {row.status === 'running' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />}
+                                                    <span className="text-[12px] font-bold text-slate-900 truncate max-w-xs">{row.query}</span>
+                                                </div>
+                                                {row.intent && <div className="text-[9px] text-slate-400 font-medium truncate max-w-xs mt-0.5">{row.intent}</div>}
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${platformBg[row.platform] || 'bg-slate-50 text-slate-500'}`}>
+                                                    {row.platform}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${sc.bg} ${sc.color}`}>
+                                                    {sc.icon} {sc.label}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-right">
+                                                <span className="text-[13px] font-black text-slate-900">{row.found}</span>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-right">
+                                                <span className="text-[13px] font-black text-red-500">{row.hot || '—'}</span>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-right">
+                                                <span className="text-[13px] font-black text-orange-500">{row.warm || '—'}</span>
+                                            </td>
+                                            <td className="px-5 py-3.5 text-right text-[10px] text-slate-400 font-medium">
+                                                {row.completedAt ? new Date(row.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : row.startedAt ? <span className="text-blue-500">Running...</span> : '—'}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-2 text-emerald-400 bg-emerald-400/5 px-3 py-1.5 rounded-full border border-emerald-400/10">
-                        <Check size={12} />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Synced</span>
+                    /* ── PROSPECTS LIST ── */
+                    <div className="space-y-3">
+                        {prospects.length === 0 ? (
+                            <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-16 text-center">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Awaiting signals...</p>
+                            </div>
+                        ) : prospects.map((p, idx) => {
+                            const temp = (p.intelligenceScore || p.relevance || 0) >= 75 ? 'hot' : (p.intelligenceScore || p.relevance || 0) >= 45 ? 'warm' : 'cold';
+                            const tempBadge = { hot: '🔥 HOT', warm: '⚡ WARM', cold: '❄️ COLD' }[temp];
+                            const tempColor = { hot: 'text-red-500 bg-red-50', warm: 'text-orange-500 bg-orange-50', cold: 'text-slate-400 bg-slate-50' }[temp];
+                            return (
+                                <div key={idx} className="bg-white rounded-2xl border border-slate-200 hover:border-slate-300 transition-all p-5 flex items-start gap-4">
+                                    <div className={`w-10 h-10 rounded-xl ${platformColor[p.tags?.[1]] || 'bg-slate-900'} flex items-center justify-center text-sm font-black shrink-0`}>
+                                        {(p.name || '?').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-sm font-black text-slate-900">{p.name || 'Unknown'}</span>
+                                            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest ${tempColor}`}>{tempBadge}</span>
+                                            <span className="px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest bg-slate-50 text-slate-500">
+                                                {p.interactionType === 'Comment' ? '💬 Comment' : '📣 Post'}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 font-medium mt-1 line-clamp-2">{p.postText || p.why}</p>
+                                        {p.tags?.[0] && <p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest mt-1">Keyword: {p.tags[0]}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <span className="text-[11px] font-black text-slate-900">{p.intelligenceScore || p.relevance || 0}%</span>
+                                        <a href={p.postUrl || p.url} target="_blank" rel="noopener noreferrer"
+                                            className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-900 hover:text-white transition-all">
+                                            <ArrowUpRight size={14} />
+                                        </a>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
-            
-            <div className="space-y-1.5">
-                <div className="text-[13px] font-mono text-slate-700 truncate" title={query.query}>{query.query}</div>
-                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">{query.intent}</div>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                <div className="text-[10px] text-slate-500 font-bold"><span className="text-slate-900 font-black">{stats.scanned}</span> <span className="opacity-40">ANALYZED</span></div>
-                <div className="flex gap-3">
-                    <div className="text-[10px] text-rose-600 font-bold"><span className="font-black">{stats.buyNow || 0}</span> <span className="opacity-40 uppercase">Buy Now</span></div>
-                    <div className="text-[10px] text-orange-600 font-bold"><span className="font-black">{stats.warm || 0}</span> <span className="opacity-40 uppercase">Warm</span></div>
-                    <div className="text-[10px] text-emerald-600 font-bold"><span className="font-black">{stats.found}</span> <span className="opacity-40 uppercase">Total</span></div>
-                </div>
-            </div>
         </div>
     );
 };
-
-const DNASection = ({ title, items, color }: any) => {
-    const colorMap: any = {
-        emerald: { bg: 'bg-emerald-500/5', border: 'border-emerald-500/10', text: 'text-emerald-600/80' },
-        blue: { bg: 'bg-blue-500/5', border: 'border-blue-500/10', text: 'text-blue-600/80' },
-        indigo: { bg: 'bg-indigo-500/5', border: 'border-indigo-500/10', text: 'text-indigo-600/80' },
-        rose: { bg: 'bg-rose-500/5', border: 'border-rose-500/10', text: 'text-rose-600/80' }
-    };
-    const c = colorMap[color] || colorMap.blue;
-
-    return (
-        <div className="space-y-3">
-            <label className="text-[9px] font-black uppercase tracking-[0.3em] text-gray-600">{title}</label>
-            <div className="flex flex-wrap gap-2">
-                {items.map((it: string) => (
-                    <span key={it} className={`px-3 py-1.5 ${c.bg} border ${c.border} rounded-xl text-[10px] font-bold ${c.text}`}>
-                        {it}
-                    </span>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const ShieldCheck = ({ size, className }: any) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="m9 12 2 2 4-4" />
-    </svg>
-);
-
-const Sparkles = ({ size, fill, className }: any) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill || "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-        <path d="M5 3v4" /><path d="M19 17v4" /><path d="M3 5h4" /><path d="M17 19h4" />
-    </svg>
-);

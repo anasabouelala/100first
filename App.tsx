@@ -17,7 +17,7 @@ import { PipelineView } from './components/PipelineView';
 import { IntelligenceTriage } from './components/IntelligenceTriage';
 import { 
   Rocket, Target, Zap, Layout, Loader2, Globe, Radar, MessageSquarePlus, 
-  Menu, Home, ArrowRight, ShieldCheck, Activity, Users, Sparkles, Database, ListChecks, GitMerge
+  Menu, Home, ArrowRight, ShieldCheck, Activity, Users, Sparkles, Database, ListChecks, GitMerge, Trash2
 } from 'lucide-react';
 
 function App() {
@@ -331,14 +331,37 @@ function App() {
             ))}
           </div>
 
-          <div className="mt-8">
-            <li className="menu-title opacity-50 uppercase text-xs tracking-wider mb-4 font-semibold">Readiness Checklist</li>
-            <ReadinessWidget />
-            
+          <div className="mt-8 space-y-4">
+            <button 
+              onClick={() => {
+                if (window.confirm("FATAL RESET: This will permanently DELETE all campaigns, prospects, leads, and extension data. You will start with a 100% clean session. Proceed?")) {
+                  // 1. Message Extension to Nuke
+                  if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+                    chrome.runtime.sendMessage({ action: 'STOP_RECON_MISSION' });
+                    // Additional thorough clear if extension allows
+                    if (chrome.storage?.local) {
+                       chrome.storage.local.clear();
+                    }
+                  }
+                  
+                  // 2. Clear All Web Storage
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  
+                  // 3. Reload
+                  window.location.reload();
+                }
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl transition-all font-black uppercase tracking-widest text-[10px] border border-transparent hover:border-red-100"
+            >
+              <Trash2 size={16} />
+              <span>Nuke Session</span>
+            </button>
+
             <div className="divider my-4"></div>
-            <div className="px-4 text-xs opacity-50 text-center">
-              Powered by Gemini 3 Flash<br/>
-              v1.0.0
+            <div className="px-4 text-[9px] opacity-40 font-black uppercase tracking-[0.2em] text-center">
+              System: Stable<br/>
+              v1.0.0.REVIVE
             </div>
           </div>
         </ul>
