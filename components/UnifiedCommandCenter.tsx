@@ -430,19 +430,6 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
               </div>
               Public Radar
           </button>
-          <button 
-              onClick={() => setActiveMainTab('leads')}
-              className={`flex items-center gap-2 px-10 py-4 rounded-t-[2.5rem] text-xs font-black uppercase tracking-widest transition-all relative z-10 ${
-                  activeMainTab === 'leads' 
-                  ? 'bg-white text-blue-600 border-x border-t border-gray-200 -mb-[1px] shadow-[0_-15px_35px_rgba(0,0,0,0.08)]' 
-                  : 'text-gray-400 hover:text-gray-600 pb-3'
-              }`}
-          >
-              <div className={`p-1.5 rounded-xl ${activeMainTab === 'leads' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
-                  <Target size={16} />
-              </div>
-              Prospects
-          </button>
           
           <div className="flex-1"></div>
           
@@ -466,35 +453,25 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
 
         <div className="flex items-center justify-between mb-16">
             <div className="flex items-center gap-6">
-                <div className="w-20 h-20 bg-gray-900 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-gray-200/50">
-                    <Target size={40} className="text-white" />
+                <div className="w-20 h-20 bg-amber-500 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-amber-200/50">
+                    <Radar size={40} className="text-white" />
                 </div>
                 <div>
-                    <h2 className="text-5xl font-display font-medium tracking-tight text-gray-900">Engagement <span className="text-blue-600 font-bold">Pipeline</span></h2>
-                    <p className="text-sm font-black uppercase tracking-[0.3em] text-gray-300 mt-2">Nurture prospects into customers</p>
+                    <h2 className="text-5xl font-display font-medium tracking-tight text-gray-900">Public <span className="text-amber-600 font-bold">Radar</span></h2>
+                    <p className="text-sm font-black uppercase tracking-[0.3em] text-gray-300 mt-2">Tracked account activity — be first to engage</p>
                 </div>
             </div>
             
             <div className="flex items-center gap-6">
-                {activeMainTab === 'radar' ? (
-                    <div className="text-right">
-                        <div className="px-5 py-2 bg-amber-100 text-amber-600 rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest inline-block mb-3 shadow-sm border border-amber-200">Influencer Tracking</div>
-                        <p className="text-sm text-gray-400 font-medium max-w-[240px]">Be the first to engage with big accounts to get noticed.</p>
-                    </div>
-                ) : (
-                    <div className="text-right">
-                        <div className="px-5 py-2 bg-blue-100 text-blue-600 rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest inline-block mb-3 shadow-sm border border-blue-200">Direct Sales</div>
-                        <p className="text-sm text-gray-400 font-medium max-w-[240px]">Turn social signals into warm leads and real customers.</p>
-                    </div>
-                )}
+                <div className="text-right">
+                    <div className="px-5 py-2 bg-amber-100 text-amber-600 rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest inline-block mb-3 shadow-sm border border-amber-200">Influencer Tracking</div>
+                    <p className="text-sm text-gray-400 font-medium max-w-[240px]">Be the first to engage with big accounts to get noticed.</p>
+                </div>
             </div>
         </div>
 
-        {/* Batch actions bar */}
+        {/* Radar feed */}
         <div className="space-y-3 max-w-5xl">
-
-            
-            {activeMainTab === 'radar' ? (
                 <div className="space-y-4">
                     {influencerSignals.length === 0 ? (
                         <div className="py-32 text-center bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
@@ -543,7 +520,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                         <AnswerlyView />
                     </div>
                 </div>
-            ) : (
+            {false && (
                 <div className="space-y-6">
                     {/* ── MISSION INTELLIGENCE TRIAGE ── */}
                     {newReconSignals.length > 0 && (
@@ -861,8 +838,8 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
             )}
         </div>
 
-        {/* Floating Batch Actions Hub */}
-        {selectedLeads.size > 0 && activeMainTab === 'leads' && (
+        {/* Floating Batch Actions Hub — reserved for future use */}
+        {false && selectedLeads.size > 0 && activeMainTab === 'leads' && (
             <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[90] animate-in fade-in slide-in-from-bottom-6 duration-300">
                 <div className="bg-gray-950/90 backdrop-blur-xl text-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.4)] px-8 py-5 flex items-center gap-8 border border-white/10 ring-1 ring-white/5">
                     <div className="flex flex-col">

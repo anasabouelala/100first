@@ -190,7 +190,137 @@ export enum AppMode {
   FORUM_LEADS = 'FORUM_LEADS',
   CONTENT_ENGINE = 'CONTENT_ENGINE',
   PLATFORM_INSIGHTS = 'PLATFORM_INSIGHTS',
-  TRIAGE = 'TRIAGE'
+  TRIAGE = 'TRIAGE',
+  ACCOUNT_FINDER = 'ACCOUNT_FINDER'
+}
+
+// =====================================================================
+// ACCOUNT DISCOVERY ENGINE
+// =====================================================================
+
+export type DiscoveryPlatform = 'X' | 'LinkedIn' | 'Reddit';
+export type DiscoveryMode = 'surgical' | 'volume' | 'deep';
+export type AuthorityLevel = 'nano' | 'micro' | 'mid' | 'macro' | 'mega' | 'all';
+export type AccountTier = 'S' | 'A' | 'B' | 'C';
+export type MissionStatus = 'idle' | 'preparing' | 'scanning' | 'paused' | 'cooldown' | 'completed' | 'failed' | 'aborted';
+
+export interface DiscoveryFilters {
+  platforms: DiscoveryPlatform[];
+  keywords: string[];
+  hashtags: string[];
+  excludeKeywords: string[];
+  minFollowers?: number;
+  maxFollowers?: number;
+  minEngagementRate?: number;
+  authorityLevel: AuthorityLevel;
+  language?: string;
+  location?: string;
+  industry?: string;
+  postingFrequency?: 'daily' | 'weekly' | 'any';
+  verifiedOnly: boolean;
+  recentActivityDays?: number;
+  excludeAlreadyTracked: boolean;
+}
+
+export interface DiscoveredAccount {
+  id: string;
+  platform: DiscoveryPlatform;
+  handle: string;
+  url: string;
+  displayName: string;
+  bio?: string;
+  avatar?: string;
+  followers: number;
+  following?: number;
+  posts?: number;
+  avgEngagement?: number;
+  engagementRate?: number;
+  verified: boolean;
+  authorityScore: number;
+  nicheMatch: number;
+  finalScore: number;
+  postingCadence?: string;
+  topTopics?: string[];
+  lastActive?: string;
+  matchedSignals: string[];
+  tier: AccountTier;
+  crossPlatform?: boolean;
+  discoveredAt: string;
+  trackingStatus: 'untracked' | 'tracking' | 'dismissed';
+  sampleHooks?: string[];
+}
+
+export interface MissionLog {
+  timestamp: string;
+  level: 'info' | 'warn' | 'error' | 'success' | 'stealth';
+  message: string;
+  platform?: DiscoveryPlatform;
+}
+
+export interface StealthState {
+  actionsThisMinute: number;
+  actionsThisSession: number;
+  rateLimit: number;
+  cooldownUntil?: number;
+  detected: boolean;
+  detectionReason?: string;
+  nextActionInMs: number;
+  sessionStartedAt: number;
+  humanizedBehaviorScore: number;
+  patternsDetected: string[];
+}
+
+export interface MissionProgress {
+  currentPlatform?: DiscoveryPlatform;
+  phase: string;
+  candidatesScanned: number;
+  profilesAnalyzed: number;
+  matched: number;
+  rejected: number;
+  estimatedRemainingMs?: number;
+  totalQueriesPlanned: number;
+  queriesCompleted: number;
+}
+
+export interface DiscoveryMission {
+  id: string;
+  name: string;
+  status: MissionStatus;
+  mode: DiscoveryMode;
+  filters: DiscoveryFilters;
+  startedAt?: string;
+  completedAt?: string;
+  progress: MissionProgress;
+  stealth: StealthState;
+  logs: MissionLog[];
+  results: DiscoveredAccount[];
+  campaignId?: string;
+}
+
+export type DiscoveryCampaignStatus = 'active' | 'paused' | 'completed' | 'aborted';
+
+export interface DiscoveryCampaign {
+  id: string;
+  name: string;
+  mode: DiscoveryMode;
+  filters: DiscoveryFilters;
+  status: DiscoveryCampaignStatus;
+  // Schedule
+  intervalHours: number;     // tick frequency (e.g. 3 = every 3h)
+  intervalJitter: number;    // ± random jitter in hours
+  durationDays: number;      // total campaign length
+  startedAt: string;
+  endsAt: string;
+  lastTickAt?: string;
+  nextTickAt?: string;
+  ticksCompleted: number;
+  ticksFailed: number;
+  // Aggregated state
+  results: DiscoveredAccount[];
+  totalCandidatesScanned: number;
+  knownHandles: string[];    // dedupe across ticks
+  // Diagnostics
+  recentLogs: MissionLog[];  // last 50 across all ticks
 }
 
 export interface ICPReconCampaign {

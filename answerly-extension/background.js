@@ -4,7 +4,7 @@
  * Polling Interval: Randomized (15-30m)
  */
 
-importScripts('LeadIntelligenceEngine.js');
+importScripts('LeadIntelligenceEngine.js', 'discovery_engine.js');
 
 const LOG_TAG = "[Answerly]";
 
@@ -12,18 +12,73 @@ const LOG_TAG = "[Answerly]";
 let currentReconTimeout = null;
 let activeShadowWindowId = null;
 
+// ═══════════════════════════════════════════════════════════
+// TRACKING SETTINGS — user-configurable polling cadence
+// ═══════════════════════════════════════════════════════════
+const TRACKING_SETTINGS_KEY = 'tracking_settings';
+const DEFAULT_TRACKING_SETTINGS = {
+  intervalMinutes: 15,      // how often to wake up and pick a creator to poll
+  cooldownMinutes: 20,      // min time between two polls of the SAME creator
+  respectOffHours: true,    // skip polling between 23h and 8h local time
+  jitterPercent: 0.25       // ±25% random jitter on alarm timing
+};
+
+async function getTrackingSettings() {
+  const r = await chrome.storage.local.get([TRACKING_SETTINGS_KEY]);
+  return { ...DEFAULT_TRACKING_SETTINGS, ...(r[TRACKING_SETTINGS_KEY] || {}) };
+}
+
+async function rescheduleStealthCheck() {
+  const s = await getTrackingSettings();
+  const min = Math.max(5, s.intervalMinutes); // hard floor: 5 min
+  const jitter = (Math.random() * 2 - 1) * (s.jitterPercent || 0) * min;
+  const periodInMinutes = Math.max(5, Math.round((min + jitter) * 100) / 100);
+  await chrome.alarms.clear("stealthCheck");
+  chrome.alarms.create("stealthCheck", { periodInMinutes });
+  console.log(LOG_TAG, `[Tracking] Next poll in ~${periodInMinutes.toFixed(1)}min (base ${min}min ± ${(s.jitterPercent*100)}%)`);
+}
+
 // 1. Initialize Alarms
 chrome.runtime.onInstalled.addListener(() => {
   console.log(LOG_TAG, "Engine Initialized.");
-  chrome.alarms.create("stealthCheck", { periodInMinutes: 15 }); // Slow polling
-  chrome.alarms.create("queueProcessor", { periodInMinutes: 5 }); // Trickle keywords
+  rescheduleStealthCheck();
+  chrome.alarms.create("queueProcessor", { periodInMinutes: 5 });
   chrome.alarms.create("resetEngagementCounter", { periodInMinutes: 60 });
   chrome.alarms.create("watchdog", { periodInMinutes: 1 });
-  
-  // Wait 2s for bridge to potentially sync data before first run
+
+  // Register content scripts programmatically (more reliable than manifest for localhost)
+  chrome.scripting.registerContentScripts([{
+    id: 'answerly-bridge',
+    matches: ['http://localhost:*/*', 'http://127.0.0.1:*/*'],
+    js: ['content_bridge.js'],
+    runAt: 'document_start',
+    persistAcrossSessions: true
+  }]).catch(err => {
+    if (!err.message?.includes('already registered')) {
+      console.error(LOG_TAG, "Failed to register bridge script:", err);
+    }
+  });
+
+  // Auto-reload tabs running the web app so the bridge reconnects
+  chrome.tabs.query({ url: ["http://localhost:*/*", "http://127.0.0.1:*/*"] }, (tabs) => {
+    for (const tab of tabs) {
+      chrome.tabs.reload(tab.id);
+    }
+  });
+
   setTimeout(() => {
     executeCycle();
   }, 2000);
+});
+
+// Fallback: inject bridge on tab navigation for localhost (in case manifest matching fails)
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url && (tab.url.startsWith('http://localhost') || tab.url.startsWith('http://127.0.0.1'))) {
+    chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content_bridge.js']
+    }).catch(() => {});
+  }
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -34,7 +89,24 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     console.log(LOG_TAG, "Resetting hourly engagement counter.");
     chrome.storage.local.set({ answerly_engagements: 0 });
   }
+  // Discovery campaign ticks
+  if (alarm.name.startsWith('campaign_tick_') && self.handleCampaignAlarm) {
+    self.handleCampaignAlarm(alarm.name).catch(e => console.error(LOG_TAG, 'Campaign alarm failed:', e));
+  }
 });
+
+// React to user changing tracking settings → reschedule alarm immediately
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes[TRACKING_SETTINGS_KEY]) {
+    console.log(LOG_TAG, "[Tracking] Settings changed, rescheduling alarm.");
+    rescheduleStealthCheck();
+  }
+});
+
+// Reschedule on SW startup (alarms persist but jitter doesn't)
+chrome.runtime.onStartup?.addListener(() => rescheduleStealthCheck());
+// Also reschedule once at module load to recover from SW eviction
+rescheduleStealthCheck().catch(() => {});
 
 async function checkWatchdog() {
     // If isEngaging is true for more than 10 mins, something crashed
@@ -111,7 +183,6 @@ async function processEngagementQueue() {
             height: 600,
             left: 200,
             top: 200,
-            populate: true
         });
         
         shadowWindowId = win.id;
@@ -293,6 +364,111 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    // ─── DISCOVERY ENGINE HANDLERS ───
+    // CRITICAL: respond synchronously. Mission runs as fire-and-forget — Chrome
+    // closes message channels after ~5min, but missions can run for 30min.
+    if (request.action === 'DISCOVERY_START') {
+        console.log(LOG_TAG, "[Discovery] Mission start request received.");
+        if (typeof self.startDiscoveryMission !== 'function') {
+            console.error(LOG_TAG, "[Discovery] Engine not loaded! discovery_engine.js failed to import.");
+            sendResponse({ success: false, error: 'Discovery engine not loaded — check extension console' });
+            return false;
+        }
+        // Fire-and-forget — mission updates state via chrome.storage which the bridge picks up
+        self.startDiscoveryMission(request.mission).catch(e => {
+            console.error(LOG_TAG, "[Discovery] Mission crashed:", e);
+        });
+        sendResponse({ success: true, started: true });
+        return false; // sync response, channel can close
+    }
+    if (request.action === 'DISCOVERY_PAUSE') {
+        self.pauseDiscoveryMission?.().catch(e => console.error('[Discovery] Pause error:', e));
+        sendResponse({ success: true });
+        return false;
+    }
+    if (request.action === 'DISCOVERY_RESUME') {
+        self.resumeDiscoveryMission?.().catch(e => console.error('[Discovery] Resume error:', e));
+        sendResponse({ success: true });
+        return false;
+    }
+    if (request.action === 'DISCOVERY_ABORT') {
+        self.abortDiscoveryMission?.().catch(e => console.error('[Discovery] Abort error:', e));
+        sendResponse({ success: true });
+        return false;
+    }
+    if (request.action === 'DISCOVERY_PING') {
+        // Diagnostic: lets the web app verify the engine is loaded
+        sendResponse({
+            engineLoaded: typeof self.startDiscoveryMission === 'function',
+            campaignSupport: typeof self.startDiscoveryCampaign === 'function',
+            version: '1.1'
+        });
+        return false;
+    }
+
+    // ─── CAMPAIGN HANDLERS ───
+    if (request.action === 'CAMPAIGN_START') {
+        if (typeof self.startDiscoveryCampaign !== 'function') {
+            sendResponse({ success: false, error: 'Campaign engine not loaded' });
+            return false;
+        }
+        self.startDiscoveryCampaign(request.config)
+            .then(c => console.log(LOG_TAG, '[Campaign] Started:', c.id))
+            .catch(e => console.error(LOG_TAG, '[Campaign] Start failed:', e));
+        sendResponse({ success: true });
+        return false;
+    }
+    if (request.action === 'CAMPAIGN_PAUSE') {
+        self.pauseDiscoveryCampaign?.(request.id).catch(e => console.error(e));
+        sendResponse({ success: true });
+        return false;
+    }
+    if (request.action === 'CAMPAIGN_RESUME') {
+        self.resumeDiscoveryCampaign?.(request.id).catch(e => console.error(e));
+        sendResponse({ success: true });
+        return false;
+    }
+    if (request.action === 'CAMPAIGN_ABORT') {
+        self.abortDiscoveryCampaign?.(request.id).catch(e => console.error(e));
+        sendResponse({ success: true });
+        return false;
+    }
+    if (request.action === 'CAMPAIGN_DELETE') {
+        self.deleteDiscoveryCampaign?.(request.id).catch(e => console.error(e));
+        sendResponse({ success: true });
+        return false;
+    }
+    if (request.action === 'CAMPAIGN_RUN_NOW') {
+        self.runCampaignTick?.(request.id).catch(e => console.error(e));
+        sendResponse({ success: true });
+        return false;
+    }
+
+    // ─── TRACKING SETTINGS ───
+    if (request.action === 'TRACKING_SETTINGS_GET') {
+        getTrackingSettings().then(s => sendResponse({ success: true, settings: s }));
+        return true; // async response
+    }
+    if (request.action === 'TRACKING_SETTINGS_SET') {
+        const incoming = request.settings || {};
+        // Enforce floor: 5 min minimum
+        const safe = {
+            intervalMinutes: Math.max(5, Number(incoming.intervalMinutes) || 15),
+            cooldownMinutes: Math.max(5, Number(incoming.cooldownMinutes) || 20),
+            respectOffHours: incoming.respectOffHours !== false,
+            jitterPercent: Math.min(0.5, Math.max(0, Number(incoming.jitterPercent) || 0.25))
+        };
+        chrome.storage.local.set({ [TRACKING_SETTINGS_KEY]: safe }, () => {
+            sendResponse({ success: true, settings: safe });
+        });
+        return true;
+    }
+    if (request.action === 'TRACKING_RUN_NOW') {
+        executeCycle().catch(e => console.error(LOG_TAG, '[Tracking] Manual run failed:', e));
+        sendResponse({ success: true });
+        return false;
+    }
+
     if (request.action === 'QUEUE_FOR_ENGAGEMENT') {
         console.log(LOG_TAG, "[ENGAGE] Queued:", request.lead?.url);
         chrome.storage.local.get(['answerly_engagement_queue'], (result) => {
@@ -364,19 +540,40 @@ async function executeCycle() {
   const diagnostic = result.answerly_diagnostic || { lastRuns: [], errors: [] };
   const backoffUntil = result.answerly_backoff_until || 0;
 
-  if (configs.length === 0) return;
+  if (configs.length === 0) {
+    // Still reschedule with fresh jitter even if nothing to do
+    await rescheduleStealthCheck();
+    return;
+  }
+
+  const settings = await getTrackingSettings();
+
+  // Off-hours guard — humans don't poll profiles at 3am
+  if (settings.respectOffHours) {
+    const h = new Date().getHours();
+    if (h < 8 || h >= 23) {
+      console.log(LOG_TAG, `[Tracking] Off-hours (${h}h) — skipping poll. Will retry on next alarm.`);
+      await rescheduleStealthCheck();
+      return;
+    }
+  }
 
   // 1. Safety Check: If we are in a backoff period, skip
   if (Date.now() < backoffUntil) {
     const mins = Math.ceil((backoffUntil - Date.now()) / 60000);
+    console.log(LOG_TAG, `[Tracking] In backoff for ${mins}min — skipping.`);
+    await rescheduleStealthCheck();
     return;
   }
 
-  // 2. Identify candidates (Must have rested at least 20 minutes)
-  const COOLDOWN_MS = 20 * 60 * 1000;
+  // 2. Identify candidates (must have rested at least cooldownMinutes since last check)
+  const COOLDOWN_MS = Math.max(5, settings.cooldownMinutes) * 60 * 1000;
   const candidates = configs.filter(c => (Date.now() - (c.lastChecked || 0)) > COOLDOWN_MS);
 
-  if (candidates.length === 0) return;
+  if (candidates.length === 0) {
+    await rescheduleStealthCheck();
+    return;
+  }
 
   // Pick the oldest from the rested candidates
   candidates.sort((a, b) => (a.lastChecked || 0) - (b.lastChecked || 0));
@@ -415,6 +612,9 @@ async function executeCycle() {
     diagnostic.errors.unshift({ time: new Date().toISOString(), label: target.label, error: error.message });
     diagnostic.errors = diagnostic.errors.slice(0, 10);
     await chrome.storage.local.set({ answerly_diagnostic: diagnostic });
+  } finally {
+    // Reschedule with fresh jitter so timing stays unpredictable
+    await rescheduleStealthCheck();
   }
 }
 
@@ -437,7 +637,6 @@ async function pollXWithShadowTab(target) {
             height: 600,
             left: 50,
             top: 50,
-            populate: true
         });
 
         const tabId = shadowWindow.tabs?.[0]?.id || (await chrome.tabs.query({ windowId: shadowWindow.id }))[0]?.id;
@@ -534,7 +733,6 @@ async function pollLinkedIn(target) {
             height: 600,
             left: 100,
             top: 100,
-            populate: true
         });
 
         const tabId = shadowWindow.tabs?.[0]?.id || (await chrome.tabs.query({ windowId: shadowWindow.id }))[0]?.id;
@@ -623,7 +821,6 @@ async function pollReddit(target) {
             type: 'popup',
             state: 'minimized',
             focused: false,
-            populate: true
         });
 
         const tabId = shadowWindow.tabs?.[0]?.id || (await chrome.tabs.query({ windowId: shadowWindow.id }))[0]?.id;
@@ -718,7 +915,6 @@ async function pollProductHunt(target) {
             type: 'popup',
             state: 'minimized',
             focused: false,
-            populate: true
         });
 
         const tabId = shadowWindow.tabs?.[0]?.id || (await chrome.tabs.query({ windowId: shadowWindow.id }))[0]?.id;
@@ -1135,8 +1331,7 @@ async function runPipelineSweepX(keywords, campaign = null) {
                     postsToDeepScan.push(...statusPosts.map(p => ({ url: p.postUrl, platform: 'X', text: p.postText })));
                 }
             }
-                // ──────────────────────────────────────────────────────────────
-            }
+            // ──────────────────────────────────────────────────────────────
 
             // ─── PERSIST PER-KEYWORD STATS ───
             const finalStatsRes = await chrome.storage.local.get(['keyword_stats']);

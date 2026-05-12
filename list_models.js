@@ -1,6 +1,6 @@
 import https from 'https';
 
-const KEY = 'AIzaSyCc1d-JqoKOAUVBK2BrgOOViTEMGBX5wXI';
+const KEY = '***REMOVED***';
 const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${KEY}`;
 
 https.get(url, (res) => {

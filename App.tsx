@@ -2,22 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { AppMode, StrategyPlan } from './types';
 import { generateLaunchStrategy } from './services/geminiService';
 import { StrategyView } from './components/StrategyView';
-import { RoastView } from './components/RoastView';
 import { DistributionView } from './components/DistributionView';
 import { ReconView } from './components/ReconView';
-import { OutreachView } from './components/OutreachView';
 import { ReadinessWidget } from './components/ReadinessWidget';
 import { PersonaView } from './components/PersonaView';
-import { ICPReconView } from './components/ICPReconView';
 import { UnifiedCommandCenter } from './components/UnifiedCommandCenter';
-import { ForumOpportunitiesView } from './components/ForumOpportunitiesView';
 import { ContentEngineView } from './components/ContentEngineView';
-import { PlatformIntelligenceView } from './components/PlatformIntelligenceView';
-import { PipelineView } from './components/PipelineView';
-import { IntelligenceTriage } from './components/IntelligenceTriage';
-import { 
-  Rocket, Target, Zap, Layout, Loader2, Globe, Radar, MessageSquarePlus, 
-  Menu, Home, ArrowRight, ShieldCheck, Activity, Users, Sparkles, Database, ListChecks, GitMerge, Trash2
+import { AccountFinderView } from './components/AccountFinderView';
+import {
+  Rocket, Target, Zap, Globe, Radar, Menu, Home, ArrowRight, ShieldCheck,
+  Users, Sparkles, ListChecks, Trash2, Crosshair
 } from 'lucide-react';
 
 function App() {
@@ -78,11 +72,7 @@ function App() {
     {
       title: 'Growth Ops',
       items: [
-        { id: AppMode.ICP_RECON, label: 'ICP Recon Pulse', icon: <Activity size={18} /> },
-        { id: AppMode.TRIAGE, label: 'Intelligence Triage', icon: <ListChecks size={18} /> },
-        { id: AppMode.PIPELINE, label: 'Pipeline', icon: <GitMerge size={18} /> },
-        { id: AppMode.FORUM_LEADS, label: 'Forum Intel', icon: <Users size={18} /> },
-        { id: AppMode.PLATFORM_INSIGHTS, label: 'Platform Insights', icon: <Database size={18} /> },
+        { id: AppMode.ACCOUNT_FINDER, label: 'Account Finder', icon: <Crosshair size={18} /> },
       ]
     },
     {
@@ -91,7 +81,6 @@ function App() {
         { id: AppMode.STRATEGY, label: 'Launch Strategy', icon: <Target size={18} /> },
         { id: AppMode.RECON, label: 'Competitor Analysis', icon: <Radar size={18} /> },
         { id: AppMode.PERSONA, label: 'Buyer Persona', icon: <Users size={18} /> },
-        { id: AppMode.ROAST, label: 'Landing Roast', icon: <Layout size={18} /> },
         { id: AppMode.DISTRIBUTION, label: 'Distribution', icon: <Globe size={18} /> },
       ]
     },
@@ -99,25 +88,18 @@ function App() {
       title: 'Execution',
       items: [
         { id: AppMode.CONTENT_ENGINE, label: 'Content Engine', icon: <Sparkles size={18} /> },
-        { id: AppMode.OUTREACH, label: 'Direct Outreach', icon: <MessageSquarePlus size={18} /> },
       ]
     }
   ];
 
   const renderContent = () => {
     switch (mode) {
-      case AppMode.ROAST: return <RoastView />;
       case AppMode.DISTRIBUTION: return <DistributionView />;
       case AppMode.RECON: return <ReconView />;
       case AppMode.PERSONA: return <PersonaView appName={appName} appDesc={appDesc} category={audience} />;
-      case AppMode.OUTREACH: return <OutreachView appDesc={appDesc} />;
-      case AppMode.ICP_RECON: return <ICPReconView />;
       case AppMode.ANSWERLY_RADAR: return <UnifiedCommandCenter appDesc={appDesc} />;
-      case AppMode.PIPELINE: return <PipelineView appDesc={appDesc} />;
-      case AppMode.TRIAGE: return <IntelligenceTriage />;
-      case AppMode.FORUM_LEADS: return <ForumOpportunitiesView />;
       case AppMode.CONTENT_ENGINE: return <ContentEngineView />;
-      case AppMode.PLATFORM_INSIGHTS: return <PlatformIntelligenceView />;
+      case AppMode.ACCOUNT_FINDER: return <AccountFinderView />;
       case AppMode.STRATEGY:
         if (plan) {
           return (
@@ -209,34 +191,34 @@ function App() {
                    <p className="opacity-60 max-w-lg text-lg leading-relaxed">The engine for your first 100 users. Deploy social radar, surgical search dorks, and AI-powered engagement from one dashboard.</p>
                 </div>
                 <div className="flex flex-wrap gap-4 relative z-10">
-                    <button onClick={() => setMode(AppMode.ICP_RECON)} className="btn bg-primary hover:bg-primary/90 border-none text-white px-8 h-14 rounded-2xl shadow-xl shadow-primary/20"><Activity size={20}/> Launch Recon</button>
+                    <button onClick={() => setMode(AppMode.ACCOUNT_FINDER)} className="btn bg-primary hover:bg-primary/90 border-none text-white px-8 h-14 rounded-2xl shadow-xl shadow-primary/20"><Crosshair size={20}/> Find Accounts</button>
                     <button onClick={() => setMode(AppMode.ANSWERLY_RADAR)} className="btn bg-white/10 hover:bg-white/20 border-white/10 text-white px-8 h-14 rounded-2xl backdrop-blur-md"><ShieldCheck size={20}/> View Radar</button>
                 </div>
              </div>
 
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <DashboardCard 
-                  onClick={() => setMode(AppMode.ICP_RECON)}
-                  icon={<Activity size={28} className="text-primary" />}
-                  title="ICP Recon Pulse"
-                  desc="Run surgical social searches."
+                <DashboardCard
+                  onClick={() => setMode(AppMode.ACCOUNT_FINDER)}
+                  icon={<Crosshair size={28} className="text-primary" />}
+                  title="Account Finder"
+                  desc="Discover & track key accounts."
                   color="blue"
                 />
-                <DashboardCard 
+                <DashboardCard
                   onClick={() => setMode(AppMode.ANSWERLY_RADAR)}
                   icon={<ShieldCheck size={28} className="text-emerald-500" />}
                   title="Unified Radar"
-                  desc="Manage leads and engagement."
+                  desc="Engage tracked account posts."
                   color="emerald"
                 />
-                <DashboardCard 
-                  onClick={() => setMode(AppMode.FORUM_LEADS)}
-                  icon={<Users size={28} className="text-amber-500" />}
-                  title="Forum Intel"
-                  desc="Find intent in Reddit/HN."
+                <DashboardCard
+                  onClick={() => setMode(AppMode.DISTRIBUTION)}
+                  icon={<Globe size={28} className="text-amber-500" />}
+                  title="Distribution"
+                  desc="Find the best launch channels."
                   color="amber"
                 />
-                <DashboardCard 
+                <DashboardCard
                   onClick={() => setMode(AppMode.CONTENT_ENGINE)}
                   icon={<Sparkles size={28} className="text-purple-500" />}
                   title="Content Engine"

@@ -20,8 +20,8 @@ try {
 const app  = express();
 const PORT = 3002;
 
-const STEEL_KEY  = process.env.STEEL_API_KEY  || 'ste-IPZNHuupORhgC3jddhMflJRsqrn9gJJg7xwEICvZsZUhLz2BBRVwwybNPvhpb6JUhIRFmA6qHSQFUu2gVSf9r3Aopl7be0jTumo';
-const GEMINI_KEY = process.env.GEMINI_API_KEY || 'AIzaSyCc1d-JqoKOAUVBK2BrgOOViTEMGBX5wXI';
+const STEEL_KEY  = process.env.STEEL_API_KEY  || '***REMOVED***';
+const GEMINI_KEY = process.env.GEMINI_API_KEY || '***REMOVED***';
 
 app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'] }));
 app.use(express.json());

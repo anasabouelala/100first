@@ -3,7 +3,17 @@
  * Runs on the SaaS domain to relay configuration changes to the extension.
  */
 
-console.log("[Answerly Bridge] Active.");
+// Expose version marker so the web app can detect if the new bridge is loaded
+window.__answerly_bridge_version__ = '1.4';
+window.__answerly_bridge_loaded_at__ = Date.now();
+window.__answerly_bridge__ = true;
+
+console.log("[Answerly Bridge] Active. Version:", window.__answerly_bridge_version__);
+
+// Handshake: announce presence to the web app
+window.dispatchEvent(new CustomEvent('EXTENSION_BRIDGE_READY', {
+    detail: { version: window.__answerly_bridge_version__, timestamp: Date.now() }
+}));
 
 // 0. Listen for Extension -> App pushes
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -17,6 +27,17 @@ chrome.storage.onChanged.addListener((changes, area) => {
         }
         if (changes.answerly_engine_pulse) {
             window.dispatchEvent(new CustomEvent('answerly_pulse_update', { detail: changes.answerly_engine_pulse.newValue }));
+        }
+        // Discovery engine state sync
+        if (changes.discovery_mission_state) {
+            window.dispatchEvent(new CustomEvent('discovery_mission_update', {
+                detail: changes.discovery_mission_state.newValue
+            }));
+        }
+        if (changes.discovery_mission_completed) {
+            window.dispatchEvent(new CustomEvent('discovery_mission_complete', {
+                detail: changes.discovery_mission_completed.newValue
+            }));
         }
     }
 });
@@ -41,6 +62,10 @@ chrome.runtime.onMessage.addListener((request) => {
 // 3. Heartbeat for UI
 window.addEventListener('answerly_ping', () => {
     window.dispatchEvent(new CustomEvent('answerly_pong'));
+    // Re-announce bridge for late-mounting React components
+    window.dispatchEvent(new CustomEvent('EXTENSION_BRIDGE_READY', {
+        detail: { version: '1.4', timestamp: Date.now() }
+    }));
 });
 
 // 4. History Request (From App to Extension)
@@ -125,12 +150,168 @@ function relayEngagement(lead) {
     });
 }
 
+// 4.7 Discovery Engine Bridge (Web App → Extension)
+window.addEventListener('discovery_mission_start', (event) => {
+    console.log("[Answerly Bridge] === DISCOVERY MISSION START EVENT RECEIVED ===");
+    console.log("[Answerly Bridge] Mission:", event.detail);
+    try {
+        chrome.runtime.sendMessage({ action: 'DISCOVERY_START', mission: event.detail }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error("[Answerly Bridge] ❌ Discovery start FAILED:", chrome.runtime.lastError.message);
+                window.dispatchEvent(new CustomEvent('discovery_mission_update', {
+                    detail: {
+                        ...event.detail,
+                        status: 'failed',
+                        completedAt: new Date().toISOString(),
+                        logs: [...(event.detail.logs || []), {
+                            timestamp: new Date().toISOString(),
+                            level: 'error',
+                            message: `Bridge → Background failed: ${chrome.runtime.lastError.message}. Reload extension and refresh page.`
+                        }]
+                    }
+                }));
+                return;
+            }
+            console.log("[Answerly Bridge] ✓ Background acknowledged:", response);
+            if (!response?.success) {
+                console.error("[Answerly Bridge] ❌ Background reported failure:", response);
+                window.dispatchEvent(new CustomEvent('discovery_mission_update', {
+                    detail: {
+                        ...event.detail,
+                        status: 'failed',
+                        completedAt: new Date().toISOString(),
+                        logs: [...(event.detail.logs || []), {
+                            timestamp: new Date().toISOString(),
+                            level: 'error',
+                            message: response?.error || 'Background returned failure without details'
+                        }]
+                    }
+                }));
+            }
+        });
+    } catch (e) {
+        console.error("[Answerly Bridge] ❌ sendMessage threw:", e);
+        window.dispatchEvent(new CustomEvent('discovery_mission_update', {
+            detail: {
+                ...event.detail,
+                status: 'failed',
+                completedAt: new Date().toISOString(),
+                logs: [...(event.detail.logs || []), {
+                    timestamp: new Date().toISOString(),
+                    level: 'error',
+                    message: e.message?.includes('context invalidated')
+                        ? 'Extension was reloaded. Please refresh this page (F5).'
+                        : `Bridge crash: ${e.message}`
+                }]
+            }
+        }));
+    }
+});
+
+// Diagnostic ping — let the web app verify the engine is loaded in the SW
+window.addEventListener('discovery_engine_ping', () => {
+    try {
+        chrome.runtime.sendMessage({ action: 'DISCOVERY_PING' }, (response) => {
+            window.dispatchEvent(new CustomEvent('discovery_engine_pong', {
+                detail: chrome.runtime.lastError
+                    ? { ok: false, error: chrome.runtime.lastError.message }
+                    : { ok: true, ...response }
+            }));
+        });
+    } catch (e) {
+        window.dispatchEvent(new CustomEvent('discovery_engine_pong', { detail: { ok: false, error: e.message } }));
+    }
+});
+
+window.addEventListener('discovery_mission_pause', () => {
+    chrome.runtime.sendMessage({ action: 'DISCOVERY_PAUSE' }, (r) => {
+        console.log("[Answerly Bridge] Pause confirmed:", r);
+    });
+});
+
+window.addEventListener('discovery_mission_resume', () => {
+    chrome.runtime.sendMessage({ action: 'DISCOVERY_RESUME' }, (r) => {
+        console.log("[Answerly Bridge] Resume confirmed:", r);
+    });
+});
+
+window.addEventListener('discovery_mission_abort', () => {
+    chrome.runtime.sendMessage({ action: 'DISCOVERY_ABORT' }, (r) => {
+        console.log("[Answerly Bridge] Abort confirmed:", r);
+    });
+});
+
+// ─── CAMPAIGN BRIDGE ───
+window.addEventListener('discovery_campaign_start', (event) => {
+    chrome.runtime.sendMessage({ action: 'CAMPAIGN_START', config: event.detail }, (r) => {
+        console.log("[Answerly Bridge] Campaign start ack:", r);
+    });
+});
+window.addEventListener('discovery_campaign_pause', (event) => {
+    chrome.runtime.sendMessage({ action: 'CAMPAIGN_PAUSE', id: event.detail?.id });
+});
+window.addEventListener('discovery_campaign_resume', (event) => {
+    chrome.runtime.sendMessage({ action: 'CAMPAIGN_RESUME', id: event.detail?.id });
+});
+window.addEventListener('discovery_campaign_abort', (event) => {
+    chrome.runtime.sendMessage({ action: 'CAMPAIGN_ABORT', id: event.detail?.id });
+});
+window.addEventListener('discovery_campaign_delete', (event) => {
+    chrome.runtime.sendMessage({ action: 'CAMPAIGN_DELETE', id: event.detail?.id });
+});
+window.addEventListener('discovery_campaign_run_now', (event) => {
+    chrome.runtime.sendMessage({ action: 'CAMPAIGN_RUN_NOW', id: event.detail?.id });
+});
+
+// ─── TRACKING SETTINGS BRIDGE ───
+window.addEventListener('tracking_settings_get', () => {
+    chrome.runtime.sendMessage({ action: 'TRACKING_SETTINGS_GET' }, (r) => {
+        window.dispatchEvent(new CustomEvent('tracking_settings_loaded', { detail: r?.settings || null }));
+    });
+});
+window.addEventListener('tracking_settings_set', (event) => {
+    chrome.runtime.sendMessage({ action: 'TRACKING_SETTINGS_SET', settings: event.detail }, (r) => {
+        window.dispatchEvent(new CustomEvent('tracking_settings_loaded', { detail: r?.settings || null }));
+    });
+});
+window.addEventListener('tracking_run_now', () => {
+    chrome.runtime.sendMessage({ action: 'TRACKING_RUN_NOW' });
+});
+
+// Sync campaign storage changes to web app
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.discovery_campaigns) {
+        window.dispatchEvent(new CustomEvent('discovery_campaigns_update', {
+            detail: changes.discovery_campaigns.newValue
+        }));
+    }
+});
+
+// On load: push current campaign state
+chrome.storage.local.get(['discovery_campaigns'], (r) => {
+    if (r.discovery_campaigns) {
+        window.dispatchEvent(new CustomEvent('discovery_campaigns_update', {
+            detail: r.discovery_campaigns
+        }));
+    }
+});
+
+// On load: push current state to web app if a mission is running (resume after refresh)
+chrome.storage.local.get(['discovery_mission_state'], (r) => {
+    if (r.discovery_mission_state) {
+        window.dispatchEvent(new CustomEvent('discovery_mission_update', {
+            detail: r.discovery_mission_state
+        }));
+    }
+});
+
 // 5. Periodic Poll (Backup)
 setInterval(syncToExtension, 10000);
 
 function syncToExtension(providedData = null) {
+    if (!chrome.runtime?.id) return;
     let dataToSync = providedData;
-    
+
     if (!dataToSync) {
         const raw = localStorage.getItem('answerly_creator_configs');
         if (raw) {

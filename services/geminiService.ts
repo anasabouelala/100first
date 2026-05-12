@@ -2,7 +2,21 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import * as cheerio from 'cheerio';
 import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, GeneratedContent, ChannelAnalysis, CompetitorData, CompetitorDeepDive, OutreachResponse, MarketOpportunity, ReplyDraft, IndustryBenchmark, SearchDork } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+const _apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
+const ai = new GoogleGenAI({ apiKey: _apiKey || 'MISSING_KEY_ADD_TO_.env' });
+
+export const isGeminiConfigured = (): boolean => !!_apiKey && _apiKey !== 'MISSING_KEY_ADD_TO_.env';
+
+export class GeminiNotConfiguredError extends Error {
+  constructor() {
+    super('Gemini API key missing. Add VITE_GEMINI_API_KEY to your .env file (get one at https://aistudio.google.com/app/apikey) and restart the dev server.');
+    this.name = 'GeminiNotConfiguredError';
+  }
+}
+
+function assertConfigured() {
+  if (!isGeminiConfigured()) throw new GeminiNotConfiguredError();
+}
 
 // Helper: Validate and enrich opportunity with real page title
 const validateOpportunity = async (opp: MarketOpportunity): Promise<MarketOpportunity | null> => {
@@ -192,6 +206,7 @@ export const findDistributionChannels = async (
   appDescription: string,
   category: string
 ): Promise<DistributionChannel[]> => {
+  assertConfigured();
   const model = "gemini-flash-latest";
 
   const schema: Schema = {
@@ -250,24 +265,43 @@ export const findDistributionChannels = async (
     - 30% Paid Ads / Sponsorships
   `;
 
+  // Gemini API rejects `tools` (googleSearch) combined with `responseSchema`.
+  // Try schema-mode first (deterministic). Fall back to grounded text mode if schema fails.
+  const systemInstruction = "You are a senior distribution strategist. You find high-leverage opportunities. You NEVER hallucinate URLs. You provide specific subreddits and newsletter names.";
+
   try {
     const response = await ai.models.generateContent({
       model,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         responseSchema: schema,
-        systemInstruction: "You are a senior distribution strategist. You find high-leverage opportunities. You NEVER hallucinate URLs. You provide specific subreddits and newsletter names."
+        systemInstruction
       }
     });
-
     const text = response.text;
-    if (!text) throw new Error("No response from AI");
+    if (!text) throw new Error("Empty response from Gemini");
     return JSON.parse(text) as DistributionChannel[];
-  } catch (error) {
-    console.error("Distribution Gen Error:", error);
-    throw error;
+  } catch (schemaErr: any) {
+    console.warn("Schema mode failed, retrying with grounded mode:", schemaErr?.message);
+    // Fallback: ask for JSON in plain text with grounding
+    const fallbackPrompt = prompt + "\n\nRespond ONLY with a valid JSON array matching the structure described. No markdown, no commentary.";
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: fallbackPrompt,
+        config: { tools: [{ googleSearch: {} }], systemInstruction }
+      });
+      const text = response.text || "";
+      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      const start = cleaned.indexOf('[');
+      const end = cleaned.lastIndexOf(']');
+      if (start === -1 || end === -1) throw new Error("No JSON array in fallback response");
+      return JSON.parse(cleaned.slice(start, end + 1)) as DistributionChannel[];
+    } catch (fallbackErr: any) {
+      console.error("Both modes failed. Schema:", schemaErr?.message, "Fallback:", fallbackErr?.message);
+      throw new Error(`Channel search failed: ${fallbackErr?.message || schemaErr?.message || 'Unknown error'}`);
+    }
   }
 };
 
@@ -275,6 +309,7 @@ export const findDistributionChannels = async (
 export const getIndustryBenchmarks = async (
   category: string
 ): Promise<IndustryBenchmark[]> => {
+  assertConfigured();
   const model = "gemini-3-flash-preview";
 
   const schema: Schema = {
@@ -335,6 +370,7 @@ export const analyzeChannel = async (
   channelUrl: string,
   appDescription: string
 ): Promise<ChannelAnalysis> => {
+  assertConfigured();
   const model = "gemini-3-flash-preview";
 
   const schema: Schema = {
@@ -428,6 +464,7 @@ export const generateChannelContent = async (
   appName: string,
   description: string
 ): Promise<GeneratedContent> => {
+  assertConfigured();
   const model = "gemini-3-flash-preview";
 
   const schema: Schema = {
@@ -716,6 +753,7 @@ export const findChannelOpportunities = async (
   channel: DistributionChannel,
   appDescription: string
 ): Promise<MarketOpportunity[]> => {
+  assertConfigured();
   const model = "gemini-3-flash-preview";
 
   const schema: Schema = {
@@ -822,6 +860,7 @@ export const generateOpportunityReply = async (
   appDescription: string,
   rules: string[]
 ): Promise<ReplyDraft> => {
+  assertConfigured();
   const model = "gemini-3-flash-preview";
 
   const schema: Schema = {
@@ -1018,24 +1057,396 @@ Return a JSON array of 50 objects.
   }
 };
 
-export const generateContentEnginePost = async (params: any): Promise<ContentEnginePost> => {
+// ════════════════════════════════════════════════════════════════════
+// CONTENT ENGINE — Voice Architecture System
+// ════════════════════════════════════════════════════════════════════
+
+export interface VoiceMix {
+  authority: number;        // 0=humble student → 100=unquestionable expert
+  energy: number;           // 0=zen → 100=manic
+  vulnerability: number;    // 0=guarded → 100=bare soul
+  provocation: number;      // 0=consensus → 100=controversial
+  specificity: number;      // 0=vague poetry → 100=concrete numbers
+  intimacy: number;         // 0=corporate → 100=DM to a friend
+  rhythm: 'staccato' | 'punchy' | 'flowing' | 'contemplative';
+}
+
+export interface HookArchitecture {
+  patternInterrupt: 'shocking_number' | 'taboo_confession' | 'precise_moment'
+                  | 'self_indictment' | 'forbidden_statement' | 'unexpected_name';
+  tensionMechanism: 'curiosity_gap' | 'cognitive_dissonance' | 'pain_mirror'
+                  | 'status_threat' | 'forbidden_knowledge';
+  promisePayoff: 'what_to_learn' | 'what_to_avoid' | 'who_to_become' | 'what_to_feel';
+}
+
+export interface PerspectiveInjector {
+  uniqueAngle: string;       // "I shipped 47 failed products before this one"
+  contrarian: string;        // what the majority gets wrong
+  forbiddenTakes: string;    // what to NEVER say
+  receipts: string;          // 3-5 numbers/results that credibilize
+}
+
+export interface ViralPhysics {
+  statusCurrency: boolean;
+  inGroupSignaling: boolean;
+  tribalFraming: boolean;
+  fortuneCookieClose: boolean;
+  loopOpener: boolean;
+  concessionMove: boolean;
+  baitAndSwitch: boolean;
+  forbiddenSpecificity: boolean;
+}
+
+export type CloserStrategy = 'open_question' | 'punchline' | 'reverse_cta' | 'soft_proof' | 'open_loop';
+
+export interface ContentEngineParams {
+  origin: 'answer' | 'rephrase' | 'build_in_public' | 'fresh';
+  sourceContent: string;
+  sourceUrl?: string;
+  sourceCreator?: string;
+  sourcePlatform?: string;
+  targetPlatforms: string[];
+  format: 'single' | 'thread' | 'longform' | 'comment';
+  length?: 'short' | 'medium' | 'long';
+  tone?: string;            // legacy field, optional
+  hookStyle?: string;       // legacy field, optional
+  cta: 'none' | 'soft' | 'medium' | 'hard';
+  contentDNA?: string;
+  bannedWords?: string[];
+  styleInspiration?: string;
+  // NEW Voice Architecture
+  voiceMix?: VoiceMix;
+  hook?: HookArchitecture;
+  perspective?: PerspectiveInjector;
+  viral?: ViralPhysics;
+  closer?: CloserStrategy;
+  variants?: number;        // generate N variants per platform (1-5)
+}
+
+export interface ContentEngineDraft {
+  platform: string;
+  content: string;
+  hookUsed: string;
+  tips: string[];
+  voiceProfile?: string;
+  variantNote?: string;
+}
+
+// Helper: turn a slider value into a directive
+const sliderToDirective = (label: string, value: number, lowDesc: string, highDesc: string): string => {
+  if (value < 20) return `${label}: ${value}/100 — strongly ${lowDesc}`;
+  if (value < 40) return `${label}: ${value}/100 — leaning ${lowDesc}`;
+  if (value < 60) return `${label}: ${value}/100 — balanced`;
+  if (value < 80) return `${label}: ${value}/100 — leaning ${highDesc}`;
+  return `${label}: ${value}/100 — strongly ${highDesc}`;
+};
+
+const PATTERN_INTERRUPT_DESC: Record<HookArchitecture['patternInterrupt'], string> = {
+  shocking_number: 'Open with a specific, surprising figure (revenue, time, count) in the FIRST 5 words.',
+  taboo_confession: 'Open with a personal admission most people would hide.',
+  precise_moment: 'Open with "On [date]" or "At [time]" — anchor the reader in a specific instant.',
+  self_indictment: 'Open by accusing yourself of something embarrassing or naive.',
+  forbidden_statement: 'Open with a sentence that violates the unspoken rules of your industry.',
+  unexpected_name: 'Open by naming a specific person, brand or tool nobody expects to see.'
+};
+
+const TENSION_MECHANISM_DESC: Record<HookArchitecture['tensionMechanism'], string> = {
+  curiosity_gap: 'Set up a question whose answer the reader CANNOT guess from context.',
+  cognitive_dissonance: 'State two facts that seem contradictory. Force the reader to wonder how both can be true.',
+  pain_mirror: 'Articulate a frustration the reader has felt but never put into words.',
+  status_threat: 'Hint that the reader is doing something that\'s costing them status/credibility/money.',
+  forbidden_knowledge: 'Frame it as info "they" don\'t want you to have.'
+};
+
+const PROMISE_PAYOFF_DESC: Record<HookArchitecture['promisePayoff'], string> = {
+  what_to_learn: 'Promise a clear takeaway they can apply today.',
+  what_to_avoid: 'Promise a specific mistake/trap they\'ll dodge.',
+  who_to_become: 'Promise an identity transformation (operator, expert, founder, etc.).',
+  what_to_feel: 'Promise a felt experience (relief, validation, vindication).'
+};
+
+const VIRAL_DESC: Record<keyof ViralPhysics, string> = {
+  statusCurrency: 'Embed at least one quotable insight the reader will WANT to share to look smart.',
+  inGroupSignaling: 'Use insider vocabulary/acronyms/references that make the right audience feel "this person gets us".',
+  tribalFraming: 'Frame an "us vs them" opposition (founders vs VCs, builders vs talkers, etc.) — but tasteful.',
+  fortuneCookieClose: 'End with a single quotable, screenshot-worthy line.',
+  loopOpener: 'Drop a cliffhanger that forces a reply or DM (e.g. "DM me for the spreadsheet").',
+  concessionMove: 'Admit ONE thing against your own interest (huge trust amplifier).',
+  baitAndSwitch: 'Start by AGREEING with the conventional view, then pivot mid-post to flip it.',
+  forbiddenSpecificity: 'Name a specific tool / dollar amount / competitor that less brave writers wouldn\'t.'
+};
+
+const CLOSER_DESC: Record<CloserStrategy, string> = {
+  open_question: 'End with a specific, answerable question (NOT "thoughts?").',
+  punchline: 'End with a quotable, screenshot-worthy one-liner.',
+  reverse_cta: 'End with "Don\'t [X] if [Y]" — counterintuitive call to NOT act.',
+  soft_proof: 'End by casually mentioning a result/number from your own experience.',
+  open_loop: 'End by teasing what you\'ll cover next time.'
+};
+
+function buildVoiceArchitecturePrompt(params: ContentEngineParams): string {
+  const sections: string[] = [];
+
+  // ── Voice Mix
+  if (params.voiceMix) {
+    const v = params.voiceMix;
+    sections.push(`VOICE MIX (must be palpable in EVERY line — this is the writer's identity):
+${sliderToDirective('Authority', v.authority, 'humble student tone, ask-as-you-go', 'unquestionable expert, declarative')}
+${sliderToDirective('Energy', v.energy, 'zen contemplative, slow cadence', 'manic urgency, exclamation-heavy')}
+${sliderToDirective('Vulnerability', v.vulnerability, 'guarded armor, no admissions', 'bare-soul confession, name your fear')}
+${sliderToDirective('Provocation', v.provocation, 'polite consensus, agreeable', 'controversial, take a side')}
+${sliderToDirective('Specificity', v.specificity, 'vague generalities, poetic', 'concrete numbers, dates, names')}
+${sliderToDirective('Intimacy', v.intimacy, 'corporate distant, third-person', 'DM to a friend, second-person')}
+RHYTHM: ${v.rhythm} — ${
+      v.rhythm === 'staccato' ? 'short fragments. Three words. Period. Repeat.' :
+      v.rhythm === 'punchy' ? 'mostly short sentences punctuated by occasional longer reflective lines.' :
+      v.rhythm === 'flowing' ? 'long, winding sentences that build momentum across multiple clauses.' :
+      'contemplative, comma-rich, with deliberate pauses and rhetorical breath marks.'
+    }`);
+  }
+
+  // ── Hook Architecture
+  if (params.hook) {
+    sections.push(`HOOK ARCHITECTURE (the first 3 lines decide everything):
+1. Pattern Interrupt: ${PATTERN_INTERRUPT_DESC[params.hook.patternInterrupt]}
+2. Tension Mechanism: ${TENSION_MECHANISM_DESC[params.hook.tensionMechanism]}
+3. Promise/Payoff: ${PROMISE_PAYOFF_DESC[params.hook.promisePayoff]}`);
+  }
+
+  // ── Perspective Injector — THIS IS THE UNIQUENESS VECTOR
+  if (params.perspective) {
+    const p = params.perspective;
+    const uniqueParts: string[] = [];
+    if (p.uniqueAngle) uniqueParts.push(`Unique angle / credential: "${p.uniqueAngle}"`);
+    if (p.contrarian) uniqueParts.push(`Contrarian belief I want to express: "${p.contrarian}"`);
+    if (p.receipts) uniqueParts.push(`Receipts (weave in naturally, do NOT list): ${p.receipts}`);
+    if (p.forbiddenTakes) uniqueParts.push(`NEVER write any of these takes (forbidden): ${p.forbiddenTakes}`);
+    if (uniqueParts.length) {
+      sections.push(`PERSPECTIVE (this is what makes this post UNIQUELY mine — it MUST shape the angle):\n${uniqueParts.join('\n')}`);
+    }
+  }
+
+  // ── Viral Physics
+  if (params.viral) {
+    const active = (Object.keys(params.viral) as Array<keyof ViralPhysics>).filter(k => params.viral![k]);
+    if (active.length) {
+      sections.push(`VIRAL PHYSICS (psychological triggers to ACTIVATE):\n${active.map(k => `- ${VIRAL_DESC[k]}`).join('\n')}`);
+    }
+  }
+
+  // ── Closer
+  if (params.closer) {
+    sections.push(`CLOSER STRATEGY: ${CLOSER_DESC[params.closer]}`);
+  }
+
+  return sections.join('\n\n');
+}
+
+export interface VoiceProfileSuggestion {
+  voiceMix: VoiceMix;
+  hook: HookArchitecture;
+  viral: ViralPhysics;
+  closer: CloserStrategy;
+  reasoning: string;
+}
+
+export const suggestVoiceProfile = async (context: {
+  sourceContent: string;
+  perspective?: PerspectiveInjector;
+  format?: string;
+  targetPlatforms?: string[];
+  styleInspiration?: string;
+}): Promise<VoiceProfileSuggestion> => {
+  assertConfigured();
   const model = "gemini-flash-latest";
+
   const schema: Schema = {
     type: Type.OBJECT,
     properties: {
-      title: { type: Type.STRING },
-      hook: { type: Type.STRING },
-      body: { type: Type.STRING },
-      tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+      voiceMix: {
+        type: Type.OBJECT,
+        properties: {
+          authority: { type: Type.NUMBER },
+          energy: { type: Type.NUMBER },
+          vulnerability: { type: Type.NUMBER },
+          provocation: { type: Type.NUMBER },
+          specificity: { type: Type.NUMBER },
+          intimacy: { type: Type.NUMBER },
+          rhythm: { type: Type.STRING, enum: ['staccato', 'punchy', 'flowing', 'contemplative'] }
+        },
+        required: ['authority', 'energy', 'vulnerability', 'provocation', 'specificity', 'intimacy', 'rhythm']
+      },
+      hook: {
+        type: Type.OBJECT,
+        properties: {
+          patternInterrupt: { type: Type.STRING, enum: ['shocking_number', 'taboo_confession', 'precise_moment', 'self_indictment', 'forbidden_statement', 'unexpected_name'] },
+          tensionMechanism: { type: Type.STRING, enum: ['curiosity_gap', 'cognitive_dissonance', 'pain_mirror', 'status_threat', 'forbidden_knowledge'] },
+          promisePayoff: { type: Type.STRING, enum: ['what_to_learn', 'what_to_avoid', 'who_to_become', 'what_to_feel'] }
+        },
+        required: ['patternInterrupt', 'tensionMechanism', 'promisePayoff']
+      },
+      viral: {
+        type: Type.OBJECT,
+        properties: {
+          statusCurrency: { type: Type.BOOLEAN },
+          inGroupSignaling: { type: Type.BOOLEAN },
+          tribalFraming: { type: Type.BOOLEAN },
+          fortuneCookieClose: { type: Type.BOOLEAN },
+          loopOpener: { type: Type.BOOLEAN },
+          concessionMove: { type: Type.BOOLEAN },
+          baitAndSwitch: { type: Type.BOOLEAN },
+          forbiddenSpecificity: { type: Type.BOOLEAN }
+        },
+        required: ['statusCurrency', 'inGroupSignaling', 'tribalFraming', 'fortuneCookieClose', 'loopOpener', 'concessionMove', 'baitAndSwitch', 'forbiddenSpecificity']
+      },
+      closer: { type: Type.STRING, enum: ['open_question', 'punchline', 'reverse_cta', 'soft_proof', 'open_loop'] },
+      reasoning: { type: Type.STRING, description: 'One sentence explaining WHY these settings fit this context.' }
     },
-    required: ["title", "hook", "body", "tags"]
+    required: ['voiceMix', 'hook', 'viral', 'closer', 'reasoning']
   };
-  const prompt = `Generate a high-engagement social post for ${params.platform}. Topic: ${params.topic}. Target: ${params.audience}.`;
+
+  const p = context.perspective || { uniqueAngle: '', contrarian: '', forbiddenTakes: '', receipts: '' };
+  const prompt = `You are a senior content strategist. Given the writer's context, suggest the OPTIMAL voice architecture for this specific post.
+
+CONTEXT:
+- Source / topic: ${context.sourceContent.slice(0, 800)}
+- Format: ${context.format || 'single'}
+- Target platforms: ${(context.targetPlatforms || ['X']).join(', ')}
+${p.uniqueAngle ? `- Writer's unique angle: ${p.uniqueAngle}` : ''}
+${p.contrarian ? `- Writer's contrarian belief: ${p.contrarian}` : ''}
+${p.receipts ? `- Writer's receipts/credentials: ${p.receipts}` : ''}
+${context.styleInspiration ? `- Style inspiration sample: ${context.styleInspiration.slice(0, 500)}` : ''}
+
+TASK:
+Choose voice mix values (0-100 for each dimension), the best hook architecture, which viral physics to activate, and the closer that fits this content best.
+
+THINK ABOUT:
+- Topic vulnerability vs hard data → adjust vulnerability/specificity
+- Audience expertise → adjust authority/in-group signaling
+- Format constraints (X tweet = high energy/staccato; LinkedIn long-form = contemplative)
+- The writer's contrarian view → enable bait-and-switch and forbidden specificity if strong
+- If they have receipts → enable concession move + status currency
+
+Return JSON only.`;
+
   const response = await ai.models.generateContent({
-    model, contents: prompt,
-    config: { responseMimeType: "application/json", responseSchema: schema }
+    model,
+    contents: prompt,
+    config: { responseMimeType: 'application/json', responseSchema: schema }
   });
-  return JSON.parse(response.text) as ContentEnginePost;
+  const text = response.text;
+  if (!text) throw new Error('Empty response');
+  return JSON.parse(text) as VoiceProfileSuggestion;
+};
+
+export const generateContentEnginePost = async (params: ContentEngineParams): Promise<ContentEngineDraft[]> => {
+  assertConfigured();
+  const model = "gemini-flash-latest";
+
+  const variants = Math.max(1, Math.min(5, params.variants || 1));
+  const platforms = params.targetPlatforms.length ? params.targetPlatforms : ['X'];
+
+  const platformLimits: Record<string, string> = {
+    'X': '280 characters MAX per tweet. If thread, each tweet stands alone yet links to the next.',
+    'LinkedIn': '1,200-2,500 characters. Use line breaks aggressively. First line is the entire hook.',
+    'Reddit': 'No length limit. Lowercase title-style. NO marketing language. Sound like a real human.',
+    'Threads': '500 characters MAX. More casual, more meme-aware than X.'
+  };
+
+  const formatHints: Record<string, string> = {
+    single: 'A single self-contained post.',
+    thread: 'A thread of 5-9 connected posts. Number them. Each tweet must hook into the next.',
+    longform: 'A long-form post with clear structure (hook → reveal → details → close).',
+    comment: 'A reply to an existing post — should feel native to the conversation, not promotional.'
+  };
+
+  const voiceArchitecture = buildVoiceArchitecturePrompt(params);
+
+  const sourceBlock = params.sourceContent
+    ? `SOURCE MATERIAL (${params.origin}):\n${params.sourceContent}${params.sourceCreator ? `\n— Original by ${params.sourceCreator}` : ''}${params.sourceUrl ? `\n— URL: ${params.sourceUrl}` : ''}`
+    : '';
+
+  const dnaBlock = params.contentDNA ? `\nMY BRAND DNA (apply silently):\n${params.contentDNA}` : '';
+  const styleBlock = params.styleInspiration ? `\nSTYLE INSPIRATION (clone the rhythm and word choices, NEVER the ideas):\n${params.styleInspiration.slice(0, 2500)}` : '';
+  const bannedBlock = params.bannedWords?.length ? `\nBANNED WORDS (never use): ${params.bannedWords.join(', ')}` : '';
+
+  const ctaBlock = `CTA INTENSITY: ${params.cta} — ${
+    params.cta === 'none' ? 'no call to action, pure value' :
+    params.cta === 'soft' ? 'spark discussion only (question, prompt, opinion)' :
+    params.cta === 'medium' ? 'invite to learn more (link, profile, more posts)' :
+    'direct call to action (sign up, try, buy)'
+  }`;
+
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      drafts: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            platform: { type: Type.STRING },
+            content: { type: Type.STRING, description: 'The complete, ready-to-post content with native formatting.' },
+            hookUsed: { type: Type.STRING, description: 'Short label of which hook angle was used (max 6 words).' },
+            tips: { type: Type.ARRAY, items: { type: Type.STRING }, description: '1-3 short posting tips (best time, what to add, etc.).' },
+            voiceProfile: { type: Type.STRING, description: 'One-line summary of the voice that came through (e.g. "vulnerable expert, low-energy, high-specificity").' },
+            variantNote: { type: Type.STRING, description: 'If multiple variants per platform, what makes THIS variant different (e.g. "Confession opener", "Status-currency angle"). Empty if single variant.' }
+          },
+          required: ['platform', 'content', 'hookUsed', 'tips']
+        }
+      }
+    },
+    required: ['drafts']
+  };
+
+  const prompt = `You are an elite social copywriter. You write with surgical voice control — no generic LinkedIn-influencer hype, no AI-flavored fluff. Every line earns its place.
+
+${voiceArchitecture}
+
+ORIGIN MODE: ${params.origin}
+FORMAT: ${params.format} — ${formatHints[params.format]}
+${ctaBlock}
+
+TARGET PLATFORMS:
+${platforms.map(p => `- ${p}: ${platformLimits[p] || 'native conventions.'}`).join('\n')}
+
+${sourceBlock}
+${dnaBlock}
+${styleBlock}
+${bannedBlock}
+
+TASK:
+Generate ${variants > 1 ? `${variants} DISTINCT variants per platform` : 'one draft per platform'}, each respecting the voice mix, hook architecture, perspective, viral physics and closer above.
+
+${variants > 1 ? `Each variant must take a DIFFERENT angle within the same voice — different hook entry, different tension, different proof. Use variantNote to label the angle (e.g. "Confession opener", "Numbers-first", "Contrarian flip").` : ''}
+
+CRITICAL RULES:
+1. The Perspective section is non-negotiable. The reader must FEEL this is from someone with that specific angle.
+2. NO em-dashes (—). NO "I'm not gonna lie". NO "let's be real". NO "the truth is". NO "game-changer". NO "leverage". NO "unlock".
+3. Match the platform's NATIVE writing style (LinkedIn ≠ X ≠ Reddit).
+4. Specific > generic. "$2,847 MRR" > "some revenue". "Tuesday at 3pm" > "the other day".
+5. The hook architecture is the FIRST 3 lines. Treat them like a song's first riff.
+
+Return JSON only.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: schema,
+        systemInstruction: 'You are an elite social copywriter trained on the best-performing posts of solo founders and contrarian thinkers. You hate corporate language. You worship specificity.'
+      }
+    });
+    const text = response.text;
+    if (!text) throw new Error('Empty response from Gemini');
+    const parsed = JSON.parse(text);
+    return (parsed.drafts || []) as ContentEngineDraft[];
+  } catch (e: any) {
+    console.error('Content Engine generation failed:', e);
+    throw new Error(e?.message || 'Generation failed');
+  }
 };
 
 export const getPlatformInsights = async (platform: string): Promise<PlatformInsight> => {
@@ -1216,6 +1627,41 @@ export const parseReconBrief = async (brief: string): Promise<{
       painPoints: words.length > 1 ? [words.slice(1, 3).join(' ') + " Issues"] : ["Operational Friction"],
       negativeKeywords: ["agency", "consultant", "expert", "freelancer"],
       platforms: ["X", "LinkedIn", "Reddit"]
+    };
+  }
+};
+
+export const filterProfilesWithAI = async (prospects: any[], campaign: any): Promise<{ validProfiles: any[] }> => {
+  try {
+    const modelName = "gemini-3-flash";
+    const generativeModel = ai.getGenerativeModel({ model: modelName });
+    const response = await generativeModel.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [{
+          text: `You are a lead qualification AI. Given these prospects and campaign context, score each prospect's relevance.
+
+Campaign: ${JSON.stringify({ name: campaign?.name, roles: campaign?.roles, painPoints: campaign?.painPoints })}
+
+Prospects (handle, bio, url):
+${prospects.slice(0, 30).map((p: any, i: number) => `${i+1}. @${p.handle || 'unknown'} | ${(p.bio || '').substring(0, 100)} | ${p.url || ''}`).join('\n')}
+
+Return JSON: { "validProfiles": [{ "handle": string, "url": string, "isTarget": boolean, "relevanceScore": number (0-100), "reasoning": string }] }`
+        }]
+      }],
+      generationConfig: { responseMimeType: "application/json" }
+    });
+    return JSON.parse(response.response.text());
+  } catch (e) {
+    console.error("[Gemini] filterProfilesWithAI failed:", e);
+    return {
+      validProfiles: prospects.map((p: any) => ({
+        handle: p.handle,
+        url: p.url,
+        isTarget: true,
+        relevanceScore: 50,
+        reasoning: 'AI audit unavailable — defaulting to neutral score'
+      }))
     };
   }
 };

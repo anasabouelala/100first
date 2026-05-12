@@ -1,4 +1,4 @@
-const apiKey = "AIzaSyCc1d-JqoKOAUVBK2BrgOOViTEMGBX5wXI";
+const apiKey = "***REMOVED***";
 const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
 
 async function check() {
