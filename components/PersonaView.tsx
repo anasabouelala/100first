@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { generateBuyerPersonas, chatAsPersona, PersonaChatTurn } from '../services/geminiService';
 import { BuyerPersonaAnalysis, BuyerPersona, PersonaRadar } from '../types';
+import { useProject } from '../contexts/ProjectContext';
 import {
   MapPin, Target, Users, Zap, Loader2, Quote, Activity, Coffee, MessageSquare,
   Sparkles, ExternalLink, Send, X, Play, ChevronRight, Shield, Award,
   Building2, Briefcase, Wallet, Clock, AlertTriangle, Layers, Compass, TrendingUp, ShieldAlert
 } from 'lucide-react';
 
+// Props are now optional — context wins
 interface PersonaViewProps {
-  appName: string;
-  appDesc: string;
-  category: string;
+  appName?: string;
+  appDesc?: string;
+  category?: string;
 }
 
 // ─── Personality radar axes (shared) ──────────────────────────────────
@@ -1548,7 +1550,14 @@ const Em: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 // ─── Main View ────────────────────────────────────────────────────────
-export const PersonaView: React.FC<PersonaViewProps> = ({ appName, appDesc, category }) => {
+export const PersonaView: React.FC<PersonaViewProps> = (props) => {
+  const { project } = useProject();
+  // Project context wins; fall back to legacy props for back-compat
+  const appName = project?.productName || props.appName || '';
+  const appDesc = project?.pitch || props.appDesc || '';
+  const category = project?.category || props.category || '';
+  const targetAudience = project?.targetAudience || category;
+
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<BuyerPersonaAnalysis | null>(() => {
     const saved = localStorage.getItem('buyer_personas');
@@ -1563,7 +1572,8 @@ export const PersonaView: React.FC<PersonaViewProps> = ({ appName, appDesc, cate
     setLoading(true);
     setError(null);
     try {
-      const data = await generateBuyerPersonas(appName, appDesc, category);
+      // Use targetAudience as the "category" for richer persona generation (per project context)
+      const data = await generateBuyerPersonas(appName, appDesc, targetAudience || category);
       setAnalysis(data);
       localStorage.setItem('buyer_personas', JSON.stringify(data));
       setReveal(true);

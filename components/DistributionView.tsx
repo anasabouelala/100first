@@ -39,13 +39,27 @@ const FILTER_TABS = [
 
 type FilterTab = typeof FILTER_TABS[number]['id'];
 
+import { useProject } from '../contexts/ProjectContext';
+
 export const DistributionView: React.FC = () => {
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
-  const [appName, setAppName] = useState('');
+  const { project } = useProject();
+  // Pre-fill from project context (single source of truth). Allow override per-scan.
+  const [description, setDescription] = useState(project?.pitch || '');
+  const [category, setCategory] = useState(project?.category || '');
+  const [appName, setAppName] = useState(project?.productName || '');
   const [loading, setLoading] = useState(false);
   const [channels, setChannels] = useState<DistributionChannel[]>([]);
-  const [formCollapsed, setFormCollapsed] = useState(false);
+  // Pre-collapse the form since data is pre-filled from project
+  const [formCollapsed, setFormCollapsed] = useState(!!(project?.pitch && project?.category));
+
+  // Re-sync when project changes externally (e.g. user edits in modal)
+  useEffect(() => {
+    if (project) {
+      setDescription(project.pitch);
+      setCategory(project.category);
+      setAppName(project.productName);
+    }
+  }, [project?.productName, project?.pitch, project?.category]);
 
   // Benchmark State
   const [loadingBenchmarks, setLoadingBenchmarks] = useState(false);
@@ -399,6 +413,35 @@ const ScanCard: React.FC<{
   collapsed: boolean; setCollapsed: (v: boolean) => void;
   hasResults: boolean;
 }> = ({ appName, setAppName, category, setCategory, description, setDescription, loading, onScan, collapsed, setCollapsed, hasResults }) => {
+  // Pre-filled state — show a "Scan now" CTA instead of the full form
+  if (collapsed && !hasResults) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+              <Search size={16} className="text-emerald-600" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-black tracking-widest uppercase text-emerald-600 mb-0.5">Pre-filled from project</div>
+              <div className="text-sm font-bold text-slate-900 truncate">{appName}</div>
+              <div className="text-xs text-slate-500 truncate">{category} · {description.slice(0, 80)}{description.length > 80 ? '…' : ''}</div>
+            </div>
+          </div>
+          <button onClick={() => setCollapsed(false)} className="text-[10px] font-bold tracking-widest uppercase text-slate-400 hover:text-slate-700 flex-shrink-0">
+            Refine
+          </button>
+        </div>
+        <button
+          onClick={onScan}
+          disabled={loading || !description || !category}
+          className="mt-4 w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
+          {loading ? <><Loader2 size={16} className="animate-spin" /> Scanning the web…</> : <><Sparkles size={16} /> Scan for channels <ArrowRight size={16} /></>}
+        </button>
+      </div>
+    );
+  }
+
   if (collapsed && hasResults) {
     return (
       <button

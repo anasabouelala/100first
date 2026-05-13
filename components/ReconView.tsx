@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { findCompetitors, analyzeCompetitorStrategy } from '../services/geminiService';
 import { CompetitorData, CompetitorDeepDive } from '../types';
-import { Search, Globe, Loader2, Target, BarChart2, Zap, AlertTriangle, Users, TrendingUp, X, ExternalLink, Youtube, Quote, Code, DollarSign, PlayCircle, MessageCircle, Mic2, Brain } from 'lucide-react';
+import { useProject } from '../contexts/ProjectContext';
+import { Search, Globe, Loader2, Target, BarChart2, Zap, AlertTriangle, Users, TrendingUp, X, ExternalLink, Youtube, Quote, Code, DollarSign, PlayCircle, MessageCircle, Mic2, Brain, Edit2 } from 'lucide-react';
 
 export const ReconView: React.FC = () => {
-  const [description, setDescription] = useState('');
+  const { project } = useProject();
+  const [description, setDescription] = useState(project?.pitch || '');
+  const [showEdit, setShowEdit] = useState(false);
+
+  useEffect(() => {
+    if (project?.pitch) setDescription(project.pitch);
+  }, [project?.pitch]);
   const [loading, setLoading] = useState(false);
   const [competitors, setCompetitors] = useState<CompetitorData[]>([]);
   
@@ -51,29 +58,56 @@ export const ReconView: React.FC = () => {
         </div>
       </div>
 
-      {/* Input Section */}
-      <div className="card bg-base-100 shadow-md">
-        <div className="card-body">
-            <div className="form-control">
-                <div className="join w-full">
-                    <input 
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Describe your app idea (e.g. 'A productivity tool for dog walkers using AI')"
-                        className="input input-bordered input-primary join-item w-full"
-                    />
-                    <button 
-                        onClick={handleScan}
-                        disabled={loading || !description}
-                        className="btn btn-primary join-item text-white"
-                    >
-                        {loading ? <span className="loading loading-spinner"></span> : <Search size={18} />}
-                        Scan
-                    </button>
-                </div>
+      {/* Pre-filled scan card (from project context) */}
+      {!showEdit && project ? (
+        <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                <Target size={16} className="text-emerald-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-black tracking-widest uppercase text-emerald-600 mb-0.5">Pre-filled from project</div>
+                <div className="text-sm text-gray-700 line-clamp-2 leading-snug">{description}</div>
+              </div>
             </div>
+            <button onClick={() => setShowEdit(true)} className="text-[10px] font-bold tracking-widest uppercase text-gray-400 hover:text-gray-700 flex-shrink-0 flex items-center gap-1">
+              <Edit2 size={11} /> Override
+            </button>
+          </div>
+          <button onClick={handleScan} disabled={loading || !description}
+            className="btn btn-primary w-full text-white gap-2">
+            {loading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
+            {loading ? 'Scanning…' : 'Scan competitors'}
+          </button>
         </div>
-      </div>
+      ) : (
+        <div className="card bg-base-100 shadow-md">
+          <div className="card-body">
+            <div className="form-control">
+              <label className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-1.5">Override description (this scan only)</label>
+              <div className="join w-full">
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe your product..."
+                  className="input input-bordered input-primary join-item w-full" />
+                <button onClick={handleScan} disabled={loading || !description}
+                  className="btn btn-primary join-item text-white">
+                  {loading ? <span className="loading loading-spinner"></span> : <Search size={18} />}
+                  Scan
+                </button>
+              </div>
+              {project && (
+                <button onClick={() => { setDescription(project.pitch); setShowEdit(false); }}
+                  className="text-[10px] font-bold tracking-widest uppercase text-gray-400 hover:text-gray-700 mt-2 self-start">
+                  ← Use project description
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Competitor Grid */}
       {competitors.length > 0 && (
