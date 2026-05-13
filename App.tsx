@@ -6,14 +6,14 @@ import { ProjectSetup, ProjectSummaryCard } from './components/ProjectSetup';
 import { StrategyView } from './components/StrategyView';
 import { DistributionView } from './components/DistributionView';
 import { ReconView } from './components/ReconView';
-import { ReadinessWidget } from './components/ReadinessWidget';
 import { PersonaView } from './components/PersonaView';
 import { UnifiedCommandCenter } from './components/UnifiedCommandCenter';
 import { ContentEngineView } from './components/ContentEngineView';
 import { AccountFinderView } from './components/AccountFinderView';
+import { DashboardView } from './components/DashboardView';
 import {
-  Rocket, Target, Zap, Globe, Radar, Menu, Home, ArrowRight, ShieldCheck,
-  Users, Sparkles, ListChecks, Trash2, Crosshair, Loader2, Lock
+  Rocket, Target, Zap, Globe, Radar, Menu, Home, ShieldCheck,
+  Users, Sparkles, Trash2, Crosshair, Loader2
 } from 'lucide-react';
 
 function AppInner() {
@@ -159,66 +159,7 @@ function AppInner() {
 
       case 'DASHBOARD':
       default:
-        return (
-          <div className="space-y-8 animate-fade-in">
-            {/* Hero — uses project data */}
-            <div className="flex flex-col lg:flex-row gap-6 items-center justify-between bg-gray-900 p-10 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-10 opacity-5 rotate-12">
-                <Zap size={240} />
-              </div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-[10px] font-black tracking-[0.3em] uppercase text-primary">Active project</span>
-                  <button onClick={() => setEditingProject(true)}
-                    className="text-[10px] font-bold tracking-widest uppercase text-white/40 hover:text-white transition-colors">Edit →</button>
-                </div>
-                <h1 className="text-5xl font-display font-bold mb-3 tracking-tight">{project!.productName}</h1>
-                <p className="opacity-60 max-w-lg text-lg leading-relaxed line-clamp-2">{project!.pitch}</p>
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <span className="text-[10px] font-bold tracking-widest uppercase px-3 py-1 bg-white/10 rounded-full">{project!.category}</span>
-                  <span className="text-[10px] font-bold tracking-widest uppercase px-3 py-1 bg-white/10 rounded-full">{project!.targetAudience}</span>
-                  {project!.stage && <span className="text-[10px] font-bold tracking-widest uppercase px-3 py-1 bg-primary/20 text-primary rounded-full">{project!.stage}</span>}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-4 relative z-10">
-                <button onClick={() => setMode(AppMode.ACCOUNT_FINDER)} className="btn bg-primary hover:bg-primary/90 border-none text-white px-8 h-14 rounded-2xl shadow-xl shadow-primary/20"><Crosshair size={20}/> Find Accounts</button>
-                <button onClick={() => setMode(AppMode.ANSWERLY_RADAR)} className="btn bg-white/10 hover:bg-white/20 border-white/10 text-white px-8 h-14 rounded-2xl backdrop-blur-md"><ShieldCheck size={20}/> View Radar</button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <DashboardCard onClick={() => setMode(AppMode.ACCOUNT_FINDER)} icon={<Crosshair size={28} className="text-primary" />} title="Account Finder" desc="Discover & track key accounts." color="blue" />
-              <DashboardCard onClick={() => setMode(AppMode.ANSWERLY_RADAR)} icon={<ShieldCheck size={28} className="text-emerald-500" />} title="Unified Radar" desc="Engage tracked account posts." color="emerald" />
-              <DashboardCard onClick={() => setMode(AppMode.DISTRIBUTION)} icon={<Globe size={28} className="text-amber-500" />} title="Distribution" desc="Find the best launch channels." color="amber" />
-              <DashboardCard onClick={() => setMode(AppMode.CONTENT_ENGINE)} icon={<Sparkles size={28} className="text-purple-500" />} title="Content Engine" desc="Generate trending content." color="purple" />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm">
-                <div className="flex items-center justify-between mb-8">
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">Operation Readiness</h3>
-                    <p className="text-sm text-gray-400 mt-1">Foundational tasks for a successful launch</p>
-                  </div>
-                  <ListChecks className="text-gray-200" size={32} />
-                </div>
-                <ReadinessWidget />
-              </div>
-
-              <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-8 rounded-[2rem] text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
-                <div className="relative z-10">
-                  <Target className="mb-4 opacity-50" size={32} />
-                  <h3 className="text-2xl font-bold mb-2">Build Your Roadmap</h3>
-                  <p className="text-white/70 text-sm leading-relaxed">Generate a launch strategy tailored to {project!.productName} — using the data you already filled in.</p>
-                </div>
-                <button onClick={() => setMode(AppMode.STRATEGY)}
-                  className="mt-8 w-full py-4 bg-white text-blue-700 rounded-2xl font-bold shadow-lg hover:bg-blue-50 transition-all flex items-center justify-center gap-2">
-                  Generate Strategy <ArrowRight size={18} />
-                </button>
-              </div>
-            </div>
-          </div>
-        );
+        return <DashboardView setMode={setMode} onEditProject={() => setEditingProject(true)} />;
     }
   };
 
@@ -310,19 +251,6 @@ function AppInner() {
     </div>
   );
 }
-
-const DashboardCard = ({ onClick, icon, title, desc, color }: any) => (
-  <div onClick={onClick}
-    className={`group p-6 rounded-[2rem] bg-white border border-gray-100 shadow-sm hover:shadow-xl hover:border-${color}-200 transition-all cursor-pointer flex flex-col gap-4`}>
-    <div className={`w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center transition-all group-hover:scale-110 group-hover:rotate-3`}>
-      {icon}
-    </div>
-    <div>
-      <h3 className="font-bold text-gray-900">{title}</h3>
-      <p className="text-xs text-gray-400 mt-1 leading-relaxed">{desc}</p>
-    </div>
-  </div>
-);
 
 export default function App() {
   return (
