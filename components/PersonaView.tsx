@@ -2084,6 +2084,766 @@ const EmptyState: React.FC<{ icon: React.ReactNode; title: string; hint: string 
   </div>
 );
 
+// ═════════════════════════════════════════════════════════════════════
+// MARKET STUDY — top-down B2B market research report
+// Flow: Pain → Targetable ICP → Market Size → Competition → GTM → Roster
+// ═════════════════════════════════════════════════════════════════════
+
+// Aggregation helpers
+const tally = <T extends string>(items: T[]): Array<[T, number]> => {
+  const m = new Map<T, number>();
+  items.forEach(i => m.set(i, (m.get(i) || 0) + 1));
+  return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+};
+
+const MarketStudy: React.FC<{
+  personas: BuyerPersona[];
+  marketOverview: string;
+  productName: string;
+  onChat: (idx: number) => void;
+}> = ({ personas, marketOverview, productName, onChat }) => {
+  // ── Aggregations ──
+  const agg = useMemo(() => {
+    const totalTAM = personas.reduce((a, p) => a + parseFirstNumber(p.companyProfile?.estimatedTAM), 0);
+    const avgCycle = Math.round(
+      personas.reduce((a, p) => a + (p.outreach?.avgSalesCycleDays || 0), 0) / Math.max(1, personas.filter(p => p.outreach).length)
+    );
+    const totalSources = personas.reduce((a, p) => a + (p.painSources?.length || 0), 0);
+
+    // Pain × Persona matrix: each unique pain → set of persona indexes mentioning it
+    // Use loose matching: lowercase + first 40 chars
+    const painMap = new Map<string, { text: string; personaIdxs: number[]; sources: number }>();
+    personas.forEach((p, idx) => {
+      p.painPoints.forEach((pp, painIdx) => {
+        const key = pp.toLowerCase().slice(0, 50).replace(/[^\w\s]/g, '').trim();
+        const proofCount = (p.painSources || []).filter(s => s.painIndex === painIdx).length;
+        const existing = painMap.get(key);
+        if (existing) {
+          if (!existing.personaIdxs.includes(idx)) existing.personaIdxs.push(idx);
+          existing.sources += proofCount;
+        } else {
+          painMap.set(key, { text: pp, personaIdxs: [idx], sources: proofCount });
+        }
+      });
+    });
+    const pains = Array.from(painMap.values())
+      .sort((a, b) => (b.personaIdxs.length - a.personaIdxs.length) || (b.sources - a.sources));
+
+    // Industry / stage / size / buyerRole aggregation
+    const industries = tally(personas.flatMap(p => p.companyProfile?.industries || []));
+    const stages = tally(personas.map(p => p.companyProfile?.stage || '').filter(Boolean));
+    const sizes = tally(personas.map(p => p.companyProfile?.companySize || '').filter(Boolean));
+    const buyerRoles = tally(personas.map(p => p.buyerRole?.type || '').filter(Boolean));
+    const techStack = tally(personas.flatMap(p => p.companyProfile?.techStackSignals || []));
+
+    // Competing tools — by frequency, with switching friction stats
+    const toolMap = new Map<string, { tool: string; count: number; frictions: string[]; pains: string[] }>();
+    personas.forEach(p => {
+      (p.currentStack || []).forEach(s => {
+        const existing = toolMap.get(s.tool);
+        if (existing) {
+          existing.count += 1;
+          existing.frictions.push(s.switchingFriction);
+          existing.pains.push(s.painWithIt);
+        } else {
+          toolMap.set(s.tool, { tool: s.tool, count: 1, frictions: [s.switchingFriction], pains: [s.painWithIt] });
+        }
+      });
+    });
+    const competitors = Array.from(toolMap.values()).sort((a, b) => b.count - a.count);
+
+    // Watering holes ranked by member count parsed
+    const holeMap = new Map<string, { hole: any; mentions: number }>();
+    personas.forEach(p => {
+      (p.wateringHoles || []).forEach(w => {
+        const existing = holeMap.get(w.name);
+        if (existing) existing.mentions += 1;
+        else holeMap.set(w.name, { hole: w, mentions: 1 });
+      });
+    });
+    const wateringHoles = Array.from(holeMap.values())
+      .sort((a, b) => (b.mentions - a.mentions) || (parseFirstNumber(b.hole.memberCount) - parseFirstNumber(a.hole.memberCount)));
+
+    // Outreach aggregation
+    const bestChannels = tally(personas.map(p => p.outreach?.bestChannel || '').filter(Boolean));
+    const worstChannels = tally(personas.map(p => p.outreach?.worstChannel || '').filter(Boolean));
+
+    // Triggers across personas
+    const triggers = personas.flatMap((p, idx) =>
+      (p.triggerEvents || []).map(t => ({ ...t, personaIdx: idx, personaName: p.name }))
+    ).sort((a, b) => a.urgencyDays - b.urgencyDays);
+
+    return {
+      totalTAM, avgCycle, totalSources,
+      pains, industries, stages, sizes, buyerRoles, techStack,
+      competitors, wateringHoles,
+      bestChannels, worstChannels, triggers
+    };
+  }, [personas]);
+
+  return (
+    <div className="space-y-10">
+      {/* ═══════════ HERO ═══════════ */}
+      <section className="bg-gradient-to-br from-gray-900 via-gray-900 to-indigo-950 rounded-[2rem] p-8 lg:p-10 text-white relative overflow-hidden">
+        <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
+
+        <div className="relative max-w-5xl">
+          <div className="flex items-center gap-2 mb-3 text-[10px] font-black tracking-[0.3em] uppercase">
+            <BarChart3 size={12} className="text-amber-300" />
+            <span className="text-amber-300">Market study</span>
+            <span className="text-white/30">·</span>
+            <span className="text-white/40">{personas.length} personas analysed</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold tracking-tight leading-[1.05] mb-4">
+            The {productName} <span className="bg-gradient-to-r from-amber-300 to-pink-300 bg-clip-text text-transparent">buyer landscape</span>
+          </h1>
+          <p className="text-white/60 text-base md:text-lg leading-relaxed max-w-3xl">{marketOverview}</p>
+        </div>
+
+        {/* Hero KPI strip */}
+        <div className="relative grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-px mt-8 pt-8 border-t border-white/10">
+          <HeroKPI label="Total TAM"        value={agg.totalTAM > 0 ? `~${formatBigNumber(agg.totalTAM)}` : '—'} sub="companies in range" />
+          <HeroKPI label="Personas"          value={`${personas.length}`} sub="ICP archetypes" />
+          <HeroKPI label="Avg sales cycle"   value={agg.avgCycle ? `${agg.avgCycle}d` : '—'} sub="time to close" accent={agg.avgCycle && agg.avgCycle < 60 ? 'good' : 'warn'} />
+          <HeroKPI label="Universal pains"   value={`${agg.pains.filter(p => p.personaIdxs.length >= 2).length}`} sub="echoed ≥2 personas" />
+          <HeroKPI label="Competitors"       value={`${agg.competitors.length}`} sub="vendors detected" />
+          <HeroKPI label="Validated sources" value={`${agg.totalSources}`} sub="public proof" />
+        </div>
+      </section>
+
+      {/* ═══════════ SECTION 1 — PAIN LANDSCAPE ═══════════ */}
+      <StudySection
+        number="01"
+        kicker="The problem"
+        title="Pain landscape"
+        intro="The operational pains driving buying intent — ranked by how universally they appear across personas, weighted by validated public sources."
+        accent="rose">
+        <PainLandscape pains={agg.pains} personas={personas} />
+      </StudySection>
+
+      {/* ═══════════ SECTION 2 — TARGETABLE ICP ═══════════ */}
+      <StudySection
+        number="02"
+        kicker="The who"
+        title="Targetable ICP"
+        intro="Composite firmographic profile of the addressable market. Designed to be searchable on LinkedIn Sales Navigator / Crunchbase / BuiltWith."
+        accent="sky">
+        <TargetableICP agg={agg} personas={personas} />
+      </StudySection>
+
+      {/* ═══════════ SECTION 3 — MARKET SIZE ═══════════ */}
+      <StudySection
+        number="03"
+        kicker="The size"
+        title="Market sizing"
+        intro="TAM per persona segment, ranked. Use these numbers to defend market opportunity in pitches and to prioritise sequencing of GTM motion."
+        accent="emerald">
+        <MarketSizing personas={personas} totalTAM={agg.totalTAM} />
+      </StudySection>
+
+      {/* ═══════════ SECTION 4 — COMPETITION ═══════════ */}
+      <StudySection
+        number="04"
+        kicker="The battlefield"
+        title="Competitive landscape"
+        intro="Vendors already serving these personas. Frequency = how many personas have this tool in their stack. Low-friction tools are your easiest wedges."
+        accent="amber">
+        <CompetitiveLandscape competitors={agg.competitors} />
+      </StudySection>
+
+      {/* ═══════════ SECTION 5 — GTM ═══════════ */}
+      <StudySection
+        number="05"
+        kicker="The motion"
+        title="Go-to-market playbook"
+        intro="Where to find them, what to lead with, what to avoid, and which trigger events to detect. Synthesised across all personas."
+        accent="violet">
+        <GTMPlaybook agg={agg} avgCycle={agg.avgCycle} />
+      </StudySection>
+
+      {/* ═══════════ SECTION 6 — PERSONA ROSTER (compact reference) ═══════════ */}
+      <StudySection
+        number="06"
+        kicker="Source data"
+        title="Persona roster"
+        intro="The underlying personas this study synthesises. Open chat to pressure-test your pitch with each."
+        accent="indigo">
+        <PersonaRoster personas={personas} onChat={onChat} />
+      </StudySection>
+    </div>
+  );
+};
+
+// ─── Hero KPI ─────────────────────────────────────────────────────────
+const HeroKPI: React.FC<{ label: string; value: string; sub: string; accent?: 'good' | 'warn' }> = ({ label, value, sub, accent }) => {
+  const color = accent === 'good' ? 'text-emerald-400' : accent === 'warn' ? 'text-amber-300' : 'text-white';
+  return (
+    <div className="px-4 py-2 border-r border-white/5 last:border-r-0">
+      <div className="text-[9px] font-black tracking-widest uppercase text-white/40 mb-1">{label}</div>
+      <div className={`text-3xl font-black font-mono tabular-nums ${color}`}>{value}</div>
+      <div className="text-[10px] text-white/40 font-medium mt-0.5">{sub}</div>
+    </div>
+  );
+};
+
+// ─── StudySection wrapper ─────────────────────────────────────────────
+const StudySection: React.FC<{
+  number: string;
+  kicker: string;
+  title: string;
+  intro: string;
+  accent: 'rose' | 'sky' | 'emerald' | 'amber' | 'violet' | 'indigo';
+  children: React.ReactNode;
+}> = ({ number, kicker, title, intro, accent, children }) => {
+  const accents = {
+    rose:    { text: 'text-rose-600',    bar: 'bg-rose-500',    bg: 'bg-rose-50/30' },
+    sky:     { text: 'text-sky-600',     bar: 'bg-sky-500',     bg: 'bg-sky-50/30' },
+    emerald: { text: 'text-emerald-600', bar: 'bg-emerald-500', bg: 'bg-emerald-50/30' },
+    amber:   { text: 'text-amber-600',   bar: 'bg-amber-500',   bg: 'bg-amber-50/30' },
+    violet:  { text: 'text-violet-600',  bar: 'bg-violet-500',  bg: 'bg-violet-50/30' },
+    indigo:  { text: 'text-indigo-600',  bar: 'bg-indigo-500',  bg: 'bg-indigo-50/30' }
+  };
+  const a = accents[accent];
+
+  return (
+    <section>
+      <div className="flex items-start gap-4 mb-6">
+        <div className="flex flex-col items-center gap-2 flex-shrink-0">
+          <span className={`text-[10px] font-black tracking-[0.3em] uppercase ${a.text}`}>{kicker}</span>
+          <div className={`w-[2px] h-12 ${a.bar} rounded-full`} />
+          <span className={`text-xs font-mono font-black ${a.text}`}>{number}</span>
+        </div>
+        <div className="flex-1 pt-4">
+          <h2 className="text-3xl md:text-4xl font-display font-bold tracking-tight text-gray-900 mb-2">{title}</h2>
+          <p className="text-sm md:text-base text-gray-500 leading-relaxed max-w-3xl">{intro}</p>
+        </div>
+      </div>
+      <div>{children}</div>
+    </section>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════
+// SECTION 1 — PAIN LANDSCAPE
+// ═════════════════════════════════════════════════════════════════════
+const PainLandscape: React.FC<{
+  pains: Array<{ text: string; personaIdxs: number[]; sources: number }>;
+  personas: BuyerPersona[];
+}> = ({ pains, personas }) => {
+  const maxScore = Math.max(...pains.map(p => p.personaIdxs.length * 10 + p.sources), 1);
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-3xl p-6 lg:p-8 shadow-sm">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+        {/* Left: ranked pains */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-900">Ranked pain points</h3>
+            <span className="text-[10px] font-black tracking-widest uppercase text-gray-400">{pains.length} total</span>
+          </div>
+          <ul className="space-y-3">
+            {pains.slice(0, 8).map((p, i) => {
+              const score = p.personaIdxs.length * 10 + p.sources;
+              const pct = (score / maxScore) * 100;
+              const isUniversal = p.personaIdxs.length >= 2;
+              return (
+                <li key={i} className="group">
+                  <div className="flex items-start gap-3">
+                    <span className="text-[10px] font-mono font-black text-gray-300 mt-0.5 tabular-nums w-6 flex-shrink-0">#{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-3 mb-1">
+                        <p className="text-sm font-medium text-gray-800 leading-snug flex-1">{p.text}</p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {isUniversal && (
+                            <span className="text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded-md border border-rose-200">
+                              Universal
+                            </span>
+                          )}
+                          {p.sources > 0 && (
+                            <span className="text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
+                              <Shield size={8} className="inline mr-0.5" />{p.sources}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-rose-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          {personas.map((pp, idx) => {
+                            const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+                            const owns = p.personaIdxs.includes(idx);
+                            return (
+                              <span key={idx} title={pp.name}
+                                className="w-2 h-2 rounded-full transition-all"
+                                style={{
+                                  background: owns ? t.primary : '#e5e7eb',
+                                  boxShadow: owns ? `0 0 0 1px white, 0 0 0 2px ${t.primary}40` : 'none'
+                                }} />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        {/* Right: takeaways */}
+        <div className="bg-rose-50/40 border border-rose-100 rounded-2xl p-5">
+          <div className="text-[10px] font-black tracking-widest uppercase text-rose-600 mb-3">Lead with this</div>
+          {pains.filter(p => p.personaIdxs.length >= 2).slice(0, 3).map((p, i) => (
+            <div key={i} className="mb-3 last:mb-0">
+              <div className="flex items-baseline gap-2 mb-0.5">
+                <span className="text-xs font-mono font-black text-rose-500">→</span>
+                <p className="text-sm font-bold text-gray-900 leading-snug">{p.text}</p>
+              </div>
+              <p className="text-[11px] text-gray-500 italic leading-snug ml-4">
+                Mentioned by {p.personaIdxs.length} personas{p.sources > 0 ? ` · ${p.sources} sources` : ''}
+              </p>
+            </div>
+          ))}
+          {pains.filter(p => p.personaIdxs.length >= 2).length === 0 && (
+            <p className="text-xs text-gray-500 italic">No pains echo across multiple personas. Consider tightening ICP.</p>
+          )}
+
+          <div className="mt-5 pt-4 border-t border-rose-200/60">
+            <div className="text-[10px] font-black tracking-widest uppercase text-gray-500 mb-2">Persona legend</div>
+            <ul className="space-y-1">
+              {personas.map((p, idx) => {
+                const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+                return (
+                  <li key={idx} className="flex items-center gap-2 text-[11px]">
+                    <span className="w-2 h-2 rounded-full" style={{ background: t.primary }} />
+                    <span className="font-bold text-gray-700">{p.name}</span>
+                    <span className="text-gray-400 italic">{p.role}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════
+// SECTION 2 — TARGETABLE ICP
+// ═════════════════════════════════════════════════════════════════════
+const TargetableICP: React.FC<{
+  agg: any;
+  personas: BuyerPersona[];
+}> = ({ agg, personas }) => {
+  const topIndustries = agg.industries.slice(0, 5);
+  const maxIndCount = Math.max(...topIndustries.map((i: any) => i[1]), 1);
+
+  // Build a search-ready string
+  const linkedinFilter = useMemo(() => {
+    const titles = personas.map(p => p.role).filter(Boolean);
+    const sizes = personas.map(p => p.companyProfile?.companySize).filter(Boolean);
+    return `Job title contains: ${[...new Set(titles)].join(' OR ')} · Company size: ${[...new Set(sizes)].join(', ')}`;
+  }, [personas]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Composite ICP card */}
+      <div className="bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-100 rounded-3xl p-6">
+        <div className="text-[10px] font-black tracking-widest uppercase text-sky-600 mb-3">Composite ICP</div>
+        <div className="space-y-3">
+          <ICPField label="Industries" value={topIndustries.slice(0, 3).map((i: any) => i[0]).join(' · ') || '—'} />
+          <ICPField label="Company sizes" value={agg.sizes.slice(0, 2).map((s: any) => s[0]).join(' / ') || '—'} />
+          <ICPField label="Funding stages" value={agg.stages.slice(0, 2).map((s: any) => s[0]).join(' / ') || '—'} />
+          <ICPField label="Tech signals" value={agg.techStack.slice(0, 4).map((t: any) => t[0]).join(' · ') || '—'} />
+        </div>
+
+        <div className="mt-5 pt-4 border-t border-sky-200/60">
+          <div className="text-[9px] font-black tracking-widest uppercase text-sky-700 mb-2">LinkedIn Sales Nav filter</div>
+          <div className="bg-white border border-sky-200/60 rounded-xl p-3 text-[11px] text-gray-700 font-mono leading-relaxed break-words">
+            {linkedinFilter}
+          </div>
+        </div>
+      </div>
+
+      {/* Right: 2 mini-charts stacked */}
+      <div className="space-y-4">
+        {/* Industry bar chart */}
+        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-900 text-sm">Industry concentration</h3>
+            <Building2 size={14} className="text-gray-300" />
+          </div>
+          <ul className="space-y-2">
+            {topIndustries.length === 0 && <li className="text-xs text-gray-400 italic">No data</li>}
+            {topIndustries.map(([name, count]: any, i: number) => {
+              const pct = (count / maxIndCount) * 100;
+              return (
+                <li key={i}>
+                  <div className="flex items-baseline justify-between mb-1">
+                    <span className="text-xs font-bold text-gray-700">{name}</span>
+                    <span className="text-[10px] font-mono font-bold text-gray-500 tabular-nums">{count}× cited</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-sky-500 to-blue-500" style={{ width: `${pct}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        {/* Buyer role distribution donut */}
+        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-900 text-sm">Buyer role mix</h3>
+            <Briefcase size={14} className="text-gray-300" />
+          </div>
+          <BuyerRoleMix items={agg.buyerRoles} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ICPField: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div>
+    <div className="text-[9px] font-black tracking-widest uppercase text-gray-400">{label}</div>
+    <div className="text-sm font-bold text-gray-900 leading-snug mt-0.5">{value}</div>
+  </div>
+);
+
+const BuyerRoleMix: React.FC<{ items: Array<[string, number]> }> = ({ items }) => {
+  const total = items.reduce((a, [, c]) => a + c, 0);
+  const palette = ['#3b82f6', '#f59e0b', '#8b5cf6', '#10b981', '#ec4899'];
+  if (total === 0) return <p className="text-xs text-gray-400 italic">No data</p>;
+
+  let cumulative = 0;
+  return (
+    <div className="flex items-center gap-4">
+      <svg width="80" height="80" viewBox="0 0 80 80" className="flex-shrink-0">
+        <circle cx="40" cy="40" r="32" fill="none" stroke="#f3f4f6" strokeWidth="12" />
+        {items.map(([role, count], i) => {
+          const pct = count / total;
+          const r = 32, c = 2 * Math.PI * r;
+          const dash = c * pct;
+          const offset = -c * cumulative;
+          cumulative += pct;
+          return (
+            <circle key={i} cx="40" cy="40" r={r} fill="none"
+              stroke={palette[i % palette.length]} strokeWidth="12"
+              strokeDasharray={`${dash} ${c - dash}`}
+              strokeDashoffset={offset}
+              transform="rotate(-90 40 40)" />
+          );
+        })}
+      </svg>
+      <ul className="flex-1 space-y-1">
+        {items.map(([role, count], i) => (
+          <li key={i} className="flex items-center gap-2 text-xs">
+            <span className="w-2 h-2 rounded-full" style={{ background: palette[i % palette.length] }} />
+            <span className="font-bold text-gray-700 flex-1 truncate">{role}</span>
+            <span className="text-[10px] font-mono font-bold text-gray-500 tabular-nums">{Math.round(count / total * 100)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════
+// SECTION 3 — MARKET SIZING
+// ═════════════════════════════════════════════════════════════════════
+const MarketSizing: React.FC<{ personas: BuyerPersona[]; totalTAM: number }> = ({ personas, totalTAM }) => {
+  const tams = personas.map(p => ({
+    name: p.name,
+    role: p.role,
+    tam: parseFirstNumber(p.companyProfile?.estimatedTAM),
+    tamLabel: p.companyProfile?.estimatedTAM || '—'
+  })).sort((a, b) => b.tam - a.tam);
+  const maxTAM = Math.max(...tams.map(t => t.tam), 1);
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-3xl p-6 lg:p-8 shadow-sm">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-8 items-start">
+        <div>
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-bold text-gray-900">TAM by persona</h3>
+            <Building2 size={14} className="text-gray-300" />
+          </div>
+          <ul className="space-y-4">
+            {tams.map((t, i) => {
+              const theme = PERSONA_THEMES[personas.findIndex(p => p.name === t.name) % PERSONA_THEMES.length];
+              const pct = (t.tam / maxTAM) * 100;
+              const sharePct = totalTAM > 0 ? (t.tam / totalTAM) * 100 : 0;
+              return (
+                <li key={i}>
+                  <div className="flex items-baseline justify-between mb-1.5 gap-3">
+                    <div className="min-w-0">
+                      <span className="text-sm font-bold text-gray-900">{t.name}</span>
+                      <span className="text-[11px] text-gray-400 italic ml-2">{t.role}</span>
+                    </div>
+                    <div className="flex items-baseline gap-2 flex-shrink-0">
+                      <span className="text-xl font-black font-mono tabular-nums text-gray-900">{t.tam > 0 ? `~${formatBigNumber(t.tam)}` : '—'}</span>
+                      <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">{sharePct.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${Math.max(2, pct)}%`, background: `linear-gradient(90deg, ${theme.primary}, ${theme.secondary})` }} />
+                  </div>
+                  {t.tamLabel !== '—' && (
+                    <p className="text-[10px] text-gray-400 italic mt-1 leading-snug line-clamp-1">{t.tamLabel}</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        {/* Big total */}
+        <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 text-center">
+          <div className="text-[10px] font-black tracking-widest uppercase text-emerald-700 mb-2">Total market</div>
+          <div className="text-4xl font-black font-mono tabular-nums text-gray-900">
+            ~{formatBigNumber(totalTAM)}
+          </div>
+          <div className="text-[11px] text-gray-500 mt-1">addressable companies</div>
+          <div className="mt-4 pt-4 border-t border-emerald-200/60 space-y-2 text-left">
+            <div>
+              <div className="text-[9px] font-black tracking-widest uppercase text-gray-400">Geographic scope</div>
+              <div className="text-xs font-bold text-gray-700 mt-0.5">US + EU + UK</div>
+            </div>
+            <div>
+              <div className="text-[9px] font-black tracking-widest uppercase text-gray-400">Avg deal</div>
+              <div className="text-xs font-bold text-gray-700 mt-0.5">Derived from buyer-role budget</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════
+// SECTION 4 — COMPETITIVE LANDSCAPE
+// ═════════════════════════════════════════════════════════════════════
+const CompetitiveLandscape: React.FC<{
+  competitors: Array<{ tool: string; count: number; frictions: string[]; pains: string[] }>;
+}> = ({ competitors }) => {
+  if (competitors.length === 0) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-3xl p-8 text-center">
+        <Layers size={32} className="mx-auto mb-3 text-gray-200" />
+        <p className="text-sm text-gray-400">No competing stack captured.</p>
+      </div>
+    );
+  }
+
+  const maxCount = Math.max(...competitors.map(c => c.count), 1);
+  const lowFriction = competitors.filter(c => c.frictions.some(f => f === 'Low'));
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
+      {/* Frequency chart */}
+      <div className="bg-white border border-gray-100 rounded-3xl p-6 lg:p-8 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="font-bold text-gray-900">Vendor frequency</h3>
+          <span className="text-[10px] font-black tracking-widest uppercase text-gray-400">{competitors.length} vendors</span>
+        </div>
+        <ul className="space-y-3">
+          {competitors.slice(0, 10).map((c, i) => {
+            const pct = (c.count / maxCount) * 100;
+            const dom = c.frictions.sort((a, b) =>
+              c.frictions.filter(f => f === b).length - c.frictions.filter(f => f === a).length
+            )[0];
+            const fricColor = dom === 'Low' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+              : dom === 'High' ? 'bg-rose-100 text-rose-700 border-rose-200'
+              : 'bg-amber-100 text-amber-700 border-amber-200';
+            return (
+              <li key={i}>
+                <div className="flex items-baseline justify-between mb-1 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] font-mono font-black text-gray-300 tabular-nums">#{i + 1}</span>
+                    <span className="text-sm font-bold text-gray-900 truncate">{c.tool}</span>
+                    <span className={`text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded-md border ${fricColor}`}>
+                      {dom} switch
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-gray-500 tabular-nums flex-shrink-0">{c.count} persona{c.count !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-amber-500" style={{ width: `${pct}%` }} />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {/* Wedge opportunities */}
+      <div className="bg-emerald-50/40 border border-emerald-100 rounded-3xl p-5">
+        <div className="text-[10px] font-black tracking-widest uppercase text-emerald-700 mb-3">Wedge opportunities</div>
+        <p className="text-[11px] text-gray-500 italic leading-relaxed mb-4">
+          Tools with low switching friction = easiest replacements. Lead competitive positioning against these.
+        </p>
+        {lowFriction.length > 0 ? (
+          <ul className="space-y-2">
+            {lowFriction.slice(0, 5).map((c, i) => (
+              <li key={i} className="bg-white border border-emerald-100 rounded-xl p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-sm text-gray-900 truncate">{c.tool}</span>
+                  <span className="text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md">Low</span>
+                </div>
+                {c.pains[0] && (
+                  <p className="text-[11px] text-gray-500 italic leading-snug mt-1 line-clamp-2">"{c.pains[0]}"</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-gray-400 italic">No low-friction wedges detected.</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════
+// SECTION 5 — GTM PLAYBOOK
+// ═════════════════════════════════════════════════════════════════════
+const GTMPlaybook: React.FC<{ agg: any; avgCycle: number }> = ({ agg, avgCycle }) => {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Watering holes ranked */}
+      <div className="lg:col-span-2 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="font-bold text-gray-900">Top watering holes</h3>
+          <MapPin size={14} className="text-gray-300" />
+        </div>
+        {agg.wateringHoles.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">No channels mapped.</p>
+        ) : (
+          <ul className="space-y-3">
+            {agg.wateringHoles.slice(0, 6).map((w: any, i: number) => {
+              const memberN = parseFirstNumber(w.hole.memberCount);
+              const max = parseFirstNumber(agg.wateringHoles[0].hole.memberCount) || memberN;
+              const pct = (memberN / max) * 100;
+              return (
+                <li key={i}>
+                  <div className="flex items-baseline justify-between mb-1 gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {w.hole.url ? (
+                        <a href={w.hole.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-gray-900 hover:text-violet-600 truncate">{w.hole.name}</a>
+                      ) : (
+                        <span className="text-sm font-bold text-gray-900 truncate">{w.hole.name}</span>
+                      )}
+                      <span className="text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 bg-violet-50 text-violet-700 rounded-md border border-violet-200">{w.hole.type}</span>
+                      {w.mentions > 1 && <span className="text-[9px] font-black tracking-widest uppercase text-rose-600">↑ {w.mentions}× cited</span>}
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-gray-500 tabular-nums">{w.hole.memberCount}</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-violet-500 to-purple-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <p className="text-[10px] text-gray-400 italic mt-1 line-clamp-1">{w.hole.activityLevel} · {w.hole.bestPostFormat}</p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* Outreach + triggers */}
+      <div className="space-y-4">
+        <div className="bg-emerald-50/40 border border-emerald-100 rounded-3xl p-5">
+          <div className="text-[10px] font-black tracking-widest uppercase text-emerald-700 mb-3">✓ Lead channels</div>
+          {agg.bestChannels.slice(0, 3).map(([c, n]: any, i: number) => (
+            <div key={i} className="text-sm font-bold text-gray-800 mb-1 leading-snug">→ {c} <span className="text-[10px] text-gray-400 font-medium">({n}×)</span></div>
+          )) || <p className="text-xs text-gray-400 italic">—</p>}
+          <div className="mt-3 pt-3 border-t border-emerald-200/60 text-[10px] text-gray-500">
+            Avg sales cycle: <span className="font-mono font-black text-gray-900">{avgCycle ? `${avgCycle}d` : '—'}</span>
+          </div>
+        </div>
+
+        <div className="bg-rose-50/40 border border-rose-100 rounded-3xl p-5">
+          <div className="text-[10px] font-black tracking-widest uppercase text-rose-700 mb-3">✗ Avoid</div>
+          {agg.worstChannels.slice(0, 3).map(([c, n]: any, i: number) => (
+            <div key={i} className="text-sm font-bold text-gray-800 mb-1 leading-snug">→ {c} <span className="text-[10px] text-gray-400 font-medium">({n}×)</span></div>
+          )) || <p className="text-xs text-gray-400 italic">—</p>}
+        </div>
+
+        {agg.triggers.length > 0 && (
+          <div className="bg-amber-50/50 border border-amber-100 rounded-3xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock size={12} className="text-amber-600" />
+              <div className="text-[10px] font-black tracking-widest uppercase text-amber-700">Buy-now triggers</div>
+            </div>
+            <ul className="space-y-2">
+              {agg.triggers.slice(0, 4).map((t: any, i: number) => (
+                <li key={i}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs font-bold text-gray-800 leading-snug flex-1">{t.event}</span>
+                    <span className="flex-shrink-0 text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 bg-amber-500 text-white rounded-md">{t.urgencyDays}d</span>
+                  </div>
+                  <p className="text-[10px] text-gray-400 italic leading-snug">{t.personaName}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════
+// SECTION 6 — PERSONA ROSTER (compact)
+// ═════════════════════════════════════════════════════════════════════
+const PersonaRoster: React.FC<{ personas: BuyerPersona[]; onChat: (idx: number) => void }> = ({ personas, onChat }) => {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      {personas.map((p, idx) => {
+        const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+        const tam = parseFirstNumber(p.companyProfile?.estimatedTAM);
+        return (
+          <div key={idx} className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm relative overflow-hidden">
+            <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none"
+              style={{ background: t.primary }} />
+            <div className="relative">
+              <div className="flex items-start gap-3 mb-3">
+                <img src={avatarUrl(p.avatarSeed || p.name)}
+                  className="w-12 h-12 rounded-full bg-white p-0.5 flex-shrink-0"
+                  style={{ boxShadow: `0 0 0 2px ${t.primary}` } as any}
+                  alt={p.name} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-base text-gray-900 truncate">{p.name}</div>
+                  <div className="text-[10px] font-bold tracking-widest uppercase truncate" style={{ color: t.primary }}>{p.role}</div>
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-500 italic leading-snug line-clamp-2 mb-3 min-h-[2rem]">"{p.tagline || p.demographics || ''}"</p>
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <div>
+                  <div className="text-[9px] font-black tracking-widest uppercase text-gray-400">TAM</div>
+                  <div className="text-sm font-mono font-black text-gray-900 tabular-nums">{tam > 0 ? `~${formatBigNumber(tam)}` : '—'}</div>
+                </div>
+                <button onClick={() => onChat(idx)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-[10px] font-black tracking-widest uppercase shadow-md transition-all hover:scale-105"
+                  style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.secondary})` }}>
+                  <MessageSquare size={11} /> Chat
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // ─── Main View ────────────────────────────────────────────────────────
 export const PersonaView: React.FC<PersonaViewProps> = (props) => {
   const { project } = useProject();
@@ -2101,10 +2861,6 @@ export const PersonaView: React.FC<PersonaViewProps> = (props) => {
   const [error, setError] = useState<string | null>(null);
   const [reveal, setReveal] = useState(false);
   const [chatTarget, setChatTarget] = useState<{ persona: BuyerPersona; themeIdx: number } | null>(null);
-  const [viewMode, setViewMode] = useState<'studio' | 'compare'>(() =>
-    (localStorage.getItem('persona_view_mode') as any) || 'studio'
-  );
-  useEffect(() => { localStorage.setItem('persona_view_mode', viewMode); }, [viewMode]);
 
   const handleGenerate = async () => {
     if (!appName || !appDesc || !category) return;
@@ -2128,8 +2884,8 @@ export const PersonaView: React.FC<PersonaViewProps> = (props) => {
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in pb-20">
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-base-300 pb-4">
         <div>
-          <h2 className="text-3xl font-display font-bold"><span className="text-primary">Buyer</span> Personas <span className="text-xs font-bold tracking-widest uppercase text-gray-400 ml-2 align-middle">for SaaS founders</span></h2>
-          <p className="text-sm opacity-70 mt-1">Comparison dashboard for B2B buyer intel — TAM ticker, personality overlay, market map, single matrix table from pains to outreach.</p>
+          <h2 className="text-3xl font-display font-bold"><span className="text-primary">Buyer</span> Market Study <span className="text-xs font-bold tracking-widest uppercase text-gray-400 ml-2 align-middle">B2B research report</span></h2>
+          <p className="text-sm opacity-70 mt-1">Top-down market analysis — pain landscape → targetable ICP → market sizing → competitive landscape → GTM playbook.</p>
         </div>
         {analysis && (
           <button onClick={() => setReveal(true)}
@@ -2175,47 +2931,13 @@ export const PersonaView: React.FC<PersonaViewProps> = (props) => {
           <p className="text-brand-secondary font-medium">Analyzing market trends, building personality profiles, and surfacing live sources...</p>
         </div>
       ) : analysis ? (
-        <div className="space-y-6 animate-fade-in">
-          {/* View toggle — Studio (default) vs Compare */}
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="inline-flex items-center gap-1 p-1 bg-white border border-stone-200 rounded-2xl shadow-sm">
-              <button onClick={() => setViewMode('studio')}
-                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  viewMode === 'studio' ? 'bg-stone-900 text-white shadow-md' : 'text-stone-500 hover:text-stone-800'
-                }`}>
-                <Sparkles size={13} /> Studio
-              </button>
-              <button onClick={() => setViewMode('compare')}
-                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  viewMode === 'compare' ? 'bg-stone-900 text-white shadow-md' : 'text-stone-500 hover:text-stone-800'
-                }`}>
-                <Layers size={13} /> Compare
-              </button>
-            </div>
-          </div>
-
-          {viewMode === 'studio' ? (
-            <PersonaStudio
-              personas={analysis.personas}
-              marketOverview={analysis.marketOverview}
-              onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })}
-            />
-          ) : (
-            <>
-              <div className="bg-gradient-to-r from-primary/10 to-secondary/10 p-6 rounded-2xl border border-primary/20">
-                <h3 className="font-bold text-primary flex items-center gap-2 mb-2"><Activity size={20} /> Market Overview</h3>
-                <p className="text-gray-700 leading-relaxed text-sm">{analysis.marketOverview}</p>
-              </div>
-              <KPITicker personas={analysis.personas} />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <OverlayRadar personas={analysis.personas} />
-                <MarketMap personas={analysis.personas}
-                  onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })} />
-              </div>
-              <ComparisonMatrix personas={analysis.personas}
-                onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })} />
-            </>
-          )}
+        <div className="animate-fade-in">
+          <MarketStudy
+            personas={analysis.personas}
+            marketOverview={analysis.marketOverview}
+            productName={appName || 'Your product'}
+            onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })}
+          />
         </div>
       ) : null}
 
