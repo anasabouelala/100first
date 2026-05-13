@@ -6,17 +6,97 @@ export interface StrategyStep {
   impact: 'High' | 'Medium' | 'Low';
   effort: 'High' | 'Medium' | 'Low';
   channel: string;
+  aiAngle?: string;            // 2026 — how AI accelerates this step
 }
 
 export interface LaunchPhase {
   phaseName: string;
+  weekRange?: string;          // e.g. "Week 1-2"
+  goal?: string;               // e.g. "First 10 design-partner users"
+  successMetric?: string;      // e.g. "10 PoC convos booked"
   steps: StrategyStep[];
+}
+
+export interface NorthStarMetric {
+  name: string;                // e.g. "Weekly Active Sessions"
+  target: string;              // e.g. "200 by week 12"
+  rationale: string;
+}
+
+export interface WedgeDoctrine {
+  useCase: string;             // The smallest possible problem
+  idealUser: string;           // The narrowest user
+  whyNow: string;              // Why 2026 makes this possible
+  expansionPath: string[];     // 3-4 steps from wedge to broader market
+}
+
+export interface GrowthLoop {
+  name: string;                // e.g. "Content → SEO → Users"
+  type: 'Content' | 'Network' | 'Product' | 'Community' | 'Data' | 'Sales';
+  trigger: string;             // What kicks off one cycle
+  action: string;              // What the user does
+  output: string;              // What gets created
+  reinvestment: string;        // How the output feeds the trigger again
+  velocityWeeks: number;       // weeks until first compounding return
+  leverage: 'High' | 'Medium' | 'Low';
+}
+
+export interface AINativeTactic {
+  tactic: string;              // e.g. "Publish llm.txt with structured product info"
+  category: 'GEO' | 'MCP' | 'Agent-Distribution' | 'AI-Directory' | 'Eval-as-Marketing' | 'API-First';
+  rationale: string;
+  impact: 'High' | 'Medium' | 'Low';
+  timeframe: string;           // e.g. "Week 1" or "Month 2"
+}
+
+export interface First72Block {
+  timeBlock: string;           // e.g. "Hour 0-3" or "Day 1, AM"
+  action: string;
+  channel: string;
+  successMetric: string;
+}
+
+export interface AntiPattern {
+  pattern: string;             // What founders still do that's broken
+  whyItFails2026: string;
+  instead: string;             // The 2026 alternative
+}
+
+export interface TrustLever {
+  lever: string;               // e.g. "Open-source the core engine"
+  mechanism: string;           // Why it builds trust now
+  timeToInstall: string;       // e.g. "Week 1"
+}
+
+export interface LaunchRisk {
+  risk: string;
+  impact: 'High' | 'Medium' | 'Low';
+  probability: 'High' | 'Medium' | 'Low';
+  mitigation: string;
+}
+
+export interface FounderActivity {
+  activity: string;            // e.g. "Daily writing on X / LinkedIn"
+  hoursPerWeek: number;
+  rationale: string;
 }
 
 export interface StrategyPlan {
   productName: string;
   targetAudience: string;
   phases: LaunchPhase[];
+  // 2026 AI-era additions
+  northStarMetric?: NorthStarMetric;
+  wedge?: WedgeDoctrine;
+  growthLoops?: GrowthLoop[];
+  aiNativeDiscovery?: AINativeTactic[];
+  first72Hours?: First72Block[];
+  antiPatterns?: AntiPattern[];
+  trustLevers?: TrustLever[];
+  risks?: LaunchRisk[];
+  founderOperatingModel?: FounderActivity[];
+  compoundingMoats?: string[]; // What gets harder for competitors to copy each week
+  pricingThesis?: string;      // One-liner pricing recommendation for 2026
 }
 
 export interface CompetitorData {

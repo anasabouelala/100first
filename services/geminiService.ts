@@ -75,57 +75,266 @@ const validateOpportunity = async (opp: MarketOpportunity): Promise<MarketOpport
   }
 };
 
-// ... existing generateLaunchStrategy ...
+// =====================================================================
+// LAUNCH STRATEGY — 2026 AI-era roadmap
+// =====================================================================
 export const generateLaunchStrategy = async (
   appName: string,
   description: string,
   audience: string
 ): Promise<StrategyPlan> => {
-  const model = "gemini-3-flash-preview";
+  assertConfigured();
+  const model = "gemini-flash-latest";
+
+  // Reusable sub-schemas
+  const stepSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      id: { type: Type.STRING },
+      title: { type: Type.STRING },
+      description: { type: Type.STRING, description: "Specific, executable tactic. Mention exact tools, channels, numbers. Not generic." },
+      impact: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
+      effort: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
+      channel: { type: Type.STRING, description: "Specific platform or surface — e.g. 'X/Twitter build-in-public', 'r/SaaS', 'MicroConf community', 'Show HN'" },
+      aiAngle: { type: Type.STRING, description: "How AI accelerates THIS step in 2026. e.g. 'Use Claude to draft 30 variations, A/B test'" }
+    },
+    required: ["id", "title", "description", "impact", "effort", "channel", "aiAngle"]
+  };
 
   const schema: Schema = {
     type: Type.OBJECT,
     properties: {
       productName: { type: Type.STRING },
       targetAudience: { type: Type.STRING },
+
+      // ── 2026 strategic frame ──
+      northStarMetric: {
+        type: Type.OBJECT,
+        description: "The ONE metric that matters more than vanity numbers. Not 'signups' — outcome-based.",
+        properties: {
+          name: { type: Type.STRING, description: "e.g. 'Weekly Active Use Sessions' or 'Aha-moment in <60s rate'" },
+          target: { type: Type.STRING, description: "Specific number + timeframe — e.g. '200 by week 12'" },
+          rationale: { type: Type.STRING, description: "Why this is the right metric in 2026" }
+        },
+        required: ["name", "target", "rationale"]
+      },
+
+      wedge: {
+        type: Type.OBJECT,
+        description: "The smallest possible market entry — narrow enough to dominate completely, then expand from.",
+        properties: {
+          useCase: { type: Type.STRING, description: "The single hyper-specific job-to-be-done you solve perfectly" },
+          idealUser: { type: Type.STRING, description: "The narrowest persona — title + company size + situation" },
+          whyNow: { type: Type.STRING, description: "Why 2026 makes this wedge winnable now (AI capability shift, market change, etc.)" },
+          expansionPath: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3-4 expansion steps from wedge to broader market" }
+        },
+        required: ["useCase", "idealUser", "whyNow", "expansionPath"]
+      },
+
       phases: {
         type: Type.ARRAY,
+        description: "3-4 phases, each with a goal, week range, success metric, and 3-5 concrete steps. NOT generic 'day 1-3 launch'.",
         items: {
           type: Type.OBJECT,
           properties: {
-            phaseName: { type: Type.STRING, description: "e.g., 'Day 1-3: The Warm Up' or 'The Viral Hook'" },
-            steps: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  title: { type: Type.STRING },
-                  description: { type: Type.STRING, description: "Specific, actionable tactic to get users." },
-                  impact: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
-                  effort: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
-                  channel: { type: Type.STRING, description: "e.g., Twitter, Reddit, LinkedIn, Cold Email" }
-                },
-                required: ["id", "title", "description", "impact", "effort", "channel"]
-              }
-            }
+            phaseName: { type: Type.STRING, description: "e.g. 'Phase 1 — Design Partners' or 'Phase 2 — Compounding Engine'" },
+            weekRange: { type: Type.STRING, description: "e.g. 'Week 1-3'" },
+            goal: { type: Type.STRING, description: "The single outcome this phase produces" },
+            successMetric: { type: Type.STRING, description: "How you know it worked. Specific number." },
+            steps: { type: Type.ARRAY, items: stepSchema }
           },
-          required: ["phaseName", "steps"]
+          required: ["phaseName", "weekRange", "goal", "successMetric", "steps"]
         }
+      },
+
+      // ── 2026 wow sections ──
+      growthLoops: {
+        type: Type.ARRAY,
+        description: "3-4 compounding growth loops. Each loop's output must feed back into its own trigger. Linear acquisition does NOT count.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING, description: "e.g. 'User → Public artifact → SEO → User'" },
+            type: { type: Type.STRING, description: "One of: Content, Network, Product, Community, Data, Sales" },
+            trigger: { type: Type.STRING, description: "What kicks off one cycle" },
+            action: { type: Type.STRING, description: "What the user does" },
+            output: { type: Type.STRING, description: "What gets created/changed as a result" },
+            reinvestment: { type: Type.STRING, description: "How the output makes the next trigger easier" },
+            velocityWeeks: { type: Type.NUMBER, description: "How many weeks until first compounding return is visible" },
+            leverage: { type: Type.STRING, enum: ["High", "Medium", "Low"] }
+          },
+          required: ["name", "type", "trigger", "action", "output", "reinvestment", "velocityWeeks", "leverage"]
+        }
+      },
+
+      aiNativeDiscovery: {
+        type: Type.ARRAY,
+        description: "5-7 specifically 2026-era discovery tactics that didn't exist or didn't matter in 2020. Be concrete.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            tactic: { type: Type.STRING, description: "e.g. 'Publish llm.txt + OG metadata so ChatGPT/Perplexity cite you for [keyword]'" },
+            category: { type: Type.STRING, description: "One of: GEO, MCP, Agent-Distribution, AI-Directory, Eval-as-Marketing, API-First" },
+            rationale: { type: Type.STRING, description: "Why this matters in 2026 — what shifted" },
+            impact: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
+            timeframe: { type: Type.STRING, description: "e.g. 'Week 1' or 'Month 2'" }
+          },
+          required: ["tactic", "category", "rationale", "impact", "timeframe"]
+        }
+      },
+
+      first72Hours: {
+        type: Type.ARRAY,
+        description: "Hour-by-hour launch playbook for the first 72 hours. 6-10 time blocks. NO 'post on Product Hunt'.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            timeBlock: { type: Type.STRING, description: "e.g. 'Hour 0-3' or 'Day 1, AM' or 'Day 2, late afternoon'" },
+            action: { type: Type.STRING, description: "Exactly what you do, with specifics" },
+            channel: { type: Type.STRING, description: "Where it happens" },
+            successMetric: { type: Type.STRING, description: "What success looks like for this block — specific" }
+          },
+          required: ["timeBlock", "action", "channel", "successMetric"]
+        }
+      },
+
+      antiPatterns: {
+        type: Type.ARRAY,
+        description: "5-7 things founders STILL do in 2026 that worked 2018-2022 but are broken now. Be specific and brave.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            pattern: { type: Type.STRING, description: "The mistake — e.g. 'Big Product Hunt launch day push'" },
+            whyItFails2026: { type: Type.STRING, description: "Specifically what shifted — AI flood, attention fragmentation, etc." },
+            instead: { type: Type.STRING, description: "What to do in 2026 instead" }
+          },
+          required: ["pattern", "whyItFails2026", "instead"]
+        }
+      },
+
+      trustLevers: {
+        type: Type.ARRAY,
+        description: "4-6 moves to install trust early. Open-source, transparency, public evals, no-data-retention claims, etc.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            lever: { type: Type.STRING },
+            mechanism: { type: Type.STRING, description: "Why this builds trust specifically in the AI era" },
+            timeToInstall: { type: Type.STRING, description: "When in the roadmap to do this" }
+          },
+          required: ["lever", "mechanism", "timeToInstall"]
+        }
+      },
+
+      risks: {
+        type: Type.ARRAY,
+        description: "Top 5-6 things that could kill the launch. Honest. Include both market and execution risks.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            risk: { type: Type.STRING },
+            impact: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
+            probability: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
+            mitigation: { type: Type.STRING, description: "Specific action to reduce probability or impact" }
+          },
+          required: ["risk", "impact", "probability", "mitigation"]
+        }
+      },
+
+      founderOperatingModel: {
+        type: Type.ARRAY,
+        description: "How the founder should spend their week pre-launch and during launch. Hours/week per activity. Total should sum to ~50-60 sustainable hours.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            activity: { type: Type.STRING, description: "e.g. 'Daily writing on X/LinkedIn (build-in-public)'" },
+            hoursPerWeek: { type: Type.NUMBER },
+            rationale: { type: Type.STRING }
+          },
+          required: ["activity", "hoursPerWeek", "rationale"]
+        }
+      },
+
+      compoundingMoats: {
+        type: Type.ARRAY,
+        description: "3-5 things that get harder for competitors to copy each week of operation. Data, brand, distribution, integrations.",
+        items: { type: Type.STRING }
+      },
+
+      pricingThesis: {
+        type: Type.STRING,
+        description: "One paragraph: what pricing model fits this product in 2026 and why. Mention outcome-based vs seat-based, usage tiers, free-tier philosophy."
       }
     },
-    required: ["productName", "targetAudience", "phases"]
+    required: [
+      "productName", "targetAudience", "phases",
+      "northStarMetric", "wedge", "growthLoops", "aiNativeDiscovery",
+      "first72Hours", "antiPatterns", "trustLevers", "risks",
+      "founderOperatingModel", "compoundingMoats", "pricingThesis"
+    ]
   };
 
-  const prompt = `
-    Create a high-impact, unconventional launch strategy to get the first 100 users for:
-    App Name: ${appName}
-    Description: ${description}
-    Target Audience: ${audience}
+  const prompt = `You are a senior B2B SaaS GTM operator who has shipped 5+ products in the 2024-2026 AI era. You are building a launch roadmap that is SPECIFICALLY adapted to the realities of 2026 — not the 2020 playbook.
 
-    Focus on "Guerrilla Marketing", "Engineering as Marketing", and high-conversion direct outreach. 
-    Avoid generic advice like "post on social media". Be specific.
-  `;
+THE PRODUCT
+- Name: ${appName}
+- Description: ${description}
+- Target audience: ${audience}
+
+2026 REALITY YOU MUST DESIGN AROUND
+1. AI flooded every distribution channel. Cold email is at 0.2% reply. Generic LinkedIn DMs are dead. Product Hunt has become noise.
+2. ChatGPT, Claude, Perplexity, Gemini are the new search engines. If you're not cited there, you don't exist for a significant chunk of buyers.
+3. MCP servers + Claude Agent SDK mean AI agents are buying and using products on behalf of users. Discoverability is now agent-readable.
+4. Attention is fragmented across micro-communities (Discord, Slack groups, niche subreddits). Mass channels don't work.
+5. Trust is the bottleneck — buyers default-distrust AI products. Open-source, public evals, no-retention defaults move the needle.
+6. Compounding loops beat linear acquisition. Every dollar that doesn't compound is a dollar wasted.
+7. Founder voice = brand. Personal X/LinkedIn presence is the primary marketing channel for SaaS founders <$1M ARR.
+8. Pricing is shifting from seat-based to outcome/usage-based as AI does the work.
+9. Velocity matters more than perfection. Ship + iterate publicly.
+10. The "100 users" milestone is no longer about quantity — it's about 100 design partners who give you compounding signal.
+
+WHAT NOT TO RECOMMEND
+- ❌ Generic "Product Hunt launch day"
+- ❌ "Write blog posts for SEO" (without a compounding loop)
+- ❌ "Post on social media"
+- ❌ Paid ads (CAC is broken at <$10M ARR in 2026 for B2B SaaS)
+- ❌ Cold email blasts
+- ❌ Generic "Find communities and engage"
+- ❌ Anything that doesn't have a compounding mechanism
+
+WHAT TO RECOMMEND
+- ✅ GEO (Generative Engine Optimization) — getting cited in ChatGPT/Perplexity for ICP queries
+- ✅ MCP / Agent distribution — publishing as an MCP server, registry submission
+- ✅ Build-in-public on X with metrics — compounds founder brand
+- ✅ Open-sourcing strategic primitives that drive top-of-funnel
+- ✅ Public evals + benchmarks (especially for AI products)
+- ✅ "Eval-as-marketing" — releasing a public benchmark in your category
+- ✅ Embedded distribution (be the AI inside someone else's tool)
+- ✅ Co-launches with adjacent tools (cross-promotion compounds)
+- ✅ Niche Slack/Discord communities (10K members > LinkedIn)
+- ✅ llm.txt + structured product metadata for AI crawlers
+- ✅ Personal narrative content (founder's POV on their own X)
+- ✅ Tool directories: theresanaiforthat.com, ai-stars, etc.
+- ✅ Anchor on a single wedge that's so narrow nobody else cares — own it 100%
+- ✅ Booking calls with the founder as the lead magnet
+- ✅ Loom walkthroughs over scheduled demos
+
+OUTPUT
+Generate a strategic launch roadmap with:
+1. **northStarMetric** — the ONE outcome metric, not vanity signups
+2. **wedge** — the narrowest possible entry point + 3-4 expansion steps
+3. **phases** — 3-4 phases with weekRange, goal, successMetric, and 3-5 concrete steps (each with an aiAngle showing how AI accelerates it)
+4. **growthLoops** — 3-4 compounding loops (must compound, not linear)
+5. **aiNativeDiscovery** — 5-7 specifically 2026-era tactics (GEO, MCP, agent distribution, AI directories, eval-as-marketing, API-first)
+6. **first72Hours** — hour-by-hour playbook for launch (6-10 time blocks)
+7. **antiPatterns** — 5-7 things to AVOID with the 2026 alternative
+8. **trustLevers** — 4-6 trust moves
+9. **risks** — top 5-6 risks with impact × probability × mitigation
+10. **founderOperatingModel** — weekly hours allocation (total 50-60 hrs)
+11. **compoundingMoats** — 3-5 advantages that get harder to copy over time
+12. **pricingThesis** — one paragraph on pricing model fit for 2026
+
+Be specific, contrarian, and bold. Avoid filler. Every line must be executable.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -134,7 +343,8 @@ export const generateLaunchStrategy = async (
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        systemInstruction: "You are a growth hacker specializing in getting the first 100 users for indie products. You are bold, strategic, and practical."
+        temperature: 0.85,
+        systemInstruction: "You are a 2026-era growth operator. You've shipped products in the post-AI-flood era. You know what worked 2018-2022 is dead. Be sharp, specific, contrarian."
       }
     });
 
