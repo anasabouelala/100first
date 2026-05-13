@@ -427,6 +427,22 @@ export interface ContentEnginePost {
   tags: string[];
 }
 
+export interface PersonaRadar {
+  priceSensitive: number;   // 0 = bargain hunter, 100 = premium buyer
+  techSavvy: number;        // 0 = beginner, 100 = power user
+  riskAverse: number;       // 0 = early adopter, 100 = risk averse
+  collaborative: number;    // 0 = lone wolf, 100 = team-oriented
+  pragmatic: number;        // 0 = trend-driven, 100 = pragmatic
+  vocal: number;            // 0 = quiet, 100 = vocal/influencer
+}
+
+export interface PersonaSource {
+  painIndex: number;        // which painPoints index this proves
+  platform: string;         // 'Reddit' | 'Twitter' | 'HackerNews' | 'LinkedIn' | 'IndieHackers'
+  snippet: string;          // short quote/excerpt from the source
+  url: string;              // direct link to the source
+}
+
 export interface BuyerPersona {
   name: string;
   role: string;
@@ -436,6 +452,11 @@ export interface BuyerPersona {
   goals: string[];
   whereTheyHangOut: string[];
   contentTheyConsume: string[];
+  // Sprint 2 enhancements
+  personalityRadar?: PersonaRadar;
+  painSources?: PersonaSource[];
+  tagline?: string;         // one-line summary used in cinematic reveal
+  avatarSeed?: string;      // seed for DiceBear avatar (defaults to name)
 }
 
 export interface BuyerPersonaAnalysis {

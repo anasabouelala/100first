@@ -1531,6 +1531,7 @@ export const evaluateRedditOpportunities = async (items: any[]): Promise<ForumOp
 };
 
 export const generateBuyerPersonas = async (appName: string, appDesc: string, category: string): Promise<BuyerPersonaAnalysis> => {
+  assertConfigured();
   const model = "gemini-flash-latest";
   const schema: Schema = {
     type: Type.OBJECT,
@@ -1541,16 +1542,44 @@ export const generateBuyerPersonas = async (appName: string, appDesc: string, ca
         items: {
           type: Type.OBJECT,
           properties: {
-            name: { type: Type.STRING },
+            name: { type: Type.STRING, description: "First name only, evocative and memorable" },
             role: { type: Type.STRING },
+            tagline: { type: Type.STRING, description: "One punchy line that captures who they are — used in cinematic reveal" },
             demographics: { type: Type.STRING },
             realWorldQuote: { type: Type.STRING },
             painPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
             goals: { type: Type.ARRAY, items: { type: Type.STRING } },
             whereTheyHangOut: { type: Type.ARRAY, items: { type: Type.STRING } },
-            contentTheyConsume: { type: Type.ARRAY, items: { type: Type.STRING } }
+            contentTheyConsume: { type: Type.ARRAY, items: { type: Type.STRING } },
+            personalityRadar: {
+              type: Type.OBJECT,
+              description: "Each value 0-100. priceSensitive: 0=bargain hunter, 100=premium buyer. techSavvy: 0=beginner, 100=power user. riskAverse: 0=early adopter, 100=risk averse. collaborative: 0=lone wolf, 100=team-oriented. pragmatic: 0=trend-driven, 100=pragmatic. vocal: 0=quiet, 100=vocal/influencer.",
+              properties: {
+                priceSensitive: { type: Type.NUMBER },
+                techSavvy: { type: Type.NUMBER },
+                riskAverse: { type: Type.NUMBER },
+                collaborative: { type: Type.NUMBER },
+                pragmatic: { type: Type.NUMBER },
+                vocal: { type: Type.NUMBER }
+              },
+              required: ["priceSensitive", "techSavvy", "riskAverse", "collaborative", "pragmatic", "vocal"]
+            },
+            painSources: {
+              type: Type.ARRAY,
+              description: "Real public sources (Reddit threads, Twitter/X posts, HackerNews, LinkedIn posts, IndieHackers) where someone fitting this persona has voiced one of the painPoints. Must be plausible, specific URLs.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  painIndex: { type: Type.NUMBER, description: "0-based index into painPoints array" },
+                  platform: { type: Type.STRING },
+                  snippet: { type: Type.STRING, description: "Short quote (under 25 words) from the source" },
+                  url: { type: Type.STRING }
+                },
+                required: ["painIndex", "platform", "snippet", "url"]
+              }
+            }
           },
-          required: ["name", "role", "demographics", "painPoints", "goals", "whereTheyHangOut", "contentTheyConsume"]
+          required: ["name", "role", "tagline", "demographics", "painPoints", "goals", "whereTheyHangOut", "contentTheyConsume", "personalityRadar"]
         }
       }
     },
@@ -1558,10 +1587,82 @@ export const generateBuyerPersonas = async (appName: string, appDesc: string, ca
   };
   const response = await ai.models.generateContent({
     model,
-    contents: `Generate 3 detailed buyer personas for "${appName}" - a ${category} product. Description: "${appDesc}". Include market overview, demographics, pain points, goals, where they hang out online, and content they consume.`,
-    config: { responseMimeType: "application/json", responseSchema: schema }
+    contents: `Generate 3 detailed buyer personas for "${appName}" — a ${category} product. Description: "${appDesc}".
+
+For each persona include:
+- A memorable first-name + role (e.g. "Maya, Solo Designer")
+- A punchy ONE-LINE tagline (max 8 words) that captures their essence — used in a cinematic reveal screen
+- Demographics, pain points (3-5), goals (3-5), where they hang out online, content they consume
+- A realistic "realWorldQuote" — something they'd actually say (max 20 words)
+- A 6-axis personalityRadar (each 0-100). Be DECISIVE — use the full 0-100 range. Two personas should NOT have identical radars.
+- 2-4 painSources: real-looking public web URLs (Reddit threads in relevant subreddits, Twitter/X posts, HackerNews comments, LinkedIn posts, IndieHackers) where someone in this persona has voiced one of their painPoints. Include the short snippet. Each painSource must include painIndex (0-based) pointing to which painPoint it proves.
+
+Return strict JSON matching the schema.`,
+    config: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.85 }
   });
   return JSON.parse(response.text) as BuyerPersonaAnalysis;
+};
+
+// =====================================================================
+// CHAT WITH PERSONA — AI roleplays AS the buyer persona
+// =====================================================================
+export interface PersonaChatTurn { role: 'user' | 'model'; text: string }
+
+export const chatAsPersona = async (
+  persona: { name: string; role: string; demographics: string; painPoints: string[]; goals: string[]; realWorldQuote?: string; tagline?: string; personalityRadar?: any },
+  userMessage: string,
+  history: PersonaChatTurn[],
+  productContext: { appName: string; appDesc: string }
+): Promise<string> => {
+  assertConfigured();
+  const model = "gemini-flash-latest";
+
+  const radar = persona.personalityRadar
+    ? `\nPersonality (0-100):
+  - Price sensitivity: ${persona.personalityRadar.priceSensitive} (lower = bargain hunter, higher = premium buyer)
+  - Tech savvy: ${persona.personalityRadar.techSavvy}
+  - Risk averse: ${persona.personalityRadar.riskAverse} (lower = early adopter)
+  - Collaborative: ${persona.personalityRadar.collaborative}
+  - Pragmatic: ${persona.personalityRadar.pragmatic} (lower = trend-driven)
+  - Vocal: ${persona.personalityRadar.vocal}`
+    : '';
+
+  const systemPrompt = `You are roleplaying as ${persona.name}, a real human prospect — NOT a chatbot, NOT an AI assistant.
+
+WHO YOU ARE:
+- ${persona.role}
+- ${persona.demographics}
+- Tagline: ${persona.tagline || ''}
+${persona.realWorldQuote ? `- Something you'd say: "${persona.realWorldQuote}"` : ''}${radar}
+
+YOUR PAIN POINTS (what frustrates you daily):
+${persona.painPoints.map((p, i) => `  ${i + 1}. ${p}`).join('\n')}
+
+YOUR GOALS:
+${persona.goals.map((g, i) => `  ${i + 1}. ${g}`).join('\n')}
+
+CONTEXT — The founder of "${productContext.appName}" is interviewing you to understand if their product is right for you. Their product: "${productContext.appDesc}"
+
+RULES:
+1. Stay 100% in character. NEVER break the fourth wall. NEVER say you are an AI or a persona.
+2. Be skeptical, busy, honest. Real prospects don't gush — they probe, push back, and reveal pain only when trust builds.
+3. Use first-person ("I", "my team", "my workflow"). Bring specific scenarios from your life that match your demographics + role.
+4. Push back if their pitch feels generic. Ask hard questions about price, switching cost, time-to-value.
+5. Reveal one of your pain points only when the conversation naturally surfaces it.
+6. Keep replies under 80 words. Conversational, not corporate. Occasional typos or filler ("tbh", "honestly", "hmm") are fine if it fits your demographic.
+7. If the founder asks "would you pay $X?" answer truthfully based on your priceSensitive score and pain intensity. Don't auto-say yes.`;
+
+  const contents = [
+    ...history.map(t => ({ role: t.role, parts: [{ text: t.text }] })),
+    { role: 'user' as const, parts: [{ text: userMessage }] }
+  ];
+
+  const response = await ai.models.generateContent({
+    model,
+    contents,
+    config: { systemInstruction: systemPrompt, temperature: 0.9, maxOutputTokens: 300 }
+  });
+  return response.text?.trim() || "...";
 };
 
 export const parseReconBrief = async (brief: string): Promise<{
