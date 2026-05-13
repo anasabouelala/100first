@@ -71,20 +71,9 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
     .filter(k => form[k as keyof ProjectConfig] && (form[k as keyof ProjectConfig] as string).trim() !== '').length;
   const progress = (requiredFilled / 4) * 100;
 
-  // ── For first-time: full-page. For edit: modal overlay ──
-  const Container: React.FC<{ children: React.ReactNode }> = ({ children }) =>
-    mode === 'edit' ? (
-      <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-md animate-fade-in">
-        <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl relative">
-          {children}
-        </div>
-      </div>
-    ) : (
-      <div className="max-w-3xl mx-auto py-10 px-4 animate-fade-in">{children}</div>
-    );
-
-  return (
-    <Container>
+  // The form body (shared between modes)
+  const body = (
+    <>
       {/* Close (edit mode) */}
       {mode === 'edit' && onClose && (
         <button onClick={onClose}
@@ -285,7 +274,24 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
           Everything is stored locally — never sent anywhere except to the AI sections you trigger manually.
         </p>
       )}
-    </Container>
+    </>
+  );
+
+  // Wrap in modal (edit) or full-page (first-time) — done inline so
+  // the input components aren't unmounted on every keystroke
+  if (mode === 'edit') {
+    return (
+      <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-md animate-fade-in">
+        <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl relative">
+          {body}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="max-w-3xl mx-auto py-10 px-4 animate-fade-in">
+      {body}
+    </div>
   );
 };
 
