@@ -107,6 +107,35 @@ export const generateLaunchStrategy = async (
       productName: { type: Type.STRING },
       targetAudience: { type: Type.STRING },
 
+      // ── Plain-English TL;DR at top of report ──
+      summary: {
+        type: Type.OBJECT,
+        description: "Plain-English summary of the whole plan. NO jargon. Written for a non-technical founder reading their morning coffee.",
+        properties: {
+          oneSentence: { type: Type.STRING, description: "One sentence summary starting with a verb. e.g. 'Get your first 100 paying users in 12 weeks by being the only tool that solves X for Y.'" },
+          bullets: { type: Type.ARRAY, items: { type: Type.STRING }, description: "5-7 plain-English bullets capturing the strategy. Each bullet under 20 words. No acronyms unless followed by '(meaning: ...)'." }
+        },
+        required: ["oneSentence", "bullets"]
+      },
+
+      // ── Customer journey funnel ──
+      customerJourney: {
+        type: Type.ARRAY,
+        description: "How someone goes from 'never heard of you' to 'paying customer'. 4-5 stages. Concrete and specific. Each stage in plain English.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            stage: { type: Type.STRING, description: "Stage label — e.g. 'Never heard of you', 'Curious', 'Trying it', 'Paying'" },
+            whatTheyThink: { type: Type.STRING, description: "What the user thinks at this stage, in first person. e.g. 'I have problem X but I don't know any tool solves it'" },
+            yourMove: { type: Type.STRING, description: "What YOU do at this stage. Concrete action." },
+            channel: { type: Type.STRING, description: "Where this happens — specific channel/surface" },
+            example: { type: Type.STRING, description: "A concrete real-world example. Use a fake user name + scenario." },
+            typicalDays: { type: Type.NUMBER, description: "Avg days a user spends at this stage" }
+          },
+          required: ["stage", "whatTheyThink", "yourMove", "channel", "example", "typicalDays"]
+        }
+      },
+
       // ── 2026 strategic frame ──
       northStarMetric: {
         type: Type.OBJECT,
@@ -267,14 +296,24 @@ export const generateLaunchStrategy = async (
       }
     },
     required: [
-      "productName", "targetAudience", "phases",
+      "productName", "targetAudience", "phases", "summary", "customerJourney",
       "northStarMetric", "wedge", "growthLoops", "aiNativeDiscovery",
       "first72Hours", "antiPatterns", "trustLevers", "risks",
       "founderOperatingModel", "compoundingMoats", "pricingThesis"
     ]
   };
 
-  const prompt = `You are a senior B2B SaaS GTM operator who has shipped 5+ products in the 2024-2026 AI era. You are building a launch roadmap that is SPECIFICALLY adapted to the realities of 2026 — not the 2020 playbook.
+  const prompt = `You are a senior B2B SaaS GTM operator who has shipped 5+ products in the 2024-2026 AI era. You are building a launch roadmap for a FOUNDER WHO HAS NEVER WORKED IN MARKETING. Their first language may not be English. They are reading this on their phone over morning coffee.
+
+WRITING RULES — non-negotiable
+1. **Plain English only.** No marketing jargon. If you MUST use a term, follow it with "(meaning: ...)". Example: "GEO (meaning: getting your product cited in AI search engines like ChatGPT)".
+2. **Every tactic must include a concrete example.** Not "engage in communities" but "post a 3-tweet thread on Tuesday morning sharing your week-1 MRR screenshot — example: '$340 MRR week 1. Here's what worked and what didn't 🧵'".
+3. **Use specific tools, numbers, and time blocks.** "Send 5 DMs per day, Tuesday-Thursday" not "do outreach regularly".
+4. **Verbs at the start of every action.** Not "engagement strategy" → "DM 10 founders this week on LinkedIn".
+5. **No abstract nouns when concrete verbs work.** Not "build trust" → "publish your benchmark numbers in a public Google Sheet".
+6. **One idea per sentence.** Short sentences. Founder is tired and busy.
+7. **Speak directly to the founder.** Use "you", "your", "you'll".
+8. **Always answer "Why?"** Every tactic must include why it works in 2026 specifically.
 
 THE PRODUCT
 - Name: ${appName}
@@ -320,21 +359,23 @@ WHAT TO RECOMMEND
 - ✅ Loom walkthroughs over scheduled demos
 
 OUTPUT
-Generate a strategic launch roadmap with:
-1. **northStarMetric** — the ONE outcome metric, not vanity signups
-2. **wedge** — the narrowest possible entry point + 3-4 expansion steps
-3. **phases** — 3-4 phases with weekRange, goal, successMetric, and 3-5 concrete steps (each with an aiAngle showing how AI accelerates it)
-4. **growthLoops** — 3-4 compounding loops (must compound, not linear)
-5. **aiNativeDiscovery** — 5-7 specifically 2026-era tactics (GEO, MCP, agent distribution, AI directories, eval-as-marketing, API-first)
-6. **first72Hours** — hour-by-hour playbook for launch (6-10 time blocks)
-7. **antiPatterns** — 5-7 things to AVOID with the 2026 alternative
-8. **trustLevers** — 4-6 trust moves
-9. **risks** — top 5-6 risks with impact × probability × mitigation
-10. **founderOperatingModel** — weekly hours allocation (total 50-60 hrs)
-11. **compoundingMoats** — 3-5 advantages that get harder to copy over time
-12. **pricingThesis** — one paragraph on pricing model fit for 2026
+Generate a strategic launch roadmap with (in this exact order):
+1. **summary** — TL;DR. ONE sentence + 5-7 plain-English bullets. NO jargon.
+2. **customerJourney** — 4-5 stages from "Never heard of you" to "Paying". Each stage has: what the user thinks (1st person), what you do, where, a concrete example with a fake user name, and typical days at that stage.
+3. **northStarMetric** — the ONE outcome metric (not signups). Rationale in plain English.
+4. **wedge** — narrowest possible entry point + 3-4 expansion steps. Use concrete user descriptions.
+5. **phases** — 3-4 phases with weekRange, goal, successMetric, and 3-5 concrete steps (each step's description = a checklist item with specifics, each step's aiAngle = exact tool + prompt example like "Use Claude to write 20 cold-DM variations, pick top 3 by gut").
+6. **growthLoops** — 3-4 compounding loops. For each: write trigger/action/output/reinvestment as if explaining to a 12-year-old.
+7. **aiNativeDiscovery** — 5-7 2026-era tactics. ALWAYS explain the acronym in the tactic itself. e.g. "GEO (Generative Engine Optimization): publish an /llm.txt file on your website..."
+8. **first72Hours** — 6-10 time blocks. Each block = "Hour X-Y: DO this exact thing. Channel: Z. You'll know it worked if: [specific metric]."
+9. **antiPatterns** — 5-7 things to AVOID with concrete 2026 alternative. Format: pattern in 1 sentence, why it fails in 2026 in 1 sentence, instead-do in 1 sentence with example.
+10. **trustLevers** — 4-6 trust moves. Each with mechanism explained in plain language.
+11. **risks** — top 5-6 risks. Mitigation must be ACTIONABLE (a thing the founder does, not "monitor closely").
+12. **founderOperatingModel** — weekly hours allocation totaling 50-60 hrs. Each activity has a clear "this is what you'll actually be doing all day".
+13. **compoundingMoats** — 3-5 advantages. Write each as "By month 6 you'll have [specific asset] that competitors can't easily copy because [specific reason]."
+14. **pricingThesis** — one paragraph. Recommend a specific pricing model with a concrete number. e.g. "Charge $79/mo per detected qualified lead instead of per-seat. Why: ..."
 
-Be specific, contrarian, and bold. Avoid filler. Every line must be executable.`;
+Be specific, contrarian, and bold. Every line must be executable BY A FOUNDER WHO IS NOT A MARKETING EXPERT.`;
 
   try {
     const response = await ai.models.generateContent({

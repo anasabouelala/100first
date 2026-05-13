@@ -81,11 +81,29 @@ export interface FounderActivity {
   rationale: string;
 }
 
+// Clear-English summary of the whole plan in 5-7 short bullets
+export interface PlanSummary {
+  oneSentence: string;          // "Get your first 100 paying users in 12 weeks by..."
+  bullets: string[];            // 5-7 plain-language bullets
+}
+
+// Customer journey funnel — how someone goes from "never heard of you" to "paying"
+export interface JourneyStage {
+  stage: string;                // "Never heard of you" | "Curious" | "Trying it" | "Paying"
+  whatTheyThink: string;        // First-person thought
+  yourMove: string;             // What YOU do at this stage
+  channel: string;              // Where it happens
+  example: string;              // Concrete real-world example
+  typicalDays: number;          // Avg days at this stage
+}
+
 export interface StrategyPlan {
   productName: string;
   targetAudience: string;
   phases: LaunchPhase[];
   // 2026 AI-era additions
+  summary?: PlanSummary;              // NEW — TL;DR at top
+  customerJourney?: JourneyStage[];   // NEW — visual funnel
   northStarMetric?: NorthStarMetric;
   wedge?: WedgeDoctrine;
   growthLoops?: GrowthLoop[];
