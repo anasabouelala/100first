@@ -1549,6 +1549,541 @@ const Em: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span className="text-gray-300 text-[11px] italic">{children}</span>
 );
 
+// ═════════════════════════════════════════════════════════════════════
+// PERSONA STUDIO — Cell-Architecture-inspired warm 3-column layout
+// ═════════════════════════════════════════════════════════════════════
+
+type LensId = 'profile' | 'pains' | 'stack' | 'channels' | 'outreach';
+
+const LENSES: Array<{ id: LensId; label: string; sub: string; icon: React.ReactNode }> = [
+  { id: 'profile',  label: 'Profile',  sub: 'Who they are',         icon: <Users size={14} /> },
+  { id: 'pains',    label: 'Pains',    sub: 'What hurts',           icon: <Zap size={14} /> },
+  { id: 'stack',    label: 'Stack',    sub: 'What they use now',    icon: <Layers size={14} /> },
+  { id: 'channels', label: 'Channels', sub: 'Where they hang out',  icon: <MapPin size={14} /> },
+  { id: 'outreach', label: 'Outreach', sub: 'How to win them',      icon: <Send size={14} /> }
+];
+
+const PersonaStudio: React.FC<{
+  personas: BuyerPersona[];
+  marketOverview: string;
+  onChat: (idx: number) => void;
+}> = ({ personas, marketOverview, onChat }) => {
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [lens, setLens] = useState<LensId>('profile');
+  const persona = personas[selectedIdx];
+  const theme = PERSONA_THEMES[selectedIdx % PERSONA_THEMES.length];
+
+  return (
+    <div className="bg-stone-50/80 rounded-[2rem] border border-stone-200/80 p-4 md:p-6 lg:p-8 relative overflow-hidden">
+      {/* Decorative blob */}
+      <div className="absolute top-0 right-0 w-96 h-96 rounded-full opacity-[0.04] blur-3xl pointer-events-none"
+        style={{ background: theme.primary }} />
+
+      {/* Inner header */}
+      <div className="flex items-center justify-between mb-6 relative">
+        <div>
+          <div className="text-[10px] font-black tracking-[0.3em] uppercase text-stone-400">Persona Studio</div>
+          <h2 className="text-3xl md:text-4xl font-display font-bold text-stone-900 mt-1">Explore your buyers</h2>
+        </div>
+        <div className="text-right max-w-md hidden md:block">
+          <p className="text-xs italic text-stone-500 leading-relaxed line-clamp-2">{marketOverview}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_320px] gap-4">
+        {/* LEFT — Persona Rail */}
+        <PersonaRail personas={personas} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
+
+        {/* CENTER — Stage */}
+        <PersonaStage
+          persona={persona}
+          themeIdx={selectedIdx}
+          lens={lens}
+          onLensChange={setLens}
+          onChat={() => onChat(selectedIdx)}
+        />
+
+        {/* RIGHT — Details */}
+        <PersonaDetails persona={persona} themeIdx={selectedIdx} />
+      </div>
+    </div>
+  );
+};
+
+// ─── LEFT RAIL: Persona list ──────────────────────────────────────────
+const PersonaRail: React.FC<{
+  personas: BuyerPersona[];
+  selectedIdx: number;
+  onSelect: (i: number) => void;
+}> = ({ personas, selectedIdx, onSelect }) => {
+  return (
+    <div className="space-y-3">
+      {/* Header chip */}
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <span className="text-emerald-600">🌿</span>
+        <span className="text-[10px] font-black tracking-widest uppercase text-stone-500">Personas</span>
+      </div>
+
+      <div className="space-y-2">
+        {personas.map((p, i) => {
+          const t = PERSONA_THEMES[i % PERSONA_THEMES.length];
+          const active = i === selectedIdx;
+          return (
+            <button key={i} onClick={() => onSelect(i)}
+              className={`w-full text-left flex items-center gap-3 p-3 rounded-2xl transition-all relative ${
+                active ? 'bg-white border border-stone-200 shadow-sm' : 'hover:bg-white/60 border border-transparent'
+              }`}>
+              <div className="relative flex-shrink-0">
+                <div className="absolute inset-0 rounded-full blur-md opacity-30"
+                  style={{ background: t.primary, transform: active ? 'scale(1.2)' : 'scale(0.8)' }} />
+                <img src={avatarUrl(p.avatarSeed || p.name)}
+                  className="relative w-11 h-11 rounded-full bg-white p-0.5"
+                  style={{ boxShadow: `0 0 0 2px ${t.primary}${active ? '' : '40'}` } as any}
+                  alt={p.name} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className={`font-display font-bold leading-tight ${active ? 'text-stone-900' : 'text-stone-700'}`}>{p.name}</div>
+                <div className="text-[11px] text-stone-500 truncate italic">{p.role}</div>
+              </div>
+              {active && (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-400">★</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sticky-note tip */}
+      <div className="mt-6 p-3 bg-amber-50 border border-amber-200/80 rounded-xl rotate-[-1deg] shadow-sm">
+        <p className="text-[11px] text-amber-900 leading-snug italic font-medium">
+          Tip: switch lenses to see Pains, Stack, Channels, Outreach for each persona.
+        </p>
+      </div>
+
+      {/* Sub-section: lens icons hint (mimics "Organelles" section) */}
+      <div className="mt-6 px-2 pt-4 border-t border-stone-200/60">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-violet-500">✦</span>
+          <span className="text-[10px] font-black tracking-widest uppercase text-stone-500">Lenses</span>
+        </div>
+        <ul className="space-y-1.5 text-[12px] text-stone-600">
+          {LENSES.map(l => (
+            <li key={l.id} className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-stone-300" />
+              <span className="font-semibold">{l.label}</span>
+              <span className="text-stone-400 italic text-[11px]">— {l.sub}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+// ─── CENTER STAGE ─────────────────────────────────────────────────────
+const PersonaStage: React.FC<{
+  persona: BuyerPersona;
+  themeIdx: number;
+  lens: LensId;
+  onLensChange: (l: LensId) => void;
+  onChat: () => void;
+}> = ({ persona, themeIdx, lens, onLensChange, onChat }) => {
+  const theme = PERSONA_THEMES[themeIdx];
+
+  return (
+    <div className="space-y-4">
+      {/* Title + lens switcher */}
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+        <div>
+          <h1 className="text-4xl md:text-5xl font-display font-bold text-stone-900 leading-tight">{persona.name}</h1>
+          <p className="text-stone-500 italic mt-1">{persona.role}</p>
+        </div>
+        <LensSwitcher current={lens} onChange={onLensChange} themeColor={theme.primary} />
+      </div>
+
+      {/* Hero canvas */}
+      <div className="bg-white rounded-3xl border border-stone-200 p-6 md:p-8 relative overflow-hidden min-h-[420px]">
+        {/* Soft radial backdrop */}
+        <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full blur-3xl opacity-20 pointer-events-none"
+          style={{ background: theme.primary }} />
+
+        {/* Sticky-note tip top-left */}
+        <div className="absolute top-4 left-4 max-w-[180px] p-2.5 bg-amber-50 border border-amber-200/80 rounded-lg rotate-[-2deg] shadow-sm z-10 hidden lg:block">
+          <p className="text-[10px] text-amber-900 leading-snug italic">
+            Tip: switch the lens above to see different facets of this buyer.
+          </p>
+        </div>
+
+        <div className="relative z-[1]">
+          {lens === 'profile'  && <ProfileLens persona={persona} theme={theme} />}
+          {lens === 'pains'    && <PainsLens persona={persona} theme={theme} />}
+          {lens === 'stack'    && <StackLens persona={persona} theme={theme} />}
+          {lens === 'channels' && <ChannelsLens persona={persona} theme={theme} />}
+          {lens === 'outreach' && <OutreachLens persona={persona} theme={theme} />}
+        </div>
+      </div>
+
+      {/* Action strip */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={onChat}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm font-bold shadow-lg transition-all hover:scale-[1.02] active:scale-100"
+          style={{
+            background: `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`,
+            boxShadow: `0 8px 24px ${theme.glow}`
+          }}>
+          <MessageSquare size={14} /> Chat with {persona.name}
+        </button>
+        <button className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-stone-700 text-xs font-bold border border-stone-200 bg-white hover:border-stone-300 transition-all">
+          <Award size={13} /> Save
+        </button>
+        <button className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-stone-700 text-xs font-bold border border-stone-200 bg-white hover:border-stone-300 transition-all">
+          <ExternalLink size={13} /> Export
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Lens Switcher (segmented control) ───────────────────────────────
+const LensSwitcher: React.FC<{
+  current: LensId;
+  onChange: (l: LensId) => void;
+  themeColor: string;
+}> = ({ current, onChange, themeColor }) => (
+  <div className="flex items-center gap-1 p-1 bg-white border border-stone-200 rounded-2xl shadow-sm overflow-x-auto">
+    {LENSES.map(l => {
+      const active = l.id === current;
+      return (
+        <button key={l.id} onClick={() => onChange(l.id)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+            active ? 'text-white shadow-md' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-50'
+          }`}
+          style={active ? { background: `linear-gradient(135deg, ${themeColor}, ${themeColor}dd)` } : {}}>
+          {l.icon}
+          {l.label}
+        </button>
+      );
+    })}
+  </div>
+);
+
+// ─── LENS: Profile (avatar + radar + demographics + quote) ───────────
+const ProfileLens: React.FC<{ persona: BuyerPersona; theme: typeof PERSONA_THEMES[number] }> = ({ persona, theme }) => {
+  const radar = persona.personalityRadar || { priceSensitive: 50, techSavvy: 50, riskAverse: 50, collaborative: 50, pragmatic: 50, vocal: 50 };
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-8 items-center">
+      <div className="flex flex-col items-center md:items-start gap-4">
+        <div className="relative">
+          <div className="absolute inset-0 rounded-full blur-2xl opacity-30" style={{ background: theme.primary }} />
+          <div className="relative w-40 h-40 rounded-full bg-white p-1 shadow-xl"
+            style={{ boxShadow: `0 0 60px ${theme.glow}` }}>
+            <img src={avatarUrl(persona.avatarSeed || persona.name)} alt={persona.name} className="w-full h-full rounded-full" />
+          </div>
+        </div>
+        {persona.tagline && (
+          <p className="text-2xl font-display italic text-stone-800 text-center md:text-left leading-snug max-w-md">"{persona.tagline}"</p>
+        )}
+        {persona.demographics && (
+          <p className="text-sm text-stone-500 leading-relaxed text-center md:text-left max-w-md">{persona.demographics}</p>
+        )}
+        {persona.realWorldQuote && (
+          <div className="pl-4 border-l-2 text-sm text-stone-600 italic leading-relaxed max-w-md" style={{ borderColor: theme.primary }}>
+            "{persona.realWorldQuote}"
+          </div>
+        )}
+      </div>
+      <div className="flex justify-center">
+        <MiniRadarChart radar={radar} color={theme.primary} glow={theme.glow} size={260} animated={true} />
+      </div>
+    </div>
+  );
+};
+
+// ─── LENS: Pains (cards with proof inline) ───────────────────────────
+const PainsLens: React.FC<{ persona: BuyerPersona; theme: typeof PERSONA_THEMES[number] }> = ({ persona, theme }) => {
+  const sourcesByPain = new Map<number, NonNullable<BuyerPersona['painSources']>>();
+  (persona.painSources || []).forEach(s => {
+    const list = sourcesByPain.get(s.painIndex) || [];
+    list.push(s); sourcesByPain.set(s.painIndex, list);
+  });
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-5">
+        <span className="text-rose-500">🔥</span>
+        <h3 className="text-sm font-black tracking-widest uppercase text-stone-600">Operational pains</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {persona.painPoints.map((pain, i) => {
+          const sources = sourcesByPain.get(i) || [];
+          return (
+            <div key={i} className="p-4 bg-rose-50/40 border border-rose-100/80 rounded-2xl">
+              <div className="flex items-start gap-2 mb-2">
+                <span className="text-[10px] font-black tracking-widest uppercase text-rose-500 mt-0.5">#{i + 1}</span>
+                <p className="text-sm font-bold text-stone-800 leading-snug flex-1">{pain}</p>
+              </div>
+              {sources.length > 0 && (
+                <div className="space-y-1.5 mt-3 pt-3 border-t border-rose-100/60">
+                  {sources.map((s, j) => {
+                    const plat = PLATFORM_LABEL(s.platform);
+                    return (
+                      <a key={j} href={s.url} target="_blank" rel="noreferrer"
+                        className="block group/src hover:bg-white/60 rounded-lg p-1.5 -m-1.5 transition-colors">
+                        <div className="flex items-start gap-2">
+                          <span className={`flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-black tracking-widest uppercase rounded border ${plat.bg}`}>
+                            <span>{plat.icon}</span>{plat.label}
+                          </span>
+                          <p className="text-[11px] text-stone-600 italic leading-snug">"{s.snippet}"</p>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── LENS: Stack (current solutions / competition) ───────────────────
+const StackLens: React.FC<{ persona: BuyerPersona; theme: typeof PERSONA_THEMES[number] }> = ({ persona, theme }) => {
+  if (!persona.currentStack || persona.currentStack.length === 0) {
+    return (
+      <EmptyState icon={<Layers size={32} />} title="No stack data" hint="Regenerate personas to capture competing tools." />
+    );
+  }
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-5">
+        <span className="text-amber-500">⚔️</span>
+        <h3 className="text-sm font-black tracking-widest uppercase text-stone-600">What they use today — your competition</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {persona.currentStack.map((s, i) => {
+          const fricColor = s.switchingFriction === 'Low' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+            : s.switchingFriction === 'High' ? 'bg-rose-100 text-rose-700 border-rose-200'
+            : 'bg-amber-100 text-amber-700 border-amber-200';
+          return (
+            <div key={i} className="p-4 bg-white border border-stone-200 rounded-2xl">
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div>
+                  <div className="font-display font-bold text-lg text-stone-900">{s.tool}</div>
+                  <div className="text-[11px] text-stone-500 italic">{s.rolePlayed}</div>
+                </div>
+                <span className={`text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md border ${fricColor}`}>
+                  {s.switchingFriction} switch
+                </span>
+              </div>
+              <p className="text-sm text-stone-600 italic leading-relaxed mt-2">"{s.painWithIt}"</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── LENS: Channels (watering holes) ─────────────────────────────────
+const ChannelsLens: React.FC<{ persona: BuyerPersona; theme: typeof PERSONA_THEMES[number] }> = ({ persona, theme }) => {
+  if (!persona.wateringHoles || persona.wateringHoles.length === 0) {
+    return <EmptyState icon={<MapPin size={32} />} title="No channels mapped" hint="Regenerate personas to capture named watering holes." />;
+  }
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-5">
+        <span className="text-violet-500">🌐</span>
+        <h3 className="text-sm font-black tracking-widest uppercase text-stone-600">Where they hang out</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {persona.wateringHoles.map((w, i) => (
+          <a key={i} href={w.url || '#'} target={w.url ? '_blank' : undefined} rel="noreferrer"
+            className={`block p-4 bg-white border border-stone-200 rounded-2xl transition-colors ${w.url ? 'hover:border-violet-300' : ''}`}>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div>
+                <div className="font-display font-bold text-lg text-stone-900">{w.name}</div>
+                <div className="text-[10px] font-black tracking-widest uppercase mt-0.5" style={{ color: theme.primary }}>{w.type}</div>
+              </div>
+              <span className="text-sm font-mono font-bold text-stone-600 tabular-nums">{w.memberCount}</span>
+            </div>
+            <div className="mt-2 pt-2 border-t border-stone-100 grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <div className="text-[9px] font-black tracking-widest uppercase text-stone-400">Activity</div>
+                <div className="text-stone-700">{w.activityLevel}</div>
+              </div>
+              <div>
+                <div className="text-[9px] font-black tracking-widest uppercase text-stone-400">Best post</div>
+                <div className="text-stone-700">{w.bestPostFormat}</div>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── LENS: Outreach (playbook) ───────────────────────────────────────
+const OutreachLens: React.FC<{ persona: BuyerPersona; theme: typeof PERSONA_THEMES[number] }> = ({ persona, theme }) => {
+  const o = persona.outreach;
+  if (!o) return <EmptyState icon={<Send size={32} />} title="No playbook" hint="Regenerate personas to capture outreach plan." />;
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-5">
+        <span className="text-emerald-500">📨</span>
+        <h3 className="text-sm font-black tracking-widest uppercase text-stone-600">Outreach playbook</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        <div className="p-4 bg-emerald-50/60 border border-emerald-200/60 rounded-2xl">
+          <div className="text-[9px] font-black tracking-widest uppercase text-emerald-700 mb-1">✓ Best channel</div>
+          <div className="font-display font-bold text-lg text-stone-900">{o.bestChannel}</div>
+        </div>
+        <div className="p-4 bg-rose-50/40 border border-rose-200/60 rounded-2xl">
+          <div className="text-[9px] font-black tracking-widest uppercase text-rose-700 mb-1">✗ Avoid</div>
+          <div className="font-display font-bold text-lg text-stone-900">{o.worstChannel}</div>
+        </div>
+        <div className="p-4 bg-white border border-stone-200 rounded-2xl">
+          <div className="text-[9px] font-black tracking-widest uppercase text-stone-400 mb-1">Best time</div>
+          <div className="text-sm font-bold text-stone-800">{o.bestTimeToReach}</div>
+        </div>
+        <div className="p-4 bg-white border border-stone-200 rounded-2xl">
+          <div className="text-[9px] font-black tracking-widest uppercase text-stone-400 mb-1">Sales cycle</div>
+          <div className="text-sm font-bold text-stone-800 font-mono tabular-nums">~{o.avgSalesCycleDays} days</div>
+        </div>
+      </div>
+      <div className="p-4 bg-amber-50/60 border border-amber-200/60 rounded-2xl rotate-[-0.3deg]">
+        <div className="text-[10px] font-black tracking-widest uppercase text-amber-800 mb-1">First-message angle</div>
+        <p className="text-sm italic text-stone-700 leading-relaxed">"{o.openingAngle}"</p>
+      </div>
+      {persona.objections && persona.objections.length > 0 && (
+        <div className="mt-4">
+          <div className="text-[10px] font-black tracking-widest uppercase text-stone-500 mb-2">Top objections + counters</div>
+          <div className="space-y-2">
+            {persona.objections.map((obj, i) => (
+              <div key={i} className="p-3 bg-white border border-stone-200 rounded-xl">
+                <div className="flex items-start gap-2">
+                  <span className="text-[9px] font-black tracking-widest uppercase text-rose-500 mt-0.5">No:</span>
+                  <p className="text-sm text-stone-800 leading-snug flex-1">{obj.objection}</p>
+                </div>
+                <div className="mt-1.5 pt-1.5 border-t border-stone-50 flex items-start gap-2">
+                  <span className="text-[9px] font-black tracking-widest uppercase text-emerald-500 mt-0.5">Win:</span>
+                  <p className="text-xs text-stone-600 leading-snug flex-1">{obj.counter}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── RIGHT RAIL: Key Details panel ───────────────────────────────────
+const PersonaDetails: React.FC<{ persona: BuyerPersona; themeIdx: number }> = ({ persona, themeIdx }) => {
+  const theme = PERSONA_THEMES[themeIdx];
+  const cp = persona.companyProfile;
+  const br = persona.buyerRole;
+  const sourceCount = persona.painSources?.length || 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Header card */}
+      <div className="bg-white border border-stone-200 rounded-3xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[10px] font-black tracking-widest uppercase text-stone-400">Persona Details</div>
+          <Award size={14} className="text-amber-400" />
+        </div>
+        <div className="flex items-center gap-3">
+          <img src={avatarUrl(persona.avatarSeed || persona.name)}
+            className="w-12 h-12 rounded-full bg-white p-0.5"
+            style={{ boxShadow: `0 0 0 2px ${theme.primary}` } as any}
+            alt={persona.name} />
+          <div className="min-w-0">
+            <h3 className="font-display font-bold text-xl text-stone-900 leading-tight">{persona.name}</h3>
+            <p className="text-[11px] text-stone-500 italic truncate">{persona.tagline || persona.role}</p>
+          </div>
+        </div>
+
+        {/* Key stats list */}
+        <ul className="mt-4 space-y-2.5">
+          {cp?.estimatedTAM && <DetailRow label="TAM" value={cp.estimatedTAM} />}
+          {cp?.companySize && <DetailRow label="Company size" value={cp.companySize} />}
+          {cp?.arrRange && <DetailRow label="ARR range" value={cp.arrRange} />}
+          {br?.typicalBudget && <DetailRow label="Budget" value={br.typicalBudget} />}
+          {br?.type && <DetailRow label="Buyer role" value={br.type} />}
+          {persona.outreach?.avgSalesCycleDays && <DetailRow label="Sales cycle" value={`~${persona.outreach.avgSalesCycleDays}d`} />}
+          {sourceCount > 0 && <DetailRow label="Sources" value={`${sourceCount} validated`} />}
+        </ul>
+      </div>
+
+      {/* Insider Notes (mimics Biological Notes) */}
+      <div className="bg-white border border-stone-200 rounded-3xl p-5">
+        <div className="text-[10px] font-black tracking-widest uppercase text-stone-400 mb-2">Insider Notes</div>
+        <p className="text-sm text-stone-700 leading-relaxed italic">
+          {persona.demographics || 'Demographics not specified.'}
+        </p>
+        {persona.realWorldQuote && (
+          <p className="mt-3 text-xs text-stone-500 leading-relaxed pl-3 border-l-2" style={{ borderColor: theme.primary }}>
+            "{persona.realWorldQuote}"
+          </p>
+        )}
+      </div>
+
+      {/* Fun fact (mimics the cell-studio fun fact) */}
+      {persona.triggerEvents && persona.triggerEvents.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200/70 rounded-3xl p-5 relative rotate-[-0.3deg]">
+          <div className="text-[10px] font-black tracking-widest uppercase text-amber-800 mb-1">Buy-now trigger ✨</div>
+          <p className="text-sm text-stone-800 font-bold leading-snug">{persona.triggerEvents[0].event}</p>
+          <p className="text-[11px] text-stone-600 mt-1 italic leading-snug">{persona.triggerEvents[0].detectionSignal}</p>
+          <span className="absolute top-3 right-3 text-[9px] font-black tracking-widest uppercase px-2 py-0.5 bg-amber-500 text-white rounded-md">{persona.triggerEvents[0].urgencyDays}d</span>
+        </div>
+      )}
+
+      {/* Where they hang out (mimics "Where It Occurs") */}
+      {persona.wateringHoles && persona.wateringHoles.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-3xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-violet-500">📍</span>
+            <span className="text-[10px] font-black tracking-widest uppercase text-stone-400">Where they hang out</span>
+          </div>
+          <ul className="space-y-2">
+            {persona.wateringHoles.slice(0, 3).map((w, i) => (
+              <li key={i} className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: `${theme.primary}15` }}>
+                  <span className="text-base">{w.type === 'Subreddit' ? '🔥' : w.type === 'Slack' ? '💬' : w.type === 'Newsletter' ? '📬' : w.type === 'Podcast' ? '🎙️' : w.type === 'Conference' ? '🎪' : '🌐'}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-stone-800 truncate">{w.name}</div>
+                  <div className="text-[10px] text-stone-500 truncate font-mono tabular-nums">{w.memberCount}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <li className="flex items-baseline justify-between gap-3 pb-2 border-b border-stone-100 last:border-0 last:pb-0">
+    <span className="text-[11px] text-stone-500 italic">{label}</span>
+    <span className="text-sm font-semibold text-stone-900 text-right truncate">{value}</span>
+  </li>
+);
+
+const EmptyState: React.FC<{ icon: React.ReactNode; title: string; hint: string }> = ({ icon, title, hint }) => (
+  <div className="py-12 text-center">
+    <div className="text-stone-300 mx-auto mb-3 flex justify-center">{icon}</div>
+    <p className="text-sm font-bold text-stone-500">{title}</p>
+    <p className="text-xs text-stone-400 mt-1">{hint}</p>
+  </div>
+);
+
 // ─── Main View ────────────────────────────────────────────────────────
 export const PersonaView: React.FC<PersonaViewProps> = (props) => {
   const { project } = useProject();
@@ -1566,6 +2101,10 @@ export const PersonaView: React.FC<PersonaViewProps> = (props) => {
   const [error, setError] = useState<string | null>(null);
   const [reveal, setReveal] = useState(false);
   const [chatTarget, setChatTarget] = useState<{ persona: BuyerPersona; themeIdx: number } | null>(null);
+  const [viewMode, setViewMode] = useState<'studio' | 'compare'>(() =>
+    (localStorage.getItem('persona_view_mode') as any) || 'studio'
+  );
+  useEffect(() => { localStorage.setItem('persona_view_mode', viewMode); }, [viewMode]);
 
   const handleGenerate = async () => {
     if (!appName || !appDesc || !category) return;
@@ -1636,25 +2175,47 @@ export const PersonaView: React.FC<PersonaViewProps> = (props) => {
           <p className="text-brand-secondary font-medium">Analyzing market trends, building personality profiles, and surfacing live sources...</p>
         </div>
       ) : analysis ? (
-        <div className="space-y-8 animate-fade-in">
-          <div className="bg-gradient-to-r from-primary/10 to-secondary/10 p-6 rounded-2xl border border-primary/20">
-            <h3 className="font-bold text-primary flex items-center gap-2 mb-2"><Activity size={20} /> Market Overview</h3>
-            <p className="text-gray-700 leading-relaxed text-sm">{analysis.marketOverview}</p>
+        <div className="space-y-6 animate-fade-in">
+          {/* View toggle — Studio (default) vs Compare */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="inline-flex items-center gap-1 p-1 bg-white border border-stone-200 rounded-2xl shadow-sm">
+              <button onClick={() => setViewMode('studio')}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  viewMode === 'studio' ? 'bg-stone-900 text-white shadow-md' : 'text-stone-500 hover:text-stone-800'
+                }`}>
+                <Sparkles size={13} /> Studio
+              </button>
+              <button onClick={() => setViewMode('compare')}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  viewMode === 'compare' ? 'bg-stone-900 text-white shadow-md' : 'text-stone-500 hover:text-stone-800'
+                }`}>
+                <Layers size={13} /> Compare
+              </button>
+            </div>
           </div>
 
-          {/* ═══ KPI TICKER ═══ */}
-          <KPITicker personas={analysis.personas} />
-
-          {/* ═══ ANALYTICS CHARTS ═══ */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <OverlayRadar personas={analysis.personas} />
-            <MarketMap personas={analysis.personas}
-              onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })} />
-          </div>
-
-          {/* ═══ COMPARISON MATRIX ═══ */}
-          <ComparisonMatrix personas={analysis.personas}
-            onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })} />
+          {viewMode === 'studio' ? (
+            <PersonaStudio
+              personas={analysis.personas}
+              marketOverview={analysis.marketOverview}
+              onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })}
+            />
+          ) : (
+            <>
+              <div className="bg-gradient-to-r from-primary/10 to-secondary/10 p-6 rounded-2xl border border-primary/20">
+                <h3 className="font-bold text-primary flex items-center gap-2 mb-2"><Activity size={20} /> Market Overview</h3>
+                <p className="text-gray-700 leading-relaxed text-sm">{analysis.marketOverview}</p>
+              </div>
+              <KPITicker personas={analysis.personas} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <OverlayRadar personas={analysis.personas} />
+                <MarketMap personas={analysis.personas}
+                  onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })} />
+              </div>
+              <ComparisonMatrix personas={analysis.personas}
+                onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })} />
+            </>
+          )}
         </div>
       ) : null}
 
