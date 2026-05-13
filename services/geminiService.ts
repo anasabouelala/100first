@@ -1533,72 +1533,212 @@ export const evaluateRedditOpportunities = async (items: any[]): Promise<ForumOp
 export const generateBuyerPersonas = async (appName: string, appDesc: string, category: string): Promise<BuyerPersonaAnalysis> => {
   assertConfigured();
   const model = "gemini-flash-latest";
+
+  // Reusable sub-schemas
+  const radarSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      priceSensitive: { type: Type.NUMBER },
+      techSavvy: { type: Type.NUMBER },
+      riskAverse: { type: Type.NUMBER },
+      collaborative: { type: Type.NUMBER },
+      pragmatic: { type: Type.NUMBER },
+      vocal: { type: Type.NUMBER }
+    },
+    required: ["priceSensitive", "techSavvy", "riskAverse", "collaborative", "pragmatic", "vocal"]
+  };
+
   const schema: Schema = {
     type: Type.OBJECT,
     properties: {
-      marketOverview: { type: Type.STRING },
+      marketOverview: { type: Type.STRING, description: "2-3 sentences. Frame the addressable market in concrete buyer terms — who pays for this category, what budget, what they currently use." },
       personas: {
         type: Type.ARRAY,
         items: {
           type: Type.OBJECT,
           properties: {
-            name: { type: Type.STRING, description: "First name only, evocative and memorable" },
-            role: { type: Type.STRING },
-            tagline: { type: Type.STRING, description: "One punchy line that captures who they are — used in cinematic reveal" },
-            demographics: { type: Type.STRING },
-            realWorldQuote: { type: Type.STRING },
-            painPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-            goals: { type: Type.ARRAY, items: { type: Type.STRING } },
-            whereTheyHangOut: { type: Type.ARRAY, items: { type: Type.STRING } },
+            name: { type: Type.STRING, description: "First name only, memorable" },
+            role: { type: Type.STRING, description: "REAL job title pattern found on LinkedIn. NEVER a niche label." },
+            tagline: { type: Type.STRING, description: "One punchy line (max 10 words) — the buyer's POV" },
+            demographics: { type: Type.STRING, description: "Years experience, seniority level, reporting line, geo bias, team size" },
+            realWorldQuote: { type: Type.STRING, description: "What they'd actually say in a sales call (max 25 words)" },
+            painPoints: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3-5 OPERATIONAL pains (not abstract) — measurable, time-bound, costing $$$" },
+            goals: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3-5 quarterly/annual goals tied to their job KPIs" },
+            whereTheyHangOut: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Legacy — short channel list" },
             contentTheyConsume: { type: Type.ARRAY, items: { type: Type.STRING } },
-            personalityRadar: {
+            personalityRadar: { ...radarSchema, description: "Each value 0-100. Use the full range — be decisive." },
+            companyProfile: {
               type: Type.OBJECT,
-              description: "Each value 0-100. priceSensitive: 0=bargain hunter, 100=premium buyer. techSavvy: 0=beginner, 100=power user. riskAverse: 0=early adopter, 100=risk averse. collaborative: 0=lone wolf, 100=team-oriented. pragmatic: 0=trend-driven, 100=pragmatic. vocal: 0=quiet, 100=vocal/influencer.",
+              description: "ICP firmographics — must be SEARCHABLE on LinkedIn Sales Nav / Crunchbase / BuiltWith.",
               properties: {
-                priceSensitive: { type: Type.NUMBER },
-                techSavvy: { type: Type.NUMBER },
-                riskAverse: { type: Type.NUMBER },
-                collaborative: { type: Type.NUMBER },
-                pragmatic: { type: Type.NUMBER },
-                vocal: { type: Type.NUMBER }
+                industries: { type: Type.ARRAY, items: { type: Type.STRING } },
+                companySize: { type: Type.STRING, description: "e.g. '50-200 employees' or 'Solo founders' or 'Mid-market 200-1000'" },
+                stage: { type: Type.STRING, description: "e.g. 'Series A-B' or 'Bootstrapped profitable' or 'Pre-seed'" },
+                arrRange: { type: Type.STRING, description: "e.g. '$2M-$20M ARR' or 'Pre-revenue' or 'Mature $50M+'" },
+                techStackSignals: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Specific tool names that signal this ICP — e.g. ['Stripe', 'Linear', 'HubSpot']" },
+                estimatedTAM: { type: Type.STRING, description: "A defensible number with geography — e.g. '~18,000 companies in US + EU + UK matching this ICP'" }
               },
-              required: ["priceSensitive", "techSavvy", "riskAverse", "collaborative", "pragmatic", "vocal"]
+              required: ["industries", "companySize", "stage", "arrRange", "techStackSignals", "estimatedTAM"]
             },
-            painSources: {
+            buyerRole: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING, description: "One of: Champion, Economic Buyer, End User, Influencer, Founder" },
+                decisionPower: { type: Type.STRING, description: "One of: Solo decision, Strong recommender, Committee member, Final approver, Blocker risk" },
+                typicalBudget: { type: Type.STRING, description: "Discretionary monthly budget — e.g. '$500-$5K/mo'" },
+                procurementFriction: { type: Type.STRING, description: "What it takes to close — e.g. 'Self-serve under $500/mo, legal review over $5K/yr, security review over $20K/yr'" }
+              },
+              required: ["type", "decisionPower", "typicalBudget", "procurementFriction"]
+            },
+            triggerEvents: {
               type: Type.ARRAY,
-              description: "Real public sources (Reddit threads, Twitter/X posts, HackerNews, LinkedIn posts, IndieHackers) where someone fitting this persona has voiced one of the painPoints. Must be plausible, specific URLs.",
+              description: "Real-world events that create urgency to buy NOW. Each must be DETECTABLE in public signals.",
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  painIndex: { type: Type.NUMBER, description: "0-based index into painPoints array" },
+                  event: { type: Type.STRING, description: "e.g. 'Hired their first VP Marketing'" },
+                  detectionSignal: { type: Type.STRING, description: "How to detect — e.g. 'LinkedIn job change + new headcount on their team page'" },
+                  urgencyDays: { type: Type.NUMBER, description: "Days the buyer is in active-evaluation mode after the trigger" }
+                },
+                required: ["event", "detectionSignal", "urgencyDays"]
+              }
+            },
+            currentStack: {
+              type: Type.ARRAY,
+              description: "Tools they are currently using to solve this problem. Use REAL vendor names. This is your competition.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  tool: { type: Type.STRING },
+                  rolePlayed: { type: Type.STRING },
+                  painWithIt: { type: Type.STRING },
+                  switchingFriction: { type: Type.STRING, description: "One of: Low, Medium, High" }
+                },
+                required: ["tool", "rolePlayed", "painWithIt", "switchingFriction"]
+              }
+            },
+            wateringHoles: {
+              type: Type.ARRAY,
+              description: "SPECIFIC named communities (not generic 'Twitter'). Subreddit names with member counts, Slack/Discord names, specific newsletters/podcasts/conferences.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING, description: "Specific name — e.g. 'r/SaaS' or 'MarketingOps Community Slack' or 'Lenny's Newsletter'" },
+                  type: { type: Type.STRING, description: "One of: Subreddit, Slack, Discord, Newsletter, Podcast, Conference, Twitter, LinkedIn group, Forum" },
+                  memberCount: { type: Type.STRING, description: "Approximate count — e.g. '187K members' or '12K subscribers'" },
+                  activityLevel: { type: Type.STRING, description: "How this persona participates — e.g. 'Lurks daily, posts monthly'" },
+                  bestPostFormat: { type: Type.STRING, description: "What content gets engagement from this persona here" },
+                  url: { type: Type.STRING }
+                },
+                required: ["name", "type", "memberCount", "activityLevel", "bestPostFormat"]
+              }
+            },
+            outreach: {
+              type: Type.OBJECT,
+              properties: {
+                bestChannel: { type: Type.STRING },
+                worstChannel: { type: Type.STRING },
+                bestTimeToReach: { type: Type.STRING },
+                openingAngle: { type: Type.STRING, description: "First-message playbook — specific enough to copy" },
+                avgSalesCycleDays: { type: Type.NUMBER }
+              },
+              required: ["bestChannel", "worstChannel", "bestTimeToReach", "openingAngle", "avgSalesCycleDays"]
+            },
+            objections: {
+              type: Type.ARRAY,
+              description: "Top 3 objections + how to counter each",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  objection: { type: Type.STRING },
+                  counter: { type: Type.STRING }
+                },
+                required: ["objection", "counter"]
+              }
+            },
+            painSources: {
+              type: Type.ARRAY,
+              description: "Public sources where this persona has voiced their pain — real-looking URLs to Reddit/X/HN/LinkedIn/IndieHackers/specific Slack communities.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  painIndex: { type: Type.NUMBER },
                   platform: { type: Type.STRING },
-                  snippet: { type: Type.STRING, description: "Short quote (under 25 words) from the source" },
+                  snippet: { type: Type.STRING },
                   url: { type: Type.STRING }
                 },
                 required: ["painIndex", "platform", "snippet", "url"]
               }
             }
           },
-          required: ["name", "role", "tagline", "demographics", "painPoints", "goals", "whereTheyHangOut", "contentTheyConsume", "personalityRadar"]
+          required: [
+            "name", "role", "tagline", "demographics", "painPoints", "goals",
+            "whereTheyHangOut", "contentTheyConsume", "personalityRadar",
+            "companyProfile", "buyerRole", "triggerEvents", "currentStack", "wateringHoles", "outreach"
+          ]
         }
       }
     },
     required: ["marketOverview", "personas"]
   };
+
+  const contents = `You are a senior B2B SaaS GTM strategist building buyer personas for a SaaS founder who needs to FIND and CLOSE real customers — not for a marketing-school assignment.
+
+PRODUCT
+- Name: "${appName}"
+- Category: ${category}
+- Description: "${appDesc}"
+
+CRITICAL RULES — Reject narrow / niche personas
+
+1. **Each persona MUST represent a market with at least 5,000 matching companies (US+EU+UK).** If you cannot defend the TAM number, the segment is too narrow — collapse it into a broader one.
+
+2. **Use REAL job titles found on LinkedIn Sales Navigator.** Examples of GOOD roles:
+   - "Head of Demand Generation"
+   - "Director of Revenue Operations"
+   - "VP of Marketing"
+   - "Solo SaaS Founder"
+   - "Head of Growth"
+   - "CFO at Series B SaaS"
+   - "Marketing Operations Lead"
+
+3. **NEVER invent niche labels** like:
+   - ❌ "Citation crisis business owner"
+   - ❌ "Burned-out content creator with imposter syndrome"
+   - ❌ "Sustainability-focused micro-influencer"
+   These are useless — a founder cannot search for them, cannot find them, cannot close them.
+
+4. **Each persona must be DISTINCT on the buyer-role axis.** Mix Champion / Economic Buyer / End User. Do not generate three flavors of the same role.
+
+5. **companyProfile.estimatedTAM must be a defensible number.** Show your work in the string — e.g. "~18,000 B2B SaaS companies at Series A-B in US/EU/UK per Crunchbase".
+
+6. **wateringHoles must be SPECIFIC NAMED communities** with member counts (approximate is fine). NEVER generic like "Twitter" or "Reddit". Use real names like "r/SaaS (187K members)", "Demand Curve Slack", "Lenny's Newsletter", "MicroConf community", "MarketingOps Community", "Latent Space Discord", "HackerNews", "Indie Hackers", etc.
+
+7. **currentStack uses real vendor names.** This is the founder's competition.
+
+8. **triggerEvents must be DETECTABLE in public data** — funding announcements, LinkedIn hires, GitHub stars, AppStore launches, layoff news, etc.
+
+9. **personalityRadar values must use the full 0-100 range.** Two personas should not have similar radar shapes.
+
+10. **painSources URLs must look real** — use specific subreddit paths, Twitter username patterns, HN item IDs, LinkedIn post URL patterns. Snippets must be conversational, not corporate.
+
+STRUCTURE
+Generate exactly 3 personas. Sort them by addressability (easiest to reach + close first).
+
+Each persona answers:
+1. WHO they are (name, role, demographics, radar, quote, ICP firmographics, buyer role)
+2. WHAT they struggle with (pain points + currentStack + objections)
+3. WHEN they buy (triggerEvents)
+4. WHERE to find them (wateringHoles)
+5. HOW to win them (outreach playbook + objection counters)
+6. PROOF — painSources
+
+Return strict JSON matching the schema. No commentary.`;
+
   const response = await ai.models.generateContent({
     model,
-    contents: `Generate 3 detailed buyer personas for "${appName}" — a ${category} product. Description: "${appDesc}".
-
-For each persona include:
-- A memorable first-name + role (e.g. "Maya, Solo Designer")
-- A punchy ONE-LINE tagline (max 8 words) that captures their essence — used in a cinematic reveal screen
-- Demographics, pain points (3-5), goals (3-5), where they hang out online, content they consume
-- A realistic "realWorldQuote" — something they'd actually say (max 20 words)
-- A 6-axis personalityRadar (each 0-100). Be DECISIVE — use the full 0-100 range. Two personas should NOT have identical radars.
-- 2-4 painSources: real-looking public web URLs (Reddit threads in relevant subreddits, Twitter/X posts, HackerNews comments, LinkedIn posts, IndieHackers) where someone in this persona has voiced one of their painPoints. Include the short snippet. Each painSource must include painIndex (0-based) pointing to which painPoint it proves.
-
-Return strict JSON matching the schema.`,
-    config: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.85 }
+    contents,
+    config: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.75 }
   });
   return JSON.parse(response.text) as BuyerPersonaAnalysis;
 };

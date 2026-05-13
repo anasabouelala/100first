@@ -443,20 +443,83 @@ export interface PersonaSource {
   url: string;              // direct link to the source
 }
 
+// ─── B2B SaaS founder-grade persona data ──────────────────────────────
+export interface PersonaCompanyProfile {
+  industries: string[];          // e.g. ["B2B SaaS", "Vertical AI", "DevTools"]
+  companySize: string;           // "50-200 employees" or "Solo founders" or "Mid-market 200-1000"
+  stage: string;                 // "Pre-seed to Seed" or "Series A-B" or "Bootstrap profitable"
+  arrRange: string;              // "$100K-$2M ARR" or "$10M-$50M ARR" or "Pre-revenue"
+  techStackSignals: string[];    // ["HubSpot", "Stripe", "Linear", "Notion"]  → searchable on Crunchbase / BuiltWith
+  estimatedTAM: string;          // "~18,000 companies in US + EU" — a number the founder can defend in a pitch
+}
+
+export type BuyerRoleType = 'Champion' | 'Economic Buyer' | 'End User' | 'Influencer' | 'Founder';
+export type DecisionPower = 'Solo decision' | 'Strong recommender' | 'Committee member' | 'Final approver' | 'Blocker risk';
+
+export interface PersonaBuyerRole {
+  type: BuyerRoleType;
+  decisionPower: DecisionPower;
+  typicalBudget: string;         // "$500-$5K/mo discretionary"
+  procurementFriction: string;   // "Self-serve under $200/mo, legal review over $5K/yr"
+}
+
+export interface PersonaTrigger {
+  event: string;                 // "Just raised Series A"
+  detectionSignal: string;       // "TechCrunch funding announcement, LinkedIn 'Excited to share' post"
+  urgencyDays: number;           // 30 = founders should act within 30 days of detecting
+}
+
+export interface PersonaStackItem {
+  tool: string;                  // "Mailchimp"
+  rolePlayed: string;            // "Email automation"
+  painWithIt: string;            // "Hits limit at 50K contacts, no behavior-based triggers"
+  switchingFriction: 'Low' | 'Medium' | 'High';
+}
+
+export interface PersonaWateringHole {
+  name: string;                  // "r/SaaS" or "Demand Curve Slack" or "MarketingOps Community"
+  type: 'Subreddit' | 'Slack' | 'Discord' | 'Newsletter' | 'Podcast' | 'Conference' | 'Twitter' | 'LinkedIn group' | 'Forum';
+  memberCount: string;           // "187K members" or "12K subscribers"
+  activityLevel: string;         // "Posts daily" | "Lurks" | "Comments weekly"
+  bestPostFormat: string;        // "Build-in-public threads with metrics"
+  url?: string;
+}
+
+export interface PersonaOutreach {
+  bestChannel: string;           // "LinkedIn DM, NOT cold email"
+  worstChannel: string;          // "Cold email — 0.3% reply rate at this segment"
+  bestTimeToReach: string;       // "Tue-Thu, 9-11am their timezone"
+  openingAngle: string;          // "Reference their recent LinkedIn post about [trigger]. Lead with a metric you helped a similar company achieve."
+  avgSalesCycleDays: number;     // 14 = self-serve, 60 = mid-market, 180+ = enterprise
+}
+
+export interface PersonaObjection {
+  objection: string;             // "We're already locked in with [competitor]"
+  counter: string;               // "Acknowledge the switching cost, offer migration credit + parallel run for 30 days"
+}
+
 export interface BuyerPersona {
   name: string;
-  role: string;
-  demographics: string;
+  role: string;                  // Job title pattern, NOT niche label (e.g. "Head of Demand Gen")
+  demographics: string;          // Years experience, location bias, reporting structure
   realWorldQuote?: string;
   painPoints: string[];
   goals: string[];
-  whereTheyHangOut: string[];
+  whereTheyHangOut: string[];    // Legacy — kept for back-compat. Use wateringHoles for new UI.
   contentTheyConsume: string[];
-  // Sprint 2 enhancements
+  // Sprint 2
   personalityRadar?: PersonaRadar;
   painSources?: PersonaSource[];
-  tagline?: string;         // one-line summary used in cinematic reveal
-  avatarSeed?: string;      // seed for DiceBear avatar (defaults to name)
+  tagline?: string;
+  avatarSeed?: string;
+  // SaaS founder layer (Sprint 3)
+  companyProfile?: PersonaCompanyProfile;
+  buyerRole?: PersonaBuyerRole;
+  triggerEvents?: PersonaTrigger[];
+  currentStack?: PersonaStackItem[];
+  wateringHoles?: PersonaWateringHole[];
+  outreach?: PersonaOutreach;
+  objections?: PersonaObjection[];
 }
 
 export interface BuyerPersonaAnalysis {

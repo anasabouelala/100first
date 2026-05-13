@@ -3,7 +3,8 @@ import { generateBuyerPersonas, chatAsPersona, PersonaChatTurn } from '../servic
 import { BuyerPersonaAnalysis, BuyerPersona, PersonaRadar } from '../types';
 import {
   MapPin, Target, Users, Zap, Loader2, Quote, Activity, Coffee, MessageSquare,
-  Sparkles, ExternalLink, Send, X, Play, ChevronRight, Shield, Award
+  Sparkles, ExternalLink, Send, X, Play, ChevronRight, Shield, Award,
+  Building2, Briefcase, Wallet, Clock, AlertTriangle, Layers, Compass, TrendingUp, ShieldAlert
 } from 'lucide-react';
 
 interface PersonaViewProps {
@@ -412,6 +413,250 @@ const ChatBubble: React.FC<{ turn: PersonaChatTurn; themeColor: string; avatar: 
   );
 };
 
+// ─── ICP Snapshot block — appears at top of every card ──────────────
+const ICPSnapshot: React.FC<{ persona: BuyerPersona; theme: typeof PERSONA_THEMES[number] }> = ({ persona, theme }) => {
+  const cp = persona.companyProfile;
+  const br = persona.buyerRole;
+  if (!cp && !br) return null;
+
+  return (
+    <div className="rounded-2xl border border-gray-200 overflow-hidden">
+      {/* Top ICP strip */}
+      {cp && (
+        <div className="p-4 bg-gradient-to-br from-gray-50 to-white">
+          <div className="flex items-center gap-2 mb-3">
+            <Building2 size={13} style={{ color: theme.primary }} />
+            <h4 className="text-[10px] font-black uppercase tracking-widest" style={{ color: theme.primary }}>ICP Snapshot</h4>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <ICPStat label="Industry" value={cp.industries.join(' · ')} />
+            <ICPStat label="Company size" value={cp.companySize} />
+            <ICPStat label="Stage" value={cp.stage} />
+            <ICPStat label="ARR" value={cp.arrRange} />
+          </div>
+          {cp.techStackSignals?.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Tech stack signals</div>
+              <div className="flex flex-wrap gap-1">
+                {cp.techStackSignals.map((t, i) => (
+                  <span key={i} className="px-2 py-0.5 text-[10px] font-bold bg-gray-100 text-gray-700 rounded-md border border-gray-200">{t}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {cp.estimatedTAM && (
+            <div className="mt-3 pt-3 border-t border-gray-100 flex items-start gap-2">
+              <TrendingUp size={13} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-gray-700 font-medium leading-snug"><span className="text-emerald-700 font-black">TAM:</span> {cp.estimatedTAM}</p>
+            </div>
+          )}
+        </div>
+      )}
+      {/* Buyer-role strip */}
+      {br && (
+        <div className="px-4 py-3 bg-white border-t border-gray-100 flex items-start gap-3">
+          <Briefcase size={13} className="text-gray-400 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0 text-xs space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest"
+                style={{ background: `${theme.primary}15`, color: theme.primary }}>{br.type}</span>
+              <span className="text-gray-500 font-medium">{br.decisionPower}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-gray-600"><Wallet size={11} /><span className="font-medium">{br.typicalBudget}</span></div>
+            <div className="text-gray-500 leading-snug italic">{br.procurementFriction}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ICPStat: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div>
+    <div className="text-[9px] font-black uppercase tracking-widest text-gray-400">{label}</div>
+    <div className="text-gray-800 font-semibold leading-tight mt-0.5 text-xs">{value || '—'}</div>
+  </div>
+);
+
+// ─── Playbook tab content (triggers, stack, watering holes, outreach, objections) ───
+const PlaybookView: React.FC<{ persona: BuyerPersona; theme: typeof PERSONA_THEMES[number] }> = ({ persona, theme }) => {
+  const hasAny = !!(persona.triggerEvents?.length || persona.currentStack?.length || persona.wateringHoles?.length || persona.outreach || persona.objections?.length);
+  if (!hasAny) {
+    return (
+      <div className="py-10 text-center">
+        <Compass size={36} className="mx-auto mb-3 text-gray-200" />
+        <p className="text-sm text-gray-400">Playbook data not generated.</p>
+        <p className="text-xs text-gray-300 mt-1">Regenerate personas to capture trigger events, stack, watering holes, and outreach plan.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Trigger events */}
+      {persona.triggerEvents && persona.triggerEvents.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Zap size={13} className="text-amber-500" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-600">Buy-Now Triggers</h4>
+          </div>
+          <div className="space-y-2">
+            {persona.triggerEvents.map((t, i) => (
+              <div key={i} className="bg-amber-50/40 border border-amber-100 rounded-xl p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-bold text-gray-900 leading-snug flex-1">{t.event}</p>
+                  <span className="flex-shrink-0 px-2 py-0.5 bg-amber-500 text-white rounded-md text-[9px] font-black tracking-widest flex items-center gap-1">
+                    <Clock size={9} /> {t.urgencyDays}d
+                  </span>
+                </div>
+                <div className="mt-2 pt-2 border-t border-amber-100/60 text-[11px] text-gray-600 leading-relaxed flex items-start gap-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-amber-700 flex-shrink-0 mt-0.5">Signal:</span>
+                  <span>{t.detectionSignal}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Current stack (competition) */}
+      {persona.currentStack && persona.currentStack.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Layers size={13} className="text-rose-500" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-rose-600">Current Stack (Competition)</h4>
+          </div>
+          <div className="space-y-1.5">
+            {persona.currentStack.map((s, i) => {
+              const fric = s.switchingFriction;
+              const fricColor = fric === 'Low' ? 'bg-emerald-100 text-emerald-700' : fric === 'High' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700';
+              return (
+                <div key={i} className="bg-white border border-gray-100 rounded-xl p-3 hover:border-gray-200 transition-colors">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-bold text-sm text-gray-900 truncate">{s.tool}</span>
+                      <span className="text-[10px] text-gray-400 font-medium truncate">· {s.rolePlayed}</span>
+                    </div>
+                    <span className={`flex-shrink-0 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md ${fricColor}`}>
+                      {fric} switch
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-snug italic">"{s.painWithIt}"</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Watering holes */}
+      {persona.wateringHoles && persona.wateringHoles.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin size={13} className="text-violet-500" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-violet-600">Watering Holes</h4>
+          </div>
+          <div className="space-y-1.5">
+            {persona.wateringHoles.map((w, i) => {
+              const inner = (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-bold text-sm text-gray-900 truncate">{w.name}</span>
+                      <span className="flex-shrink-0 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700">{w.type}</span>
+                    </div>
+                    <span className="flex-shrink-0 text-[10px] text-gray-500 font-bold">{w.memberCount}</span>
+                  </div>
+                  <div className="mt-1.5 grid grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 block">Activity</span>
+                      <span className="text-gray-700">{w.activityLevel}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 block">Best post</span>
+                      <span className="text-gray-700 truncate">{w.bestPostFormat}</span>
+                    </div>
+                  </div>
+                </>
+              );
+              return w.url ? (
+                <a key={i} href={w.url} target="_blank" rel="noreferrer"
+                  className="block bg-white border border-gray-100 rounded-xl p-3 hover:border-violet-200 hover:bg-violet-50/30 transition-colors">
+                  {inner}
+                </a>
+              ) : (
+                <div key={i} className="bg-white border border-gray-100 rounded-xl p-3">
+                  {inner}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Outreach playbook */}
+      {persona.outreach && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Send size={13} className="text-sky-500" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-sky-600">Outreach Playbook</h4>
+          </div>
+          <div className="bg-sky-50/40 border border-sky-100 rounded-xl p-3 space-y-2">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest text-emerald-700 mb-0.5">✓ Best channel</div>
+                <p className="text-gray-800 font-medium leading-snug">{persona.outreach.bestChannel}</p>
+              </div>
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest text-rose-700 mb-0.5">✗ Avoid</div>
+                <p className="text-gray-800 font-medium leading-snug">{persona.outreach.worstChannel}</p>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-sky-100/60 grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Best time</div>
+                <p className="text-gray-700 leading-snug">{persona.outreach.bestTimeToReach}</p>
+              </div>
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Sales cycle</div>
+                <p className="text-gray-700 leading-snug">~{persona.outreach.avgSalesCycleDays} days</p>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-sky-100/60">
+              <div className="text-[9px] font-black uppercase tracking-widest text-sky-700 mb-1">First-message angle</div>
+              <p className="text-xs text-gray-700 italic leading-relaxed">"{persona.outreach.openingAngle}"</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Objections + counters */}
+      {persona.objections && persona.objections.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldAlert size={13} className="text-gray-500" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-600">Objections + Counters</h4>
+          </div>
+          <div className="space-y-2">
+            {persona.objections.map((o, i) => (
+              <div key={i} className="bg-white border border-gray-100 rounded-xl p-3">
+                <div className="flex items-start gap-2">
+                  <span className="text-rose-400 text-[10px] font-black uppercase tracking-widest flex-shrink-0 mt-0.5">No:</span>
+                  <p className="text-sm text-gray-800 leading-snug">{o.objection}</p>
+                </div>
+                <div className="mt-1.5 pt-1.5 border-t border-gray-50 flex items-start gap-2">
+                  <span className="text-emerald-500 text-[10px] font-black uppercase tracking-widest flex-shrink-0 mt-0.5">Win:</span>
+                  <p className="text-xs text-gray-600 leading-snug">{o.counter}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Persona Card ─────────────────────────────────────────────────────
 const PersonaCard: React.FC<{
   persona: BuyerPersona;
@@ -419,7 +664,7 @@ const PersonaCard: React.FC<{
   onChat: () => void;
 }> = ({ persona, themeIdx, onChat }) => {
   const theme = PERSONA_THEMES[themeIdx];
-  const [activeTab, setActiveTab] = useState<'profile' | 'proof'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'playbook' | 'proof'>('profile');
 
   const sourcesByPain = useMemo(() => {
     const map = new Map<number, NonNullable<BuyerPersona['painSources']>>();
@@ -457,8 +702,11 @@ const PersonaCard: React.FC<{
         </div>
       </div>
 
-      <div className="px-6 pt-4 flex items-center gap-1 border-b border-gray-50 flex-shrink-0">
+      <div className="px-6 pt-4 flex items-center gap-1 border-b border-gray-50 flex-shrink-0 overflow-x-auto">
         <TabBtn active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} color={theme.primary}>Profile</TabBtn>
+        <TabBtn active={activeTab === 'playbook'} onClick={() => setActiveTab('playbook')} color={theme.primary}>
+          <Compass size={11} /> Playbook
+        </TabBtn>
         <TabBtn active={activeTab === 'proof'} onClick={() => setActiveTab('proof')} color={theme.primary}>
           <Shield size={11} /> Proof <span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[9px]">{totalSources}</span>
         </TabBtn>
@@ -467,7 +715,10 @@ const PersonaCard: React.FC<{
       <div className="p-6 flex-1 flex flex-col gap-5">
         {activeTab === 'profile' && (
           <>
-            <div className="flex justify-center -mt-2">
+            {/* ICP firmographics + buyer role — top of profile */}
+            <ICPSnapshot persona={persona} theme={theme} />
+
+            <div className="flex justify-center -mt-1">
               <MiniRadarChart radar={radar} color={theme.primary} glow={theme.glow} size={200} animated={true} />
             </div>
 
@@ -522,28 +773,37 @@ const PersonaCard: React.FC<{
               </ul>
             </div>
 
-            <div className="pt-3 border-t border-gray-50">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1">
-                <MapPin size={11} /> Distribution Channels
-              </h4>
-              <div className="flex flex-wrap gap-1.5">
-                {persona.whereTheyHangOut.map((place, i) => (
-                  <span key={i} className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${theme.tag}`}>{place}</span>
-                ))}
-              </div>
-            </div>
+            {/* CTA strip to deep playbook */}
+            {(persona.wateringHoles?.length || persona.triggerEvents?.length || persona.outreach) && (
+              <button onClick={() => setActiveTab('playbook')}
+                className="mt-1 w-full flex items-center justify-between px-4 py-3 rounded-2xl border-2 border-dashed hover:border-solid transition-all group/cta"
+                style={{ borderColor: `${theme.primary}40`, background: `${theme.primary}05` }}>
+                <div className="flex items-center gap-2">
+                  <Compass size={14} style={{ color: theme.primary }} />
+                  <span className="text-xs font-black uppercase tracking-widest" style={{ color: theme.primary }}>Open GTM Playbook →</span>
+                </div>
+                <span className="text-[10px] text-gray-500 font-bold">{persona.wateringHoles?.length || 0} channels · {persona.triggerEvents?.length || 0} triggers · {persona.currentStack?.length || 0} competitors</span>
+              </button>
+            )}
 
-            <div>
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1">
-                <Coffee size={11} /> Content Consumed
-              </h4>
-              <div className="flex flex-wrap gap-1.5">
-                {persona.contentTheyConsume.map((c, i) => (
-                  <span key={i} className="text-[10px] font-medium px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{c}</span>
-                ))}
+            {/* Legacy content-consumed (kept as fallback signal) */}
+            {persona.contentTheyConsume && persona.contentTheyConsume.length > 0 && (
+              <div>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1">
+                  <Coffee size={11} /> Content Consumed
+                </h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {persona.contentTheyConsume.map((c, i) => (
+                    <span key={i} className="text-[10px] font-medium px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{c}</span>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </>
+        )}
+
+        {activeTab === 'playbook' && (
+          <PlaybookView persona={persona} theme={theme} />
         )}
 
         {activeTab === 'proof' && (
@@ -678,8 +938,8 @@ export const PersonaView: React.FC<PersonaViewProps> = ({ appName, appDesc, cate
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in pb-20">
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-base-300 pb-4">
         <div>
-          <h2 className="text-3xl font-display font-bold"><span className="text-primary">Buyer</span> Personas</h2>
-          <p className="text-sm opacity-70 mt-1">Cinematic reveal · personality radar · live source proof · AI persona chat.</p>
+          <h2 className="text-3xl font-display font-bold"><span className="text-primary">Buyer</span> Personas <span className="text-xs font-bold tracking-widest uppercase text-gray-400 ml-2 align-middle">for SaaS founders</span></h2>
+          <p className="text-sm opacity-70 mt-1">Real B2B buyer intel — ICP firmographics, trigger events, competing stack, watering holes, outreach playbook. Built so you can find them on LinkedIn Sales Nav.</p>
         </div>
         {analysis && (
           <button onClick={() => setReveal(true)}
@@ -692,8 +952,8 @@ export const PersonaView: React.FC<PersonaViewProps> = ({ appName, appDesc, cate
       <div className="card bg-white border border-gray-100 shadow-minimal">
         <div className="card-body p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
-            <h3 className="font-bold text-lg text-brand-primary">Generate Core Personas</h3>
-            <p className="text-sm text-brand-secondary">Build highly specific profiles with personality radar charts, real source proof, and roleplay-ready AI chat.</p>
+            <h3 className="font-bold text-lg text-brand-primary">Generate ICP-Grade Personas</h3>
+            <p className="text-sm text-brand-secondary">Each persona ships with a searchable LinkedIn job title pattern, TAM estimate, current vendor stack (your competition), named watering holes with member counts, trigger events to detect, and a first-message outreach angle.</p>
           </div>
           <button
             onClick={handleGenerate}
