@@ -5,7 +5,8 @@ import { useProject } from '../contexts/ProjectContext';
 import {
   MapPin, Target, Users, Zap, Loader2, Quote, Activity, Coffee, MessageSquare,
   Sparkles, ExternalLink, Send, X, Play, ChevronRight, Shield, Award,
-  Building2, Briefcase, Wallet, Clock, AlertTriangle, Layers, Compass, TrendingUp, ShieldAlert
+  Building2, Briefcase, Wallet, Clock, AlertTriangle, Layers, Compass, TrendingUp, ShieldAlert,
+  BarChart3
 } from 'lucide-react';
 
 // Props are now optional — context wins
