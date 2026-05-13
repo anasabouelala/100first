@@ -906,6 +906,647 @@ const ProofView: React.FC<{
   );
 };
 
+// ═════════════════════════════════════════════════════════════════════
+// ANALYTICS DASHBOARD COMPONENTS (Bloomberg-style)
+// ═════════════════════════════════════════════════════════════════════
+
+// Parse a number out of a string like "~18,000 companies" or "$2M-$20M ARR"
+const parseFirstNumber = (s: string | undefined, scaleSuffix = true): number => {
+  if (!s) return 0;
+  const m = s.replace(/,/g, '').match(/(\d+(?:\.\d+)?)\s*([kmKMbB])?/);
+  if (!m) return 0;
+  let n = parseFloat(m[1]);
+  if (scaleSuffix && m[2]) {
+    const u = m[2].toLowerCase();
+    if (u === 'k') n *= 1000;
+    else if (u === 'm') n *= 1_000_000;
+    else if (u === 'b') n *= 1_000_000_000;
+  }
+  return n;
+};
+
+const formatBigNumber = (n: number): string => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return `${n}`;
+};
+
+// ─── KPI Ticker (top bar) ─────────────────────────────────────────────
+const KPITicker: React.FC<{ personas: BuyerPersona[] }> = ({ personas }) => {
+  const totalTAM = personas.reduce((acc, p) => acc + parseFirstNumber(p.companyProfile?.estimatedTAM), 0);
+  const avgCycle = Math.round(
+    personas.reduce((acc, p) => acc + (p.outreach?.avgSalesCycleDays || 0), 0) / Math.max(1, personas.length)
+  );
+  const totalCompetitors = new Set(personas.flatMap(p => (p.currentStack || []).map(s => s.tool))).size;
+  const totalTriggers = personas.reduce((acc, p) => acc + (p.triggerEvents?.length || 0), 0);
+  const totalChannels = new Set(personas.flatMap(p => (p.wateringHoles || []).map(w => w.name))).size;
+  const totalSources = personas.reduce((acc, p) => acc + (p.painSources?.length || 0), 0);
+
+  const items = [
+    { label: 'Total TAM',           value: totalTAM > 0 ? `~${formatBigNumber(totalTAM)}` : '—',  sub: 'companies in range',  trend: 'up'   as const, color: 'text-emerald-500' },
+    { label: 'Avg Sales Cycle',     value: avgCycle ? `${avgCycle}d` : '—',                        sub: 'time to close',       trend: avgCycle < 60 ? 'up' as const : 'down' as const, color: avgCycle < 60 ? 'text-emerald-500' : 'text-rose-500' },
+    { label: 'Competitors Found',   value: `${totalCompetitors}`,                                   sub: 'vendors in stack',    trend: 'flat' as const, color: 'text-amber-500' },
+    { label: 'Buy-Now Triggers',    value: `${totalTriggers}`,                                      sub: 'events tracked',      trend: 'up'   as const, color: 'text-violet-500' },
+    { label: 'Watering Holes',      value: `${totalChannels}`,                                      sub: 'channels mapped',     trend: 'up'   as const, color: 'text-sky-500' },
+    { label: 'Validated Sources',   value: `${totalSources}`,                                       sub: 'public proof',        trend: 'up'   as const, color: 'text-pink-500' }
+  ];
+
+  return (
+    <div className="bg-gray-900 rounded-2xl px-4 py-3 shadow-lg overflow-x-auto">
+      <div className="flex items-stretch gap-px min-w-max">
+        {items.map((it, i) => (
+          <div key={i} className="flex-1 min-w-[160px] px-4 py-1 border-r border-white/5 last:border-r-0">
+            <div className="flex items-center gap-1.5 text-[9px] font-black tracking-widest uppercase text-white/40">
+              {it.label}
+              {it.trend === 'up' && <TrendingUp size={9} className="text-emerald-400" />}
+              {it.trend === 'down' && <TrendingUp size={9} className="text-rose-400 rotate-180" />}
+            </div>
+            <div className={`font-black text-2xl mt-0.5 ${it.color} font-mono tabular-nums`}>{it.value}</div>
+            <div className="text-[10px] text-white/30 font-medium">{it.sub}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── Overlay Radar (all personas in one chart) ────────────────────────
+const OverlayRadar: React.FC<{ personas: BuyerPersona[]; size?: number }> = ({ personas, size = 320 }) => {
+  const center = size / 2;
+  const radius = size * 0.34;
+  const angles = RADAR_AXES.map((_, i) => (Math.PI * 2 * i) / RADAR_AXES.length - Math.PI / 2);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const start = Date.now();
+    const duration = 1200;
+    let raf: number;
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / duration);
+      setProgress(1 - Math.pow(1 - t, 3));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [personas]);
+
+  return (
+    <div className="relative bg-white rounded-2xl border border-gray-100 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-[10px] font-black tracking-widest uppercase text-gray-500">Persona Overlay</div>
+          <h4 className="font-bold text-sm text-gray-900">Personality Fingerprints</h4>
+        </div>
+        <div className="flex flex-wrap gap-2 justify-end">
+          {personas.map((p, i) => {
+            const t = PERSONA_THEMES[i % PERSONA_THEMES.length];
+            return (
+              <div key={i} className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ background: t.primary }} />
+                <span className="text-[10px] font-bold text-gray-700">{p.name}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex justify-center">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          {/* Grid */}
+          {[0.25, 0.5, 0.75, 1].map(level => {
+            const pts = RADAR_AXES.map((_, i) => {
+              const r = level * radius;
+              return `${center + r * Math.cos(angles[i])},${center + r * Math.sin(angles[i])}`;
+            }).join(' ');
+            return <polygon key={level} points={pts} fill="none" stroke="#e5e7eb" strokeWidth={1} strokeDasharray={level < 1 ? '3,3' : '0'} />;
+          })}
+          {/* Axis lines */}
+          {angles.map((a, i) => (
+            <line key={i} x1={center} y1={center}
+              x2={center + radius * Math.cos(a)} y2={center + radius * Math.sin(a)}
+              stroke="#e5e7eb" strokeWidth={1} />
+          ))}
+          {/* Overlay each persona */}
+          {personas.map((p, idx) => {
+            const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+            const radar = p.personalityRadar || { priceSensitive: 50, techSavvy: 50, riskAverse: 50, collaborative: 50, pragmatic: 50, vocal: 50 };
+            const points = RADAR_AXES.map((ax, i) => {
+              const v = (radar[ax.key] ?? 50) * progress;
+              const r = (v / 100) * radius;
+              return [center + r * Math.cos(angles[i]), center + r * Math.sin(angles[i])];
+            });
+            return (
+              <polygon key={idx}
+                points={points.map(pt => pt.join(',')).join(' ')}
+                fill={t.primary} fillOpacity={0.1}
+                stroke={t.primary} strokeWidth={2} strokeLinejoin="round"
+                style={{ filter: `drop-shadow(0 0 6px ${t.glow})` }} />
+            );
+          })}
+          {/* Axis labels */}
+          {RADAR_AXES.map((ax, i) => {
+            const lx = center + (radius + 18) * Math.cos(angles[i]);
+            const ly = center + (radius + 18) * Math.sin(angles[i]);
+            return (
+              <text key={i} x={lx} y={ly} fontSize={10} fontWeight={700}
+                fill="#6b7280" textAnchor="middle" dominantBaseline="middle"
+                style={{ opacity: progress }}>
+                {ax.label}
+              </text>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+};
+
+// ─── Market Map (TAM vs sales cycle scatter) ──────────────────────────
+const MarketMap: React.FC<{ personas: BuyerPersona[]; onChat: (idx: number) => void }> = ({ personas, onChat }) => {
+  const W = 380, H = 260, PAD = 40;
+  const tams = personas.map(p => parseFirstNumber(p.companyProfile?.estimatedTAM));
+  const cycles = personas.map(p => p.outreach?.avgSalesCycleDays || 30);
+  const maxTAM = Math.max(...tams, 10000);
+  const maxCycle = Math.max(...cycles, 180);
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-5">
+      <div className="text-[10px] font-black tracking-widest uppercase text-gray-500">Market Map</div>
+      <h4 className="font-bold text-sm text-gray-900 mb-2">TAM vs Sales Cycle</h4>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
+        {/* Axes */}
+        <line x1={PAD} y1={H - PAD} x2={W - 10} y2={H - PAD} stroke="#e5e7eb" strokeWidth={1.5} />
+        <line x1={PAD} y1={10} x2={PAD} y2={H - PAD} stroke="#e5e7eb" strokeWidth={1.5} />
+        {/* Axis labels */}
+        <text x={W / 2} y={H - 6} fontSize={10} fontWeight={700} fill="#9ca3af" textAnchor="middle" className="uppercase tracking-widest">Sales cycle days →</text>
+        <text x={12} y={H / 2} fontSize={10} fontWeight={700} fill="#9ca3af" textAnchor="middle" transform={`rotate(-90 12 ${H / 2})`} className="uppercase tracking-widest">TAM size →</text>
+        {/* Grid */}
+        {[0.25, 0.5, 0.75].map(p => (
+          <g key={p}>
+            <line x1={PAD + (W - PAD - 10) * p} y1={10} x2={PAD + (W - PAD - 10) * p} y2={H - PAD} stroke="#f3f4f6" strokeDasharray="2,3" />
+            <line x1={PAD} y1={(H - PAD - 10) * p + 10} x2={W - 10} y2={(H - PAD - 10) * p + 10} stroke="#f3f4f6" strokeDasharray="2,3" />
+          </g>
+        ))}
+        {/* Bubbles */}
+        {personas.map((p, idx) => {
+          const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+          const x = PAD + ((cycles[idx] / maxCycle) * (W - PAD - 20));
+          const y = (H - PAD) - ((tams[idx] / maxTAM) * (H - PAD - 20));
+          // Bubble size based on relative TAM
+          const size = 12 + (tams[idx] / maxTAM) * 28;
+          return (
+            <g key={idx} className="cursor-pointer" onClick={() => onChat(idx)}>
+              <circle cx={x} cy={y} r={size} fill={t.primary} fillOpacity={0.25} />
+              <circle cx={x} cy={y} r={size * 0.5} fill={t.primary} fillOpacity={0.8} stroke="white" strokeWidth={2} />
+              <text x={x} y={y - size - 6} fontSize={11} fontWeight={800} fill="#111827" textAnchor="middle">{p.name}</text>
+              <text x={x} y={y + size + 14} fontSize={9} fontWeight={700} fill={t.primary} textAnchor="middle" className="tracking-widest uppercase">
+                {formatBigNumber(tams[idx])} · {cycles[idx]}d
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <p className="text-[10px] text-gray-400 mt-1 text-center">Bubble size = TAM. Click a persona to start a chat.</p>
+    </div>
+  );
+};
+
+// ─── Mini horizontal bar (used in cells for visual comparison) ────────
+const MetricBar: React.FC<{ value: number; max: number; color: string; label?: string; tabular?: boolean }> = ({ value, max, color, label, tabular = true }) => {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div className="space-y-1">
+      <div className={`flex items-baseline justify-between gap-2 ${tabular ? 'font-mono tabular-nums' : ''}`}>
+        <span className="text-sm font-black text-gray-900">{label || value}</span>
+      </div>
+      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${pct}%`, background: color }} />
+      </div>
+    </div>
+  );
+};
+
+// ─── COMPARISON MATRIX (the main dashboard table) ─────────────────────
+const ComparisonMatrix: React.FC<{
+  personas: BuyerPersona[];
+  onChat: (idx: number) => void;
+}> = ({ personas, onChat }) => {
+  // Pre-compute maxes for cross-persona bar normalization
+  const tams = personas.map(p => parseFirstNumber(p.companyProfile?.estimatedTAM));
+  const maxTAM = Math.max(...tams, 1);
+  const cycles = personas.map(p => p.outreach?.avgSalesCycleDays || 0);
+  const maxCycle = Math.max(...cycles, 1);
+  const budgets = personas.map(p => parseFirstNumber(p.buyerRole?.typicalBudget));
+  const maxBudget = Math.max(...budgets, 1);
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Sticky column headers */}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] border-collapse">
+          <thead className="sticky top-0 z-10 bg-gray-900 text-white">
+            <tr>
+              <th className="text-left p-4 w-[180px] font-black text-[10px] tracking-widest uppercase text-white/40 border-r border-white/5 sticky left-0 z-20 bg-gray-900">
+                Dimension
+              </th>
+              {personas.map((p, idx) => {
+                const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+                return (
+                  <th key={idx} className="p-4 text-left border-r border-white/5 last:border-r-0 align-top min-w-[230px]">
+                    <div className="flex items-start gap-3">
+                      <img src={avatarUrl(p.avatarSeed || p.name)}
+                        className="w-12 h-12 rounded-full bg-white p-0.5 flex-shrink-0"
+                        style={{ boxShadow: `0 0 0 2px ${t.primary}` } as any}
+                        alt={p.name} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-bold text-base text-white truncate">{p.name}</span>
+                          <button onClick={() => onChat(idx)}
+                            className="flex-shrink-0 inline-flex items-center gap-1 text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md transition-colors hover:opacity-90"
+                            style={{ background: t.primary, color: 'white' }}
+                            title={`Chat with ${p.name}`}>
+                            <MessageSquare size={9} /> Chat
+                          </button>
+                        </div>
+                        <div className="text-[10px] font-bold tracking-widest uppercase truncate" style={{ color: t.primary }}>{p.role}</div>
+                        {p.tagline && (
+                          <p className="text-[11px] text-white/60 italic mt-1 leading-snug line-clamp-2">"{p.tagline}"</p>
+                        )}
+                      </div>
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+
+          <tbody className="text-sm">
+            {/* ──────── SECTION: AT A GLANCE ──────── */}
+            <SectionRow label="At a glance" icon={<Briefcase size={11} />} />
+            <DataRow label="Buyer role" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.buyerRole ? (
+                    <div>
+                      <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest"
+                        style={{ background: `${PERSONA_THEMES[idx % PERSONA_THEMES.length].primary}15`, color: PERSONA_THEMES[idx % PERSONA_THEMES.length].primary }}>
+                        {p.buyerRole.type}
+                      </span>
+                      <div className="text-[11px] text-gray-500 mt-1 font-medium">{p.buyerRole.decisionPower}</div>
+                    </div>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="TAM (companies)" sticky>
+              {personas.map((p, idx) => {
+                const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+                return (
+                  <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                    <MetricBar value={tams[idx]} max={maxTAM} color={t.primary} label={tams[idx] > 0 ? `~${formatBigNumber(tams[idx])}` : '—'} />
+                    {p.companyProfile?.estimatedTAM && (
+                      <div className="text-[10px] text-gray-400 mt-1 leading-snug line-clamp-2">{p.companyProfile.estimatedTAM}</div>
+                    )}
+                  </td>
+                );
+              })}
+            </DataRow>
+            <DataRow label="Sales cycle" sticky>
+              {personas.map((p, idx) => {
+                const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+                const d = p.outreach?.avgSalesCycleDays || 0;
+                return (
+                  <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                    <MetricBar value={d} max={maxCycle} color={t.primary} label={d ? `${d} days` : '—'} />
+                  </td>
+                );
+              })}
+            </DataRow>
+            <DataRow label="Budget authority" sticky>
+              {personas.map((p, idx) => {
+                const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+                return (
+                  <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                    <MetricBar value={budgets[idx]} max={maxBudget} color={t.primary}
+                      label={p.buyerRole?.typicalBudget || '—'} tabular={false} />
+                  </td>
+                );
+              })}
+            </DataRow>
+
+            {/* ──────── SECTION: PAIN POINTS ──────── */}
+            <SectionRow label="Pain Points" icon={<Zap size={11} />} color="text-rose-500" />
+            <DataRow label="Top operational pains" sticky>
+              {personas.map((p, idx) => {
+                const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+                const sources = (p.painSources || []);
+                return (
+                  <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                    <ul className="space-y-1.5">
+                      {p.painPoints.slice(0, 4).map((pp, i) => {
+                        const proofCount = sources.filter(s => s.painIndex === i).length;
+                        return (
+                          <li key={i} className="flex items-start gap-1.5 text-[12px] leading-snug">
+                            <span className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: t.primary }} />
+                            <span className="text-gray-700 flex-1">{pp}</span>
+                            {proofCount > 0 && (
+                              <span className="flex-shrink-0 text-[8px] font-black tracking-widest uppercase px-1 py-px rounded-sm bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                {proofCount}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </td>
+                );
+              })}
+            </DataRow>
+            <DataRow label="What they actually say" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.realWorldQuote ? (
+                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-[11px] text-gray-600 italic leading-relaxed">
+                      "{p.realWorldQuote}"
+                    </div>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="Pain intensity radar" sticky>
+              {personas.map((p, idx) => {
+                const t = PERSONA_THEMES[idx % PERSONA_THEMES.length];
+                const radar = p.personalityRadar || { priceSensitive: 50, techSavvy: 50, riskAverse: 50, collaborative: 50, pragmatic: 50, vocal: 50 };
+                return (
+                  <td key={idx} className="p-2 border-r border-gray-50 last:border-r-0 align-top">
+                    <div className="flex justify-center">
+                      <MiniRadarChart radar={radar} color={t.primary} glow={t.glow} size={140} animated={true} />
+                    </div>
+                  </td>
+                );
+              })}
+            </DataRow>
+
+            {/* ──────── SECTION: SOLUTIONS / CURRENT STACK ──────── */}
+            <SectionRow label="Current Solutions (Competition)" icon={<Layers size={11} />} color="text-amber-500" />
+            <DataRow label="Tools they use today" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.currentStack && p.currentStack.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {p.currentStack.map((s, i) => {
+                        const fricColor = s.switchingFriction === 'Low' ? 'bg-emerald-100 text-emerald-700' : s.switchingFriction === 'High' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700';
+                        return (
+                          <div key={i} className="text-[11px]">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-gray-900 truncate">{s.tool}</span>
+                              <span className={`flex-shrink-0 text-[8px] font-black uppercase tracking-widest px-1 py-px rounded-sm ${fricColor}`}>{s.switchingFriction}</span>
+                            </div>
+                            <div className="text-gray-500 italic leading-snug truncate">{s.painWithIt}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="Switching friction" sticky>
+              {personas.map((p, idx) => {
+                const tools = p.currentStack || [];
+                const fricCount = { Low: 0, Medium: 0, High: 0 };
+                tools.forEach(s => { fricCount[s.switchingFriction] = (fricCount[s.switchingFriction] || 0) + 1; });
+                const total = tools.length;
+                if (total === 0) return <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0"><Em>—</Em></td>;
+                return (
+                  <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                    <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
+                      <div className="bg-emerald-500" style={{ width: `${(fricCount.Low / total) * 100}%` }} title={`Low: ${fricCount.Low}`} />
+                      <div className="bg-amber-500" style={{ width: `${(fricCount.Medium / total) * 100}%` }} title={`Medium: ${fricCount.Medium}`} />
+                      <div className="bg-rose-500" style={{ width: `${(fricCount.High / total) * 100}%` }} title={`High: ${fricCount.High}`} />
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 text-[9px] font-bold uppercase tracking-widest">
+                      {fricCount.Low > 0 && <span className="text-emerald-600">{fricCount.Low} Low</span>}
+                      {fricCount.Medium > 0 && <span className="text-amber-600">{fricCount.Medium} Med</span>}
+                      {fricCount.High > 0 && <span className="text-rose-600">{fricCount.High} High</span>}
+                    </div>
+                  </td>
+                );
+              })}
+            </DataRow>
+
+            {/* ──────── SECTION: DEMOGRAPHICS / FIRMOGRAPHICS ──────── */}
+            <SectionRow label="Demographics & Firmographics" icon={<Building2 size={11} />} color="text-sky-500" />
+            <DataRow label="Industry" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.companyProfile?.industries ? (
+                    <div className="flex flex-wrap gap-1">
+                      {p.companyProfile.industries.map((ind, i) => (
+                        <span key={i} className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-100">{ind}</span>
+                      ))}
+                    </div>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="Company size" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top text-gray-700 font-semibold text-[12px]">
+                  {p.companyProfile?.companySize || <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="Stage" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top text-gray-700 font-semibold text-[12px]">
+                  {p.companyProfile?.stage || <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="ARR range" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top text-gray-700 font-mono font-bold tabular-nums text-[12px]">
+                  {p.companyProfile?.arrRange || <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="Tech stack signals" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.companyProfile?.techStackSignals ? (
+                    <div className="flex flex-wrap gap-1">
+                      {p.companyProfile.techStackSignals.map((t, i) => (
+                        <span key={i} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">{t}</span>
+                      ))}
+                    </div>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="Person demographics" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top text-[11px] text-gray-600 leading-snug">
+                  {p.demographics || <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+
+            {/* ──────── SECTION: WATERING HOLES ──────── */}
+            <SectionRow label="Watering Holes" icon={<MapPin size={11} />} color="text-violet-500" />
+            <DataRow label="Named communities" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.wateringHoles && p.wateringHoles.length > 0 ? (
+                    <ul className="space-y-1">
+                      {p.wateringHoles.slice(0, 4).map((w, i) => (
+                        <li key={i} className="text-[11px]">
+                          <div className="flex items-center justify-between gap-1.5">
+                            {w.url ? (
+                              <a href={w.url} target="_blank" rel="noreferrer" className="font-bold text-gray-900 truncate hover:text-violet-600 transition-colors">{w.name}</a>
+                            ) : (
+                              <span className="font-bold text-gray-900 truncate">{w.name}</span>
+                            )}
+                            <span className="flex-shrink-0 text-[9px] font-mono font-bold text-gray-500 tabular-nums">{w.memberCount}</span>
+                          </div>
+                          <div className="text-[10px] text-gray-400 truncate">
+                            <span className="text-violet-600 font-bold">{w.type}</span> · {w.activityLevel}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+
+            {/* ──────── SECTION: TRIGGER EVENTS ──────── */}
+            <SectionRow label="Buy-Now Triggers" icon={<Clock size={11} />} color="text-amber-500" />
+            <DataRow label="Detect & act" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.triggerEvents && p.triggerEvents.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {p.triggerEvents.slice(0, 3).map((t, i) => (
+                        <li key={i} className="text-[11px]">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-bold text-gray-900 leading-snug flex-1">{t.event}</span>
+                            <span className="flex-shrink-0 text-[8px] font-black uppercase tracking-widest px-1 py-px rounded-sm bg-amber-100 text-amber-700">{t.urgencyDays}d</span>
+                          </div>
+                          <div className="text-[10px] text-gray-500 italic leading-snug mt-0.5">{t.detectionSignal}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+
+            {/* ──────── SECTION: OUTREACH PLAYBOOK ──────── */}
+            <SectionRow label="Outreach Playbook" icon={<Send size={11} />} color="text-emerald-500" />
+            <DataRow label="Best channel" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.outreach?.bestChannel ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1">
+                      ✓ {p.outreach.bestChannel}
+                    </span>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="Avoid" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.outreach?.worstChannel ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-2 py-1">
+                      ✗ {p.outreach.worstChannel}
+                    </span>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="Best time to reach" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top text-[11px] text-gray-700 font-medium">
+                  {p.outreach?.bestTimeToReach || <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+            <DataRow label="Opening angle" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.outreach?.openingAngle ? (
+                    <div className="text-[11px] text-gray-600 italic leading-snug border-l-2 border-emerald-300 pl-2">
+                      "{p.outreach.openingAngle}"
+                    </div>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+
+            {/* ──────── SECTION: PROOF ──────── */}
+            <SectionRow label="Validated Sources" icon={<Shield size={11} />} color="text-pink-500" />
+            <DataRow label="Public proof links" sticky>
+              {personas.map((p, idx) => (
+                <td key={idx} className="p-3 border-r border-gray-50 last:border-r-0 align-top">
+                  {p.painSources && p.painSources.length > 0 ? (
+                    <ul className="space-y-1">
+                      {p.painSources.slice(0, 4).map((s, i) => {
+                        const plat = PLATFORM_LABEL(s.platform);
+                        return (
+                          <li key={i}>
+                            <a href={s.url} target="_blank" rel="noreferrer"
+                              className="block text-[11px] hover:bg-gray-50 rounded-md p-1.5 transition-colors group/src">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`inline-flex items-center gap-0.5 px-1 py-px text-[8px] font-black tracking-widest uppercase rounded-sm border ${plat.bg}`}>
+                                  <span className="text-[10px]">{plat.icon}</span>
+                                  {plat.label}
+                                </span>
+                                <ExternalLink size={9} className="text-gray-300 group-hover/src:text-gray-600 transition-colors" />
+                              </div>
+                              <div className="text-gray-600 italic leading-snug mt-0.5 line-clamp-2">"{s.snippet}"</div>
+                            </a>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : <Em>—</Em>}
+                </td>
+              ))}
+            </DataRow>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// Section header row in the matrix
+const SectionRow: React.FC<{ label: string; icon: React.ReactNode; color?: string }> = ({ label, icon, color = 'text-gray-400' }) => (
+  <tr className="bg-gray-50 border-y border-gray-100">
+    <td colSpan={4} className="px-4 py-2 sticky left-0 z-[5] bg-gray-50">
+      <div className={`flex items-center gap-2 text-[10px] font-black tracking-widest uppercase ${color}`}>
+        {icon} {label}
+      </div>
+    </td>
+  </tr>
+);
+
+// Standard data row with sticky first column
+const DataRow: React.FC<{ label: string; sticky?: boolean; children: React.ReactNode }> = ({ label, children }) => (
+  <tr className="border-b border-gray-50 hover:bg-gray-50/40 transition-colors group/row">
+    <td className="p-3 sticky left-0 z-[5] bg-white group-hover/row:bg-gray-50/40 border-r border-gray-100 align-top">
+      <div className="text-[10px] font-black tracking-widest uppercase text-gray-400 leading-tight">{label}</div>
+    </td>
+    {children}
+  </tr>
+);
+
+const Em: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <span className="text-gray-300 text-[11px] italic">{children}</span>
+);
+
 // ─── Main View ────────────────────────────────────────────────────────
 export const PersonaView: React.FC<PersonaViewProps> = ({ appName, appDesc, category }) => {
   const [loading, setLoading] = useState(false);
@@ -939,7 +1580,7 @@ export const PersonaView: React.FC<PersonaViewProps> = ({ appName, appDesc, cate
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-base-300 pb-4">
         <div>
           <h2 className="text-3xl font-display font-bold"><span className="text-primary">Buyer</span> Personas <span className="text-xs font-bold tracking-widest uppercase text-gray-400 ml-2 align-middle">for SaaS founders</span></h2>
-          <p className="text-sm opacity-70 mt-1">Real B2B buyer intel — ICP firmographics, trigger events, competing stack, watering holes, outreach playbook. Built so you can find them on LinkedIn Sales Nav.</p>
+          <p className="text-sm opacity-70 mt-1">Comparison dashboard for B2B buyer intel — TAM ticker, personality overlay, market map, single matrix table from pains to outreach.</p>
         </div>
         {analysis && (
           <button onClick={() => setReveal(true)}
@@ -991,16 +1632,19 @@ export const PersonaView: React.FC<PersonaViewProps> = ({ appName, appDesc, cate
             <p className="text-gray-700 leading-relaxed text-sm">{analysis.marketOverview}</p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {analysis.personas.map((persona, idx) => (
-              <PersonaCard
-                key={idx}
-                persona={persona}
-                themeIdx={idx % PERSONA_THEMES.length}
-                onChat={() => setChatTarget({ persona, themeIdx: idx % PERSONA_THEMES.length })}
-              />
-            ))}
+          {/* ═══ KPI TICKER ═══ */}
+          <KPITicker personas={analysis.personas} />
+
+          {/* ═══ ANALYTICS CHARTS ═══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <OverlayRadar personas={analysis.personas} />
+            <MarketMap personas={analysis.personas}
+              onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })} />
           </div>
+
+          {/* ═══ COMPARISON MATRIX ═══ */}
+          <ComparisonMatrix personas={analysis.personas}
+            onChat={(idx) => setChatTarget({ persona: analysis.personas[idx], themeIdx: idx % PERSONA_THEMES.length })} />
         </div>
       ) : null}
 
