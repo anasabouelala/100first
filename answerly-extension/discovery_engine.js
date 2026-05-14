@@ -622,13 +622,48 @@ async function executePlatform(platform, queries, tabId) {
                 continue;
             }
 
-            if ((!result?.candidates || result.candidates.length === 0) && result?.diagnostic) {
-                const d = result.diagnostic;
-                logMission('warn', `0 candidates [${tabLabel}] — DOM: cells=${d.userCellCount ?? '?'} primaryCol=${d.primaryColumn ?? '?'} title="${(d.pageTitle || '').slice(0,40)}"`, platform);
-                if (d.hydration?.noResults) {
-                    logMission('info', `"No results" for this query`, platform);
+            // Empty scrape — surface the reason loudly to the UI, not just logs.
+            // This is the #1 user-visible failure mode (login wall, dom drift,
+            // no-results query) and was previously buried in stealth log lines.
+            if (!result?.candidates || result.candidates.length === 0) {
+                const d = result?.diagnostic || {};
+
+                // Sniff for login walls that detectBlock might have missed
+                const titleLower = (d.pageTitle || '').toLowerCase();
+                const bodyLower = (d.bodyTextSample || '').toLowerCase();
+                const looksLikeLogin =
+                    titleLower.includes('sign in') || titleLower.includes('log in') ||
+                    bodyLower.includes("don't miss what's happening") ||
+                    bodyLower.includes('see what people are saying') ||
+                    bodyLower.includes('sign up for') ||
+                    bodyLower.includes('join linkedin') ||
+                    bodyLower.includes('to continue, log in');
+
+                let reason;
+                let level = 'warn';
+                if (looksLikeLogin) {
+                    reason = `${platform} requires you to log in. Open ${platform} in a normal tab, log in, then retry. The stealth window inherits your cookies.`;
+                    level = 'error';
+                    // Mark as a soft block so the user sees a clear alert
+                    activeMission.stealth.detected = true;
+                    activeMission.stealth.detectionReason = `Login required on ${platform}`;
+                } else if (d.hydration?.noResults) {
+                    reason = `${platform} returned "no results" for "${query}" — try broader keywords or remove hashtags`;
+                    level = 'info';
                 } else if (d.hydration?.timeout) {
-                    logMission('warn', `Hydration timeout. Body: "${(d.bodyTextSample || '').slice(0,120)}"`, platform);
+                    reason = `${platform} took too long to load. Body sample: "${(d.bodyTextSample || '').slice(0, 100)}"`;
+                } else if (d.userCellCount === 0 && d.primaryColumn === false) {
+                    reason = `${platform} page loaded but no result containers found — selectors may need updating (DOM may have changed)`;
+                } else {
+                    reason = `0 candidates on ${platform} for "${query}" [${tabLabel}]. DOM cells=${d.userCellCount ?? '?'} title="${(d.pageTitle || '').slice(0,40)}"`;
+                }
+
+                logMission(level, reason, platform);
+
+                // If it's clearly a login wall, abort this platform — no point retrying queries
+                if (looksLikeLogin) {
+                    logMission('warn', `Skipping remaining ${platform} queries until you log in`, platform);
+                    return [];
                 }
             }
 
