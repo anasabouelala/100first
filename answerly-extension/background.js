@@ -375,8 +375,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return false;
         }
         // Fire-and-forget — mission updates state via chrome.storage which the bridge picks up
-        self.startDiscoveryMission(request.mission).catch(e => {
+        self.startDiscoveryMission(request.mission).catch(async (e) => {
             console.error(LOG_TAG, "[Discovery] Mission crashed:", e);
+            // CRITICAL: surface crash to the UI. Without this, mission_state.status
+            // stays "scanning" forever and the user thinks the engine is hung.
+            try {
+                const st = await chrome.storage.local.get(['discovery_mission_state']);
+                const m = st.discovery_mission_state;
+                if (m && !['completed', 'aborted', 'failed'].includes(m.status)) {
+                    m.status = 'failed';
+                    m.completedAt = new Date().toISOString();
+                    m.logs = m.logs || [];
+                    m.logs.push({
+                        timestamp: new Date().toISOString(),
+                        level: 'error',
+                        message: `Engine crashed: ${e?.message || e}`
+                    });
+                    await chrome.storage.local.set({
+                        discovery_mission_state: m,
+                        discovery_mission_completed: { ...m, _completedAt: Date.now() }
+                    });
+                }
+            } catch (storageErr) {
+                console.error(LOG_TAG, "[Discovery] Failed to surface crash to UI:", storageErr);
+            }
         });
         sendResponse({ success: true, started: true });
         return false; // sync response, channel can close
