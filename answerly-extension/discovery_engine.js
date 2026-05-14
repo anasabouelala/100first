@@ -447,6 +447,87 @@ async function getTrackedUrls() {
 }
 
 // ============================================================
+// VISIBILITY SCORING from search-card data only (no profile visit)
+// ============================================================
+// This is the PRIMARY scoring path. Search cards already expose enough to rank
+// accounts by their actual visibility in the niche — that's the entire job.
+// Profile visits are reserved for the optional "deep" enrichment mode.
+function scoreFromCard(card, filters) {
+    const f = typeof card.followerHint === 'number' ? card.followerHint : 0;
+    const authority = f === 0 ? 25 : Math.min(100, Math.log10(f + 1) * 18);
+
+    const haystack = [
+        card.bio, card.displayName, card.samplePost, card.handle
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    let kwHits = 0, totalKw = 0;
+    (filters.keywords || []).forEach(kw => {
+        if (typeof kw !== 'string' || !kw.trim()) return;
+        totalKw++;
+        if (haystack.includes(kw.trim().toLowerCase())) kwHits++;
+    });
+    (filters.hashtags || []).forEach(tag => {
+        if (typeof tag !== 'string' || !tag.trim()) return;
+        totalKw++;
+        if (haystack.includes(tag.trim().toLowerCase().replace('#', ''))) kwHits++;
+    });
+    const nicheMatch = totalKw > 0 ? Math.round((kwHits / totalKw) * 100) : 60;
+
+    const verifiedBonus = card.verified ? 8 : 0;
+    const postSignalBonus = card.discoveredVia === 'post' ? 6 : 0;
+    const bioBonus = card.bio && card.bio.length > 30 ? 3 : 0;
+
+    const finalScore = Math.round(
+        authority * 0.45 +
+        nicheMatch * 0.40 +
+        verifiedBonus +
+        postSignalBonus +
+        bioBonus
+    );
+
+    const matchedSignals = [];
+    if (kwHits > 0) matchedSignals.push(`${kwHits}/${totalKw} keywords matched`);
+    if (card.verified) matchedSignals.push('Verified');
+    if (f > 0) {
+        const fmt = f >= 1e6 ? (f / 1e6).toFixed(1) + 'M' : f >= 1e3 ? (f / 1e3).toFixed(1) + 'K' : `${f}`;
+        matchedSignals.push(`${fmt} followers`);
+    }
+    if (card.discoveredVia === 'post') matchedSignals.push('Active poster');
+
+    return {
+        followers: f,
+        authorityScore: Math.round(authority),
+        nicheMatch,
+        finalScore,
+        matchedSignals,
+        tier: finalScore >= 85 ? 'S' : finalScore >= 70 ? 'A' : finalScore >= 50 ? 'B' : 'C'
+    };
+}
+
+// Card-level pre-filter: drop candidates we can already reject without a profile visit.
+function passesCardFilters(card, filters) {
+    if (filters.verifiedOnly && !card.verified) return false;
+    if (typeof card.followerHint === 'number') {
+        if (filters.minFollowers && card.followerHint < filters.minFollowers) return false;
+        if (filters.maxFollowers && card.followerHint > filters.maxFollowers) return false;
+        const tierMap = {
+            nano: [0, 5000], micro: [5000, 50000], mid: [50000, 250000],
+            macro: [250000, 1000000], mega: [1000000, Infinity], all: [0, Infinity]
+        };
+        const [lo, hi] = tierMap[filters.authorityLevel] || tierMap.all;
+        if (card.followerHint < lo || card.followerHint > hi) return false;
+    }
+    if (filters.excludeKeywords?.length) {
+        const hay = [card.bio, card.displayName, card.samplePost].filter(Boolean).join(' ').toLowerCase();
+        for (const ex of filters.excludeKeywords) {
+            if (typeof ex !== 'string' || !ex.trim()) continue;
+            if (hay.includes(ex.trim().toLowerCase())) return false;
+        }
+    }
+    return true;
+}
+
+// ============================================================
 // PLATFORM EXECUTION
 // ============================================================
 async function executePlatform(platform, queries, tabId) {
@@ -458,6 +539,8 @@ async function executePlatform(platform, queries, tabId) {
 
     const seenHandles = new Set();
     const allCandidates = [];
+    const deepMode = activeMission.mode === 'deep';
+    let queryIndex = 0; // counts queries within this platform — for first-query speedup
 
     // For each query, search BOTH the people/users tab AND the posts/content tab
     // Posts tab discovers active authors writing about the topic (much higher signal than People search)
@@ -496,10 +579,15 @@ async function executePlatform(platform, queries, tabId) {
                 continue;
             }
 
-            const hydrationMs = platform === 'X' ? gauss(8000, 1500)
+            // First query of each platform: shorter hydration so the user sees
+            // results within ~10-15s. Subsequent queries use full stealth pacing.
+            const isFirstQuery = queryIndex === 0;
+            const hydrationMs = isFirstQuery
+                ? gauss(3000, 600)
+                : platform === 'X' ? gauss(8000, 1500)
                 : platform === 'LinkedIn' ? gauss(6500, 1200)
                 : gauss(4500, 1000);
-            logMission('info', `Hydrating SPA (${Math.round(hydrationMs/1000)}s)...`, platform);
+            logMission('info', `Hydrating SPA (${Math.round(hydrationMs/1000)}s)${isFirstQuery ? ' — fast path' : ''}...`, platform);
             await interruptibleSleep(hydrationMs);
 
             const block = await sendToAgent(tabId, { type: 'DISCOVERY_DETECT_BLOCK' });
@@ -560,11 +648,56 @@ async function executePlatform(platform, queries, tabId) {
 
             allCandidates.push(...fresh);
 
-            // Inter-search pause: 30-60s mimics a human pausing to review results
-            await sendToAgent(tabId, { type: 'DISCOVERY_IDLE_BEHAVIOR', duration: gauss(8000, 2000) });
+            // ─── STREAM RESULTS NOW ───
+            // Score each fresh candidate using only card data and push them into
+            // activeMission.results immediately. The UI polls discovery_mission_state
+            // so accounts appear within seconds of scraping — no waiting for
+            // profile-fingerprinting. This is the primary value path: the user
+            // wants ranked high-visibility accounts fast.
+            const filters = activeMission.filters;
+            let streamed = 0;
+            for (const card of fresh) {
+                if (!passesCardFilters(card, filters)) continue;
+                const scoring = scoreFromCard(card, filters);
+                const account = {
+                    id: `${platform}_${card.handle}_${Date.now()}_${streamed}`,
+                    ...card,
+                    ...scoring,
+                    discoveredAt: nowIso(),
+                    trackingStatus: 'untracked',
+                    enriched: false  // flagged so UI can show "tap to deep-enrich"
+                };
+                activeMission.results.push(account);
+                streamed++;
+            }
+            if (streamed > 0) {
+                // Sort by score so highest-visibility appears first
+                activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
+                await patchProgress({ matched: activeMission.progress.matched + streamed });
+                await persistMission();
+                logMission('success', `Streamed ${streamed} accounts to UI (live)`, platform);
+            }
+
+            queryIndex++;
+
+            // Inter-search pause: first query is short (~10s) so the user sees
+            // results from the second query within ~30s. Later queries pace longer.
+            const pauseMs = isFirstQuery ? gauss(10000, 2500) : gauss(35000, 12000);
+            await sendToAgent(tabId, { type: 'DISCOVERY_IDLE_BEHAVIOR', duration: gauss(4000, 1000) });
             await recordAction();
-            await interruptibleSleep(gauss(35000, 12000));
+            await interruptibleSleep(pauseMs);
         }
+    }
+
+    // ─── DEEP-ENRICHMENT PHASE (opt-in only) ───
+    // Skip profile-fingerprinting unless explicitly in `deep` mode. The streamed
+    // results from search cards above are usually all the founder needs —
+    // visibility signals (followers, verified, post engagement) are visible on
+    // the search card itself. Profile visits add minutes of stealth pacing for
+    // little extra signal on the "track this account?" decision.
+    if (!deepMode) {
+        logMission('info', `Skipping profile enrichment (${activeMission.mode} mode — accounts already streamed)`, platform);
+        return activeMission.results.filter(r => r.platform === platform);
     }
 
     // ─── PRE-FILTER ───
@@ -672,6 +805,10 @@ async function executePlatform(platform, queries, tabId) {
 
             if (!passesFilters(merged, activeMission.filters)) {
                 logMission('info', `Reject @${candidate.handle}: filters`, platform);
+                // Remove from streamed results if it was already added
+                activeMission.results = activeMission.results.filter(r =>
+                    !(r.platform === platform && r.handle === candidate.handle)
+                );
                 await patchProgress({ rejected: activeMission.progress.rejected + 1 });
             } else {
                 const scoring = scoreAccount(merged, activeMission.filters, candidate);
@@ -680,10 +817,16 @@ async function executePlatform(platform, queries, tabId) {
                     ...merged,
                     ...scoring,
                     discoveredAt: nowIso(),
-                    trackingStatus: 'untracked'
+                    trackingStatus: 'untracked',
+                    enriched: true  // mark as deep-enriched
                 };
                 enriched.push(account);
-                activeMission.results.push(account);
+                // Replace any streamed entry with the enriched version
+                const idx = activeMission.results.findIndex(r =>
+                    r.platform === platform && r.handle === candidate.handle
+                );
+                if (idx >= 0) activeMission.results[idx] = account;
+                else activeMission.results.push(account);
                 await patchProgress({ matched: activeMission.progress.matched + 1 });
                 await persistMission();
                 logMission('success', `+${scoring.tier}-tier @${candidate.handle} (score ${scoring.finalScore})`, platform);
@@ -777,19 +920,21 @@ async function startDiscoveryMission(missionConfig) {
 
     let tabId = null;
     try {
-        // Open one stealth window, reuse for all platforms
+        // Open one stealth window. Land on a generic platform page first so the
+        // content script attaches before we navigate to the search URL — without
+        // this, the agent can be missing when we try to scrape.
         const firstPlatform = activeMission.filters.platforms[0];
         const initialUrl = `https://${firstPlatform === 'X' ? 'x.com' : firstPlatform === 'LinkedIn' ? 'www.linkedin.com' : 'www.reddit.com'}`;
         const win = await openStealthWindow(initialUrl);
         tabId = await getTabFromWindow(win);
         if (!tabId) throw new Error('Could not acquire stealth tab');
 
-        // Wait for tab to be ready & content script to load
+        // Wait for tab to be ready & content script to load (shortened settle)
         await waitForTabComplete(tabId, 30000);
-        await dsleep(gauss(3500, 800));
+        await dsleep(gauss(1500, 400));
 
         await updateMission({ status: 'scanning' });
-        logMission('success', 'Stealth window deployed');
+        logMission('success', 'Stealth window deployed — searching now');
 
         // Iterate platforms
         for (const platform of activeMission.filters.platforms) {
