@@ -683,36 +683,12 @@ async function executePlatform(platform, queries, tabId) {
 
             allCandidates.push(...fresh);
 
-            // ─── STREAM RESULTS NOW ───
-            // Score each fresh candidate using only card data and push them into
-            // activeMission.results immediately. The UI polls discovery_mission_state
-            // so accounts appear within seconds of scraping — no waiting for
-            // profile-fingerprinting. This is the primary value path: the user
-            // wants ranked high-visibility accounts fast.
-            const filters = activeMission.filters;
-            let streamed = 0;
-            for (const card of fresh) {
-                if (!passesCardFilters(card, filters)) continue;
-                const scoring = scoreFromCard(card, filters);
-                const account = {
-                    id: `${platform}_${card.handle}_${Date.now()}_${streamed}`,
-                    ...card,
-                    ...scoring,
-                    discoveredAt: nowIso(),
-                    trackingStatus: 'untracked',
-                    enriched: false  // flagged so UI can show "tap to deep-enrich"
-                };
-                activeMission.results.push(account);
-                streamed++;
-            }
-            if (streamed > 0) {
-                // Sort by score so highest-visibility appears first
-                activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
-                await patchProgress({ matched: activeMission.progress.matched + streamed });
-                await persistMission();
-                logMission('success', `Streamed ${streamed} accounts to UI (live)`, platform);
-            }
-
+            // ─── COLLECT, DON'T PUBLISH YET ───
+            // Candidates here are just usernames + bio snippets from search cards.
+            // We collect them in allCandidates and visit each profile in the
+            // verification phase below to read their REAL KPIs (follower count,
+            // engagement, verified status). Only profiles that match the
+            // user's filters get published to activeMission.results.
             queryIndex++;
 
             // Inter-search pause: first query is short (~10s) so the user sees
@@ -724,16 +700,12 @@ async function executePlatform(platform, queries, tabId) {
         }
     }
 
-    // ─── DEEP-ENRICHMENT PHASE (opt-in only) ───
-    // Skip profile-fingerprinting unless explicitly in `deep` mode. The streamed
-    // results from search cards above are usually all the founder needs —
-    // visibility signals (followers, verified, post engagement) are visible on
-    // the search card itself. Profile visits add minutes of stealth pacing for
-    // little extra signal on the "track this account?" decision.
-    if (!deepMode) {
-        logMission('info', `Skipping profile enrichment (${activeMission.mode} mode — accounts already streamed)`, platform);
-        return activeMission.results.filter(r => r.platform === platform);
-    }
+    // ─── VERIFICATION PHASE ───
+    // For every candidate username collected from search, visit their profile,
+    // read their REAL KPIs (follower count, engagement, verified, bio), then
+    // check against the user's filters. Only profiles that pass are published
+    // to activeMission.results. This is the core value of the extension.
+    logMission('info', `Search done. Verifying ${allCandidates.length} candidates one by one...`, platform);
 
     // ─── PRE-FILTER ───
     // Reject candidates that we already KNOW won't pass filters (saves profile visits).
@@ -785,12 +757,14 @@ async function executePlatform(platform, queries, tabId) {
     preFiltered.sort((a, b) => preRank(b) - preRank(a));
 
     // ─── HARD CAP on profile visits ───
+    // Profile-visit cap. Scaled by mode but kept to a sustainable rate.
+    // Going past 25 in a single session is bot-like and triggers rate limits.
     const profileVisitCap = activeMission.mode === 'volume' ? 25
         : activeMission.mode === 'deep' ? 20
-        : 12;
+        : 15;
     const toFingerprint = preFiltered.slice(0, profileVisitCap);
     if (preFiltered.length > profileVisitCap) {
-        logMission('stealth', `${preFiltered.length} eligible candidates — fingerprinting top ${profileVisitCap} ranked (anti-ban cap)`, platform);
+        logMission('stealth', `${preFiltered.length} eligible candidates — visiting top ${profileVisitCap} ranked (anti-ban cap)`, platform);
     }
 
     const enriched = [];
@@ -804,18 +778,22 @@ async function executePlatform(platform, queries, tabId) {
         const session = await checkSessionDuration();
         if (!session.ok) { logMission('warn', session.reason, platform); break; }
 
+        const progressMsg = `Visiting ${i + 1}/${toFingerprint.length}: @${candidate.handle}`;
         await patchProgress({
-            phase: `Fingerprinting ${i + 1}/${toFingerprint.length} on ${platform}`,
+            phase: progressMsg,
+            profilesAnalyzed: (activeMission.progress.profilesAnalyzed || 0) + 1,
             currentPlatform: platform
         });
+        logMission('info', progressMsg, platform);
 
         try {
             await navigateTab(tabId, candidate.url);
-            await interruptibleSleep(gauss(4200, 1100));
+            // Profile pages hydrate faster than search SPAs
+            await interruptibleSleep(gauss(2500, 600));
 
             const block = await sendToAgent(tabId, { type: 'DISCOVERY_DETECT_BLOCK' });
             if (block?.blocked) {
-                logMission('error', `Block during fingerprint: ${block.type} — pausing platform`, platform);
+                logMission('error', `Block during profile visit: ${block.type} — pausing platform`, platform);
                 await patchStealth({
                     detected: true,
                     detectionReason: block.indicator,
@@ -824,53 +802,56 @@ async function executePlatform(platform, queries, tabId) {
                 break;
             }
 
-            await sendToAgent(tabId, { type: 'DISCOVERY_HUMANIZE_ENTRY' });
             await recordAction();
 
             const result = await sendToAgent(tabId, { type: 'DISCOVERY_SCRAPE_PROFILE' });
             if (result?.error) {
                 logMission('warn', `Skip @${candidate.handle}: ${result.error}`, platform);
                 await patchProgress({ rejected: activeMission.progress.rejected + 1 });
-                continue;
-            }
-
-            const profile = result.profile;
-            // Merge with candidate (candidate may have better display name from search card)
-            const merged = { ...candidate, ...profile };
-
-            if (!passesFilters(merged, activeMission.filters)) {
-                logMission('info', `Reject @${candidate.handle}: filters`, platform);
-                // Remove from streamed results if it was already added
-                activeMission.results = activeMission.results.filter(r =>
-                    !(r.platform === platform && r.handle === candidate.handle)
-                );
-                await patchProgress({ rejected: activeMission.progress.rejected + 1 });
             } else {
-                const scoring = scoreAccount(merged, activeMission.filters, candidate);
-                const account = {
-                    id: `${platform}_${candidate.handle}_${Date.now()}`,
-                    ...merged,
-                    ...scoring,
-                    discoveredAt: nowIso(),
-                    trackingStatus: 'untracked',
-                    enriched: true  // mark as deep-enriched
-                };
-                enriched.push(account);
-                // Replace any streamed entry with the enriched version
-                const idx = activeMission.results.findIndex(r =>
-                    r.platform === platform && r.handle === candidate.handle
-                );
-                if (idx >= 0) activeMission.results[idx] = account;
-                else activeMission.results.push(account);
-                await patchProgress({ matched: activeMission.progress.matched + 1 });
-                await persistMission();
-                logMission('success', `+${scoring.tier}-tier @${candidate.handle} (score ${scoring.finalScore})`, platform);
+                const profile = result.profile;
+                const merged = { ...candidate, ...profile };
+
+                if (!passesFilters(merged, activeMission.filters)) {
+                    // Tell the user WHY this account didn't make the cut
+                    const f = activeMission.filters;
+                    const reasons = [];
+                    if (f.minFollowers && merged.followers < f.minFollowers)
+                        reasons.push(`only ${merged.followers || 0} followers (need ${f.minFollowers}+)`);
+                    if (f.maxFollowers && merged.followers > f.maxFollowers)
+                        reasons.push(`${merged.followers} followers (over ${f.maxFollowers} cap)`);
+                    if (f.verifiedOnly && !merged.verified)
+                        reasons.push('not verified');
+                    if (f.minEngagementRate && (merged.engagementRate || 0) < f.minEngagementRate)
+                        reasons.push(`${(merged.engagementRate || 0).toFixed(1)}% engagement (need ${f.minEngagementRate}%+)`);
+                    const reasonStr = reasons.length ? reasons.join(', ') : 'filter mismatch';
+                    logMission('info', `✗ @${candidate.handle} — ${reasonStr}`, platform);
+                    await patchProgress({ rejected: activeMission.progress.rejected + 1 });
+                } else {
+                    const scoring = scoreAccount(merged, activeMission.filters, candidate);
+                    const account = {
+                        id: `${platform}_${candidate.handle}_${Date.now()}`,
+                        ...merged,
+                        ...scoring,
+                        discoveredAt: nowIso(),
+                        trackingStatus: 'untracked',
+                        enriched: true
+                    };
+                    enriched.push(account);
+                    activeMission.results.push(account);
+                    activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
+                    await patchProgress({ matched: activeMission.progress.matched + 1 });
+                    await persistMission();
+                    const fmt = merged.followers >= 1000
+                        ? merged.followers >= 1e6 ? `${(merged.followers/1e6).toFixed(1)}M` : `${(merged.followers/1e3).toFixed(1)}K`
+                        : `${merged.followers || 0}`;
+                    logMission('success', `✓ ${scoring.tier}-tier @${candidate.handle} — ${fmt} followers (score ${scoring.finalScore})`, platform);
+                }
             }
 
-            // Inter-profile pause: humans dwell 15-30s on a profile before moving on
-            await sendToAgent(tabId, { type: 'DISCOVERY_IDLE_BEHAVIOR', duration: gauss(6000, 1500) });
-            await recordAction();
-            await interruptibleSleep(gauss(20000, 6000));
+            // Inter-profile pause — short enough to not waste the user's time,
+            // long enough to not look like a bot. Was 26s, now 9s avg.
+            await interruptibleSleep(gauss(9000, 2500));
 
             // Behavior score boost over time without detection
             if (i % 5 === 4 && !activeMission.stealth.detected) {
@@ -878,11 +859,12 @@ async function executePlatform(platform, queries, tabId) {
                 await patchStealth({ humanizedBehaviorScore: score });
             }
         } catch (e) {
-            logMission('error', `Fingerprint failed for @${candidate.handle}: ${e.message}`, platform);
+            logMission('error', `Profile visit failed for @${candidate.handle}: ${e.message}`, platform);
             await patchProgress({ rejected: activeMission.progress.rejected + 1 });
         }
     }
 
+    logMission('success', `Verified ${enriched.length}/${toFingerprint.length} candidates passed filters on ${platform}`, platform);
     return enriched;
 }
 
