@@ -260,7 +260,11 @@
         const indicators = {
             captcha: ['captcha', 'are you human', 'verify you are', 'recaptcha', 'h-captcha', 'cf-challenge', 'security check'],
             rateLimit: ['rate limit', 'too many requests', '429', 'temporarily restricted', 'unusual activity'],
-            login: ['log in to', 'sign in to', 'please log in', 'create account to view'],
+            // Login indicators must be specific enough to not false-positive on the
+            // header "Log in" link that appears on every X/LinkedIn page.
+            login: ['please log in to view', 'please sign in to view', 'sign up to view',
+                    'create account to view', "you'll need to log in",
+                    "don't miss what's happening", 'join linkedin to', 'sign up to follow'],
             block: ['account suspended', 'access denied', 'blocked', 'restricted access']
         };
         for (const [type, words] of Object.entries(indicators)) {
@@ -492,11 +496,46 @@
             const avatar = document.querySelector('a[href$="/photo"] img')?.src;
             const verified = !!document.querySelector('[data-testid="icon-verified"], svg[aria-label*="erified"]');
 
-            // Followers / Following — match by URL
-            const followerLink = document.querySelector(`a[href$="/followers"], a[href*="/verified_followers"]`);
-            const followingLink = document.querySelector(`a[href$="/following"]`);
-            const followers = parseCount(followerLink?.innerText);
-            const following = parseCount(followingLink?.innerText);
+            // Followers / Following — robust extraction.
+            // X DOM rotates frequently. The follower/following counts can be:
+            //   (a) inside an <a href$="/followers"> with the count as innerText
+            //   (b) inside <a href*="/verified_followers"> for verified accounts
+            //   (c) inside a nested <span> sibling that innerText doesn't catch
+            //   (d) prefixed/suffixed with the word "Followers" / "Following"
+            // We scan ALL anchors in the primary column and grab whichever matches.
+            function extractCountFromAnchor(a) {
+                if (!a) return 0;
+                const txt = (a.textContent || '').trim();
+                // First: try matching "1,234 Followers" or "1.2K Followers" pattern
+                const m = txt.match(/([\d.,]+\s*[KkMmBb]?)\s*(?:Verified\s+)?Followers?/i)
+                    || txt.match(/([\d.,]+\s*[KkMmBb]?)\s*Following/i);
+                if (m) return parseCount(m[1]);
+                // Fallback: just the first number group anywhere in the link
+                const m2 = txt.match(/([\d.,]+\s*[KkMmBb]?)/);
+                return m2 ? parseCount(m2[1]) : 0;
+            }
+            let followers = 0, following = 0;
+            const allAnchors = document.querySelectorAll('[data-testid="primaryColumn"] a[role="link"], [data-testid="UserName"] ~ * a[role="link"]');
+            for (const a of allAnchors) {
+                const href = a.getAttribute('href') || '';
+                if (/\/(verified_followers|followers)$/.test(href) && !followers) {
+                    followers = extractCountFromAnchor(a);
+                } else if (/\/following$/.test(href) && !following) {
+                    following = extractCountFromAnchor(a);
+                }
+                if (followers && following) break;
+            }
+            // Last-resort: scan body text for "X Followers"
+            if (!followers) {
+                const bodyTxt = document.body?.innerText || '';
+                const m = bodyTxt.match(/([\d.,]+\s*[KkMmBb]?)\s*(?:Verified\s+)?Followers/i);
+                if (m) followers = parseCount(m[1]);
+            }
+            if (!following) {
+                const bodyTxt = document.body?.innerText || '';
+                const m = bodyTxt.match(/([\d.,]+\s*[KkMmBb]?)\s*Following/i);
+                if (m) following = parseCount(m[1]);
+            }
 
             // Recent tweets for engagement signal
             const tweets = document.querySelectorAll('[data-testid="tweet"]');
@@ -611,19 +650,30 @@
             const locEl = document.querySelector('.text-body-small.inline.t-black--light.break-words, .top-card__subline-item');
             const avatar = document.querySelector('img.pv-top-card__photo, img.profile-photo-edit__preview, .top-card-layout__entity-image-container img')?.src;
 
-            // Followers — try multiple selectors
+            // Followers — robust extraction across LinkedIn DOM variants.
             let followers = 0;
-            const followerCandidates = document.querySelectorAll('span.t-bold, .pv-top-card--list-bullet li, .top-card__connections-count');
-            for (const el of followerCandidates) {
-                const text = el.innerText.toLowerCase();
-                if ((text.includes('follower') || text.includes('abonnés') || text.includes('seguidores')) && !text.includes('following')) {
-                    const num = parseCount(text);
+            // Strategy 1: scan ALL elements for "X followers" pattern
+            const allEls = document.querySelectorAll('span, p, div, li');
+            for (const el of allEls) {
+                const t = (el.innerText || '').toLowerCase();
+                if (t.length > 200) continue; // skip giant blocks
+                if (!/follower|abonnés|seguidores/i.test(t)) continue;
+                if (/following/i.test(t)) continue;
+                const m = t.match(/([\d.,]+\s*[kKmMbB]?)\s*(?:follower|abonnés|seguidores)/i);
+                if (m) {
+                    const num = parseCount(m[1]);
                     if (num > followers) followers = num;
                 }
             }
-            // Connections fallback
-            const connectionsEl = Array.from(document.querySelectorAll('span'))
-                .find(el => el.innerText.toLowerCase().match(/\d[\d,.]*\+?\s+(connection|relation)/i));
+            // Strategy 2: body text last-resort
+            if (!followers) {
+                const bodyTxt = document.body?.innerText || '';
+                const m = bodyTxt.match(/([\d.,]+\s*[kKmMbB]?)\s*followers/i);
+                if (m) followers = parseCount(m[1]);
+            }
+            // Connections fallback (LinkedIn shows connections instead of followers for many profiles)
+            const connectionsEl = Array.from(document.querySelectorAll('span, li'))
+                .find(el => /\d[\d,.]*\+?\s+(connection|relation)/i.test(el.innerText || ''));
             const connections = connectionsEl ? parseCount(connectionsEl.innerText) : 0;
             if (!followers && connections) followers = connections;
 

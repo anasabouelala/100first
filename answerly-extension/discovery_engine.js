@@ -411,22 +411,28 @@ function scoreAccount(profile, filters, candidate) {
 }
 
 function passesFilters(profile, filters) {
-    if (filters.minFollowers && profile.followers < filters.minFollowers) return false;
-    if (filters.maxFollowers && profile.followers > filters.maxFollowers) return false;
+    // Hard filters — only enforce if the user explicitly set them AND we have data
+    if (filters.minFollowers && profile.followers > 0 && profile.followers < filters.minFollowers) return false;
+    if (filters.maxFollowers && profile.followers > 0 && profile.followers > filters.maxFollowers) return false;
     if (filters.verifiedOnly && !profile.verified) return false;
     if (filters.minEngagementRate && (profile.engagementRate || 0) < filters.minEngagementRate) return false;
 
-    // Authority tier
-    const tierMap = {
-        nano: [0, 5000],
-        micro: [5000, 50000],
-        mid: [50000, 250000],
-        macro: [250000, 1000000],
-        mega: [1000000, Infinity],
-        all: [0, Infinity]
-    };
-    const [lo, hi] = tierMap[filters.authorityLevel] || tierMap.all;
-    if (profile.followers < lo || profile.followers > hi) return false;
+    // Authority tier check — IMPORTANT: only enforce when followers > 0.
+    // If the scrape failed to read the count (DOM drift, X selector broke),
+    // followers is 0. Silently rejecting all of those would zero out the
+    // entire result set. Better to let them pass and let scoring penalize.
+    if (profile.followers > 0) {
+        const tierMap = {
+            nano: [0, 5000],
+            micro: [5000, 50000],
+            mid: [50000, 250000],
+            macro: [250000, 1000000],
+            mega: [1000000, Infinity],
+            all: [0, Infinity]
+        };
+        const [lo, hi] = tierMap[filters.authorityLevel] || tierMap.all;
+        if (profile.followers < lo || profile.followers > hi) return false;
+    }
 
     // Exclude keywords (user-configured exclusions, applied AFTER scraping)
     if (filters.excludeKeywords?.length) {
@@ -592,15 +598,23 @@ async function executePlatform(platform, queries, tabId) {
 
             const block = await sendToAgent(tabId, { type: 'DISCOVERY_DETECT_BLOCK' });
             if (block?.blocked) {
-                logMission('error', `${block.type.toUpperCase()} detected — aborting platform`, platform);
+                logMission('error', `${block.type.toUpperCase()} detected on ${tabLabel} tab — skipping this tab, keeping ${allCandidates.length} candidates collected so far`, platform);
                 await patchStealth({
                     detected: true,
                     detectionReason: `${block.type} on ${platform}: ${block.indicator}`,
                     humanizedBehaviorScore: 30,
                     patternsDetected: [...(activeMission.stealth.patternsDetected || []), `${platform} ${block.type}`]
                 });
-                stealthCooldownUntil = Date.now() + gauss(900000, 300000);
-                return [];
+                // Only set the cross-platform cooldown if it's a HARD block (captcha,
+                // rate limit, account block) — login-walls just mean this tab is gated
+                // for anonymous users, not that we should pause discovery globally.
+                if (block.type === 'captcha' || block.type === 'rateLimit' || block.type === 'block') {
+                    stealthCooldownUntil = Date.now() + gauss(900000, 300000);
+                }
+                // Skip THIS tab but keep going to the next one (and other queries).
+                // Previously `return []` here wiped all preceding candidates from
+                // other tabs/queries on this platform.
+                continue;
             }
 
             await sendToAgent(tabId, { type: 'DISCOVERY_HUMANIZE_ENTRY' });
