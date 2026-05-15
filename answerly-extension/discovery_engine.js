@@ -667,7 +667,21 @@ async function executePlatform(platform, queries, tabId) {
                 }
             }
 
-            const candidates = (result?.candidates || []).filter(c => !seenHandles.has(c.handle));
+            let candidates = (result?.candidates || []).filter(c => !seenHandles.has(c.handle));
+
+            // ─── FALLBACK SCRAPE ───
+            // If the structured scrape returned 0, try the brute-force fallback
+            // that grabs ANY profile link from the page. Catches DOM drift,
+            // selector breakage, and pages that don't render expected containers.
+            if (candidates.length === 0) {
+                logMission('warn', `Structured scrape empty — trying brute-force link extraction`, platform);
+                const fb = await sendToAgent(tabId, { type: 'DISCOVERY_SCRAPE_FALLBACK' });
+                if (fb?.candidates?.length > 0) {
+                    candidates = fb.candidates.filter(c => !seenHandles.has(c.handle));
+                    logMission('success', `Fallback found ${candidates.length} profile links — verification will fill in details`, platform);
+                }
+            }
+
             candidates.forEach(c => seenHandles.add(c.handle));
 
             const fresh = candidates.filter(c => {
@@ -675,7 +689,14 @@ async function executePlatform(platform, queries, tabId) {
                 return !trackedUrls.has(cleanUrl);
             });
 
-            logMission('success', `[${tabLabel}] Found ${candidates.length} candidates (${fresh.length} fresh)`, platform);
+            // Surface the actual list so the user sees who was discovered
+            if (fresh.length > 0) {
+                const sample = fresh.slice(0, 5).map(c => `@${c.handle}`).join(', ');
+                const more = fresh.length > 5 ? ` +${fresh.length - 5} more` : '';
+                logMission('success', `[${tabLabel}] Found ${candidates.length} (${fresh.length} fresh): ${sample}${more}`, platform);
+            } else {
+                logMission('success', `[${tabLabel}] Found ${candidates.length} candidates (${fresh.length} fresh)`, platform);
+            }
             await patchProgress({
                 candidatesScanned: activeMission.progress.candidatesScanned + candidates.length,
                 queriesCompleted: activeMission.progress.queriesCompleted + 1
@@ -705,7 +726,15 @@ async function executePlatform(platform, queries, tabId) {
     // read their REAL KPIs (follower count, engagement, verified, bio), then
     // check against the user's filters. Only profiles that pass are published
     // to activeMission.results. This is the core value of the extension.
-    logMission('info', `Search done. Verifying ${allCandidates.length} candidates one by one...`, platform);
+    if (allCandidates.length === 0) {
+        logMission('error', `Found 0 usernames on ${platform}. Nothing to verify. Most likely: not logged in, narrow keywords, or DOM changed.`, platform);
+        return [];
+    }
+
+    // Surface the full candidate list to the user before verification runs
+    const handleList = allCandidates.slice(0, 10).map(c => `@${c.handle}`).join(', ');
+    const moreCount = allCandidates.length > 10 ? ` (+${allCandidates.length - 10} more)` : '';
+    logMission('info', `Search done. Visiting ${allCandidates.length} profiles to read their KPIs: ${handleList}${moreCount}`, platform);
 
     // ─── PRE-FILTER ───
     // Reject candidates that we already KNOW won't pass filters (saves profile visits).
@@ -984,6 +1013,26 @@ async function startDiscoveryMission(missionConfig) {
 
         // Sort final results by score
         activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
+
+        // ─── ACTIONABLE END-OF-MISSION SUMMARY ───
+        // If we found 0 accounts, the user needs to know exactly why so they can
+        // fix it on the next run. Synthesise a clear error from the mission state.
+        if (!missionAborted && activeMission.results.length === 0) {
+            const scanned = activeMission.progress.candidatesScanned || 0;
+            const rejected = activeMission.progress.rejected || 0;
+            const detected = activeMission.stealth.detected;
+            let reason;
+            if (detected) {
+                reason = `0 accounts: ${activeMission.stealth.detectionReason || 'platform blocked us'}. Log into the platform in a normal Chrome tab, wait 10 min, then retry.`;
+            } else if (scanned === 0) {
+                reason = `0 accounts: search returned no candidates on any platform. Likely causes: (1) you're not logged in to the search platform — check the stealth window, (2) your keywords are too narrow or specific, (3) the platform's DOM may have changed and the scraper needs an update. Try broader keywords like single common words.`;
+            } else if (rejected > 0 && rejected === scanned) {
+                reason = `0 accounts: scanned ${scanned} candidates but all ${rejected} were rejected by your filters. Loosen filters: lower min followers, drop "verified only", widen the authority tier.`;
+            } else {
+                reason = `0 accounts: scanned ${scanned} candidates, ${rejected} rejected. Some profile visits may have failed — check earlier logs.`;
+            }
+            logMission('error', reason);
+        }
 
         await updateMission({
             status: missionAborted ? 'aborted' : 'completed',
