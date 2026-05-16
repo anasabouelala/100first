@@ -26,6 +26,36 @@ let missionAborted = false;
 let missionPaused = false;
 let stealthCooldownUntil = 0;
 
+// ─── BATCHED VERIFICATION (anti-bot-aware) ───────────────────────────
+// One mission can run across multiple "batches". Each batch visits up to
+// `batchCap` profiles, then triggers a cooldown via chrome.alarms. When the
+// alarm fires, the engine reopens a stealth window and continues draining
+// the persisted candidate queue. Stops when target matches reached, queue
+// exhausted, or maxDeepeningRounds hit.
+const BATCH_RESUME_ALARM = 'discovery_batch_resume';
+let _sessionVisits = 0;  // visits in THIS execution; resets each run/resume
+
+// Throwing this exits the mission cleanly without marking it 'completed'.
+class BatchCapReached extends Error {
+    constructor() { super('Batch cap reached — paused for cooldown'); this.name = 'BatchCapReached'; }
+}
+
+async function scheduleBatchResume() {
+    if (!activeMission) return;
+    const cooldownMs = activeMission.cooldownMs || (40 * 60 * 1000);
+    const resumeAt = Date.now() + cooldownMs;
+    activeMission.cooldownUntil = resumeAt;
+    activeMission.status = 'cooldown';
+    await persistMission();
+    try {
+        await chrome.alarms.create(BATCH_RESUME_ALARM, { when: resumeAt });
+        const min = Math.round(cooldownMs / 60000);
+        logMission('stealth', `🛌 Batch cap hit. Cooling for ${min}min — engine will auto-resume at ${new Date(resumeAt).toLocaleTimeString()}.`);
+    } catch (e) {
+        logMission('error', `Failed to schedule resume alarm: ${e.message}`);
+    }
+}
+
 // Service-worker keepalive — MV3 kills idle SWs after ~30s. Long sleeps in a
 // mission would otherwise terminate the engine mid-flight with no error.
 let _keepAliveTimer = null;
@@ -313,13 +343,15 @@ function buildRedditSearchUrl(filters, query, tab = 'link') {
     return `https://www.reddit.com/search/?${params.toString()}`;
 }
 
-function planQueries(filters, mode) {
+function planQueries(filters, mode, deepeningRound = 0) {
     const queries = [];
     const keywords = filters.keywords || [];
     const hashtags = filters.hashtags || [];
 
-    // Strategy: combine keywords in different patterns to avoid repetitive queries
-    const queryCount = mode === 'volume' ? 8 : mode === 'deep' ? 5 : 3;
+    // Strategy: combine keywords in different patterns to avoid repetitive queries.
+    // Deepening rounds widen the net: more queries + more combinations.
+    let queryCount = mode === 'volume' ? 8 : mode === 'deep' ? 5 : 3;
+    if (deepeningRound > 0) queryCount += deepeningRound * 4; // +4 each round
 
     // Single keywords (broadest)
     keywords.slice(0, queryCount).forEach(kw => queries.push(kw));
@@ -327,9 +359,23 @@ function planQueries(filters, mode) {
     // Hashtags (specific)
     hashtags.slice(0, Math.max(0, queryCount - keywords.length)).forEach(tag => queries.push(tag));
 
-    // Combinations (focused)
+    // Pairwise combinations
     if (keywords.length >= 2 && queries.length < queryCount) {
-        queries.push(`${keywords[0]} ${keywords[1]}`);
+        for (let i = 0; i < keywords.length - 1 && queries.length < queryCount; i++) {
+            for (let j = i + 1; j < keywords.length && queries.length < queryCount; j++) {
+                queries.push(`${keywords[i]} ${keywords[j]}`);
+            }
+        }
+    }
+
+    // On deepening: keyword × hashtag combos for fresh angles
+    if (deepeningRound > 0 && keywords.length && hashtags.length) {
+        for (const kw of keywords) {
+            for (const tag of hashtags) {
+                if (queries.length >= queryCount) break;
+                queries.push(`${kw} ${tag.replace('#', '')}`);
+            }
+        }
     }
 
     // Industry combo
@@ -337,7 +383,8 @@ function planQueries(filters, mode) {
         queries.push(`${keywords[0]} ${filters.industry}`);
     }
 
-    return queries.slice(0, queryCount);
+    // Dedupe + cap
+    return [...new Set(queries)].slice(0, queryCount);
 }
 
 // ============================================================
@@ -799,29 +846,48 @@ async function executePlatform(platform, queries, tabId) {
     }
     preFiltered.sort((a, b) => preRank(b) - preRank(a));
 
-    // ─── HARD CAP on profile visits ───
-    // Profile-visit cap. Scaled by mode but kept to a sustainable rate.
-    // Going past 25 in a single session is bot-like and triggers rate limits.
-    const profileVisitCap = activeMission.mode === 'volume' ? 25
-        : activeMission.mode === 'deep' ? 20
-        : 15;
-    const toFingerprint = preFiltered.slice(0, profileVisitCap);
-    if (preFiltered.length > profileVisitCap) {
-        logMission('stealth', `${preFiltered.length} eligible candidates — visiting top ${profileVisitCap} ranked (anti-ban cap)`, platform);
-    }
+    // ─── PUSH ENTIRE PRE-FILTERED LIST INTO PERSISTED QUEUE ───
+    // No artificial slice — every pre-filtered candidate gets visited eventually,
+    // possibly across multiple cooldown-separated batches. We just enqueue them
+    // and let the loop below drain as many as the batchCap allows per session.
+    const newlyQueued = preFiltered.map(c => ({ platform, candidate: c }));
+    activeMission.pendingProfileQueue.push(...newlyQueued);
+    await persistMission();
+    logMission('info', `Queued ${newlyQueued.length} candidates from ${platform} (queue total: ${activeMission.pendingProfileQueue.length})`, platform);
 
     const enriched = [];
-    for (let i = 0; i < toFingerprint.length; i++) {
+    // Drain queue ENTRIES that match this platform first (so we don't switch platforms mid-run)
+    while (true) {
         if (missionAborted) break;
         while (missionPaused && !missionAborted) await dsleep(500);
 
-        const candidate = toFingerprint[i];
+        // ── TARGET REACHED ── stop the entire mission early
+        if (activeMission.progress.matched >= activeMission.targetMatches) {
+            logMission('success', `🎯 Target ${activeMission.targetMatches} matches reached — stopping discovery`, platform);
+            break;
+        }
+
+        // ── BATCH CAP HIT ── trigger cooldown + auto-resume
+        if (_sessionVisits >= activeMission.batchCap) {
+            logMission('stealth', `Batch limit ${_sessionVisits}/${activeMission.batchCap} reached — entering cooldown`, platform);
+            await scheduleBatchResume();
+            throw new BatchCapReached();
+        }
+
+        // Pop next candidate FOR THIS PLATFORM (skip cross-platform items, leave them for later)
+        const idx = activeMission.pendingProfileQueue.findIndex(item => item.platform === platform);
+        if (idx === -1) break; // no more for this platform — let outer loop move on
+        const { candidate } = activeMission.pendingProfileQueue.splice(idx, 1)[0];
+
         await enforceRateLimit();
 
         const session = await checkSessionDuration();
         if (!session.ok) { logMission('warn', session.reason, platform); break; }
 
-        const progressMsg = `Visiting ${i + 1}/${toFingerprint.length}: @${candidate.handle}`;
+        const remaining = activeMission.pendingProfileQueue.length;
+        const target = activeMission.targetMatches;
+        const matched = activeMission.progress.matched;
+        const progressMsg = `Visiting @${candidate.handle} — batch ${_sessionVisits + 1}/${activeMission.batchCap}, matches ${matched}/${target}, ${remaining} queued`;
         await patchProgress({
             phase: progressMsg,
             profilesAnalyzed: (activeMission.progress.profilesAnalyzed || 0) + 1,
@@ -896,8 +962,8 @@ async function executePlatform(platform, queries, tabId) {
             // long enough to not look like a bot. Was 26s, now 9s avg.
             await interruptibleSleep(gauss(9000, 2500));
 
-            // Behavior score boost over time without detection
-            if (i % 5 === 4 && !activeMission.stealth.detected) {
+            // Behavior score boost periodically while stealth holds
+            if (_sessionVisits > 0 && _sessionVisits % 5 === 0 && !activeMission.stealth.detected) {
                 const score = Math.min(100, (activeMission.stealth.humanizedBehaviorScore || 100) + 1);
                 await patchStealth({ humanizedBehaviorScore: score });
             }
@@ -905,9 +971,14 @@ async function executePlatform(platform, queries, tabId) {
             logMission('error', `Profile visit failed for @${candidate.handle}: ${e.message}`, platform);
             await patchProgress({ rejected: activeMission.progress.rejected + 1 });
         }
+
+        // Count this visit toward the batch cap. Persist queue state so
+        // a SW death between visits doesn't lose the remaining work.
+        _sessionVisits++;
+        await persistMission();
     }
 
-    logMission('success', `Verified ${enriched.length}/${toFingerprint.length} candidates passed filters on ${platform}`, platform);
+    logMission('success', `Verified ${enriched.length} matches passed filters on ${platform} this batch (${activeMission.pendingProfileQueue.length} candidates still queued)`, platform);
     return enriched;
 }
 
@@ -956,6 +1027,18 @@ async function startDiscoveryMission(missionConfig) {
     activeMission.startedAt = activeMission.startedAt || nowIso();
     activeMission.results = activeMission.results || [];
     activeMission.logs = activeMission.logs || [];
+
+    // Batched-verification config (defaults if caller didn't set them)
+    activeMission.targetMatches      = activeMission.targetMatches      || 25;
+    activeMission.batchCap           = activeMission.batchCap           || 15;
+    activeMission.cooldownMs         = activeMission.cooldownMs         || (40 * 60 * 1000);
+    activeMission.deepeningRound     = activeMission.deepeningRound     || 0;
+    activeMission.maxDeepeningRounds = activeMission.maxDeepeningRounds ?? 2;
+    // Persisted queue of {platform, candidate} pending profile-visit & verification.
+    // Populated during search phase; drained during verification. Survives cooldown.
+    activeMission.pendingProfileQueue = activeMission.pendingProfileQueue || [];
+
+    _sessionVisits = 0;
     activeMission.stealth = activeMission.stealth || {
         actionsThisMinute: 0,
         actionsThisSession: 0,
@@ -996,25 +1079,60 @@ async function startDiscoveryMission(missionConfig) {
         await updateMission({ status: 'scanning' });
         logMission('success', 'Stealth window deployed — searching now');
 
-        // Iterate platforms
-        for (const platform of activeMission.filters.platforms) {
-            if (missionAborted) break;
-            if (Date.now() < stealthCooldownUntil) {
-                const remaining = Math.ceil((stealthCooldownUntil - Date.now()) / 1000);
-                logMission('warn', `Stealth cooldown active (${remaining}s) — skipping ${platform}`);
-                continue;
+        // ─── RESUME PATH ───
+        // If pendingProfileQueue already has items (we were resumed from
+        // batch cooldown), skip the search phase entirely and drain the
+        // queue directly. Search adds candidates; verify drains them.
+        const isResume = activeMission.pendingProfileQueue.length > 0 && activeMission.deepeningRound === 0
+            && activeMission.results.length > 0;
+        if (isResume) {
+            logMission('info', `↻ Resuming from cooldown — ${activeMission.pendingProfileQueue.length} candidates still queued. Skipping search.`);
+            await drainQueueOnly(tabId);
+        } else {
+            // Normal flow: search each platform, verify in batches
+            for (const platform of activeMission.filters.platforms) {
+                if (missionAborted) break;
+                if (activeMission.progress.matched >= activeMission.targetMatches) {
+                    logMission('success', `🎯 Target reached before reaching ${platform}`);
+                    break;
+                }
+                if (Date.now() < stealthCooldownUntil) {
+                    const remaining = Math.ceil((stealthCooldownUntil - Date.now()) / 1000);
+                    logMission('warn', `Stealth cooldown active (${remaining}s) — skipping ${platform}`);
+                    continue;
+                }
+
+                const queries = planQueries(activeMission.filters, activeMission.mode, activeMission.deepeningRound);
+                logMission('info', `Planned ${queries.length} queries (deepening round ${activeMission.deepeningRound})`, platform);
+                await executePlatform(platform, queries, tabId);
+
+                // Inter-platform pause (long, looks like switching context)
+                if (activeMission.filters.platforms.indexOf(platform) < activeMission.filters.platforms.length - 1) {
+                    const pauseMs = gauss(45000, 12000);
+                    logMission('stealth', `Inter-platform cooldown ${Math.round(pauseMs/1000)}s`);
+                    await patchStealth({ cooldownUntil: Date.now() + pauseMs });
+                    await interruptibleSleep(pauseMs);
+                }
             }
+        }
 
-            const queries = planQueries(activeMission.filters, activeMission.mode);
-            logMission('info', `Planned ${queries.length} queries`, platform);
-            await executePlatform(platform, queries, tabId);
-
-            // Inter-platform pause (long, looks like switching context)
-            if (activeMission.filters.platforms.indexOf(platform) < activeMission.filters.platforms.length - 1) {
-                const pauseMs = gauss(45000, 12000);
-                logMission('stealth', `Inter-platform cooldown ${Math.round(pauseMs/1000)}s`);
-                await patchStealth({ cooldownUntil: Date.now() + pauseMs });
-                await interruptibleSleep(pauseMs);
+        // ─── DEEPENING ───
+        // Queue exhausted but target still unreached? Re-search with broader
+        // queries up to maxDeepeningRounds times.
+        while (
+            !missionAborted
+            && activeMission.pendingProfileQueue.length === 0
+            && activeMission.progress.matched < activeMission.targetMatches
+            && activeMission.deepeningRound < activeMission.maxDeepeningRounds
+        ) {
+            activeMission.deepeningRound++;
+            logMission('info', `🔍 Pool exhausted under target (${activeMission.progress.matched}/${activeMission.targetMatches}). Deepening round ${activeMission.deepeningRound}/${activeMission.maxDeepeningRounds} with broader queries.`);
+            await persistMission();
+            for (const platform of activeMission.filters.platforms) {
+                if (missionAborted) break;
+                if (activeMission.progress.matched >= activeMission.targetMatches) break;
+                const broaderQueries = planQueries(activeMission.filters, 'volume', activeMission.deepeningRound);
+                await executePlatform(platform, broaderQueries, tabId);
             }
         }
 
@@ -1059,18 +1177,25 @@ async function startDiscoveryMission(missionConfig) {
             discovery_mission_completed: { ...activeMission, _completedAt: Date.now() }
         });
     } catch (e) {
-        // If the error came from the abort signal, preserve 'aborted' status.
-        const isAbort = missionAborted || /aborted/i.test(e.message);
-        if (isAbort) {
-            logMission('warn', 'Mission terminated via abort signal');
-            await updateMission({ status: 'aborted', completedAt: nowIso() });
+        // BatchCapReached is a clean exit — mission is in cooldown, alarm
+        // will resume it. Don't mark as failed/aborted/completed.
+        if (e instanceof BatchCapReached) {
+            await persistMission();  // status='cooldown' already set in scheduleBatchResume
+            // Don't fire 'completed' event — the UI will see the cooldown state
         } else {
-            logMission('error', `Fatal: ${e.message}`);
-            await updateMission({ status: 'failed', completedAt: nowIso() });
+            // If the error came from the abort signal, preserve 'aborted' status.
+            const isAbort = missionAborted || /aborted/i.test(e.message);
+            if (isAbort) {
+                logMission('warn', 'Mission terminated via abort signal');
+                await updateMission({ status: 'aborted', completedAt: nowIso() });
+            } else {
+                logMission('error', `Fatal: ${e.message}`);
+                await updateMission({ status: 'failed', completedAt: nowIso() });
+            }
+            await chrome.storage.local.set({
+                discovery_mission_completed: { ...activeMission, _completedAt: Date.now() }
+            });
         }
-        await chrome.storage.local.set({
-            discovery_mission_completed: { ...activeMission, _completedAt: Date.now() }
-        });
     } finally {
         stopWatchdog();
         stopKeepAlive();
@@ -1112,12 +1237,150 @@ function resetDiscoveryEngineState() {
     stealthCooldownUntil = 0;
 }
 
+// ============================================================
+// QUEUE-ONLY DRAIN (used by deepening + resume paths)
+// ============================================================
+// Drain candidates already queued — no new search. Walks pendingProfileQueue
+// in order, visits each, applies same target/batch checks as the main loop.
+async function drainQueueOnly(tabId) {
+    while (true) {
+        if (missionAborted) break;
+        if (activeMission.pendingProfileQueue.length === 0) break;
+
+        if (activeMission.progress.matched >= activeMission.targetMatches) {
+            logMission('success', `🎯 Target reached during drain — stopping`);
+            break;
+        }
+        if (_sessionVisits >= activeMission.batchCap) {
+            logMission('stealth', `Batch limit ${_sessionVisits}/${activeMission.batchCap} reached during drain — entering cooldown`);
+            await scheduleBatchResume();
+            throw new BatchCapReached();
+        }
+
+        const next = activeMission.pendingProfileQueue.shift();
+        await persistMission();
+        // Use executePlatform's per-candidate logic by re-queuing this one
+        // and calling executePlatform with empty queries list. That's overkill;
+        // simpler to just inline a minimal verify call here.
+        await verifyOneCandidate(next.platform, next.candidate, tabId);
+    }
+}
+
+// Visit one profile, check filters, push to results if pass. Used by both
+// main flow and resume drain. Mirrors the inline logic in executePlatform.
+async function verifyOneCandidate(platform, candidate, tabId) {
+    await enforceRateLimit();
+    const session = await checkSessionDuration();
+    if (!session.ok) { logMission('warn', session.reason, platform); return; }
+
+    const remaining = activeMission.pendingProfileQueue.length;
+    const target = activeMission.targetMatches;
+    const matched = activeMission.progress.matched;
+    const progressMsg = `Visiting @${candidate.handle} — batch ${_sessionVisits + 1}/${activeMission.batchCap}, matches ${matched}/${target}, ${remaining} queued`;
+    await patchProgress({
+        phase: progressMsg,
+        profilesAnalyzed: (activeMission.progress.profilesAnalyzed || 0) + 1,
+        currentPlatform: platform
+    });
+    logMission('info', progressMsg, platform);
+
+    try {
+        await navigateTab(tabId, candidate.url);
+        await interruptibleSleep(gauss(2500, 600));
+
+        const block = await sendToAgent(tabId, { type: 'DISCOVERY_DETECT_BLOCK' });
+        if (block?.blocked) {
+            logMission('error', `Block during profile visit: ${block.type}`, platform);
+            await patchStealth({
+                detected: true,
+                detectionReason: block.indicator,
+                humanizedBehaviorScore: Math.max(30, (activeMission.stealth.humanizedBehaviorScore || 100) - 30)
+            });
+            return;
+        }
+
+        await recordAction();
+        const result = await sendToAgent(tabId, { type: 'DISCOVERY_SCRAPE_PROFILE' });
+        if (result?.error) {
+            logMission('warn', `Skip @${candidate.handle}: ${result.error}`, platform);
+            await patchProgress({ rejected: activeMission.progress.rejected + 1 });
+        } else {
+            const profile = result.profile;
+            const merged = { ...candidate, ...profile };
+            if (!passesFilters(merged, activeMission.filters)) {
+                const f = activeMission.filters;
+                const reasons = [];
+                if (f.minFollowers && merged.followers > 0 && merged.followers < f.minFollowers)
+                    reasons.push(`only ${merged.followers} followers (need ${f.minFollowers}+)`);
+                if (f.verifiedOnly && !merged.verified) reasons.push('not verified');
+                logMission('info', `✗ @${candidate.handle} — ${reasons.join(', ') || 'filter mismatch'}`, platform);
+                await patchProgress({ rejected: activeMission.progress.rejected + 1 });
+            } else {
+                const scoring = scoreAccount(merged, activeMission.filters, candidate);
+                const account = {
+                    id: `${platform}_${candidate.handle}_${Date.now()}`,
+                    ...merged, ...scoring,
+                    discoveredAt: nowIso(), trackingStatus: 'untracked', enriched: true
+                };
+                activeMission.results.push(account);
+                activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
+                await patchProgress({ matched: activeMission.progress.matched + 1 });
+                await persistMission();
+                const fmt = merged.followers >= 1000
+                    ? merged.followers >= 1e6 ? `${(merged.followers/1e6).toFixed(1)}M` : `${(merged.followers/1e3).toFixed(1)}K`
+                    : `${merged.followers || 0}`;
+                logMission('success', `✓ ${scoring.tier}-tier @${candidate.handle} — ${fmt} followers (score ${scoring.finalScore})`, platform);
+            }
+        }
+        await interruptibleSleep(gauss(9000, 2500));
+    } catch (e) {
+        logMission('error', `Profile visit failed for @${candidate.handle}: ${e.message}`, platform);
+        await patchProgress({ rejected: activeMission.progress.rejected + 1 });
+    }
+    _sessionVisits++;
+    await persistMission();
+}
+
+// ============================================================
+// BATCH-COOLDOWN RESUME
+// ============================================================
+// Triggered by chrome.alarms when the cooldown expires. Reads persisted
+// mission state, reopens stealth window, calls startDiscoveryMission which
+// detects the resume scenario via pendingProfileQueue.length > 0.
+async function resumeFromBatchCooldown() {
+    const st = await chrome.storage.local.get(['discovery_mission_state']);
+    const m = st.discovery_mission_state;
+    if (!m) {
+        console.warn(DISC_TAG, 'Resume alarm fired but no mission state in storage — ignoring');
+        return;
+    }
+    if (m.status !== 'cooldown') {
+        console.log(DISC_TAG, `Resume alarm fired but mission status is "${m.status}", not cooldown — ignoring`);
+        return;
+    }
+    if (!m.pendingProfileQueue || m.pendingProfileQueue.length === 0) {
+        console.log(DISC_TAG, 'Resume alarm fired but queue is empty — marking complete');
+        m.status = 'completed';
+        m.completedAt = nowIso();
+        await chrome.storage.local.set({
+            discovery_mission_state: m,
+            discovery_mission_completed: { ...m, _completedAt: Date.now() }
+        });
+        return;
+    }
+    console.log(DISC_TAG, `↻ Resuming mission ${m.name || m.id} — ${m.pendingProfileQueue.length} candidates queued`);
+    // Clear in-memory state so startDiscoveryMission re-init doesn't reject
+    activeMission = null;
+    await startDiscoveryMission(m);
+}
+
 // Expose to background.js (since this is importScripts'd into the SW)
 self.startDiscoveryMission = startDiscoveryMission;
 self.pauseDiscoveryMission = pauseDiscoveryMission;
 self.resumeDiscoveryMission = resumeDiscoveryMission;
 self.abortDiscoveryMission = abortDiscoveryMission;
 self.resetDiscoveryEngineState = resetDiscoveryEngineState;
+self.resumeFromBatchCooldown = resumeFromBatchCooldown;
 
 // ============================================================
 // CAMPAIGN ENGINE — long-running, recurring discovery

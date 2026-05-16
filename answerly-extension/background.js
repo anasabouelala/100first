@@ -93,6 +93,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith('campaign_tick_') && self.handleCampaignAlarm) {
     self.handleCampaignAlarm(alarm.name).catch(e => console.error(LOG_TAG, 'Campaign alarm failed:', e));
   }
+  // Discovery batch-cooldown auto-resume (anti-bot batching)
+  if (alarm.name === 'discovery_batch_resume' && self.resumeFromBatchCooldown) {
+    console.log(LOG_TAG, '[Discovery] Batch cooldown elapsed — auto-resuming mission');
+    self.resumeFromBatchCooldown().catch(e => console.error(LOG_TAG, 'Batch resume failed:', e));
+  }
 });
 
 // React to user changing tracking settings → reschedule alarm immediately
