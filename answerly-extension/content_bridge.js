@@ -305,6 +305,25 @@ chrome.storage.local.get(['discovery_mission_state'], (r) => {
     }
 });
 
+// Smoke test bridge — exposed on window so the user can fire it from DevTools:
+//   window.answerlyDiscoverySmokeTest()
+// This calls the engine's DISCOVERY_SMOKE_TEST handler which writes 3 fake
+// accounts to chrome.storage. If the UI shows them, the pipeline works and
+// the real-search bug is in scraping. If not, the bug is upstream.
+window.answerlyDiscoverySmokeTest = function () {
+    if (!chrome.runtime?.id) {
+        console.error('[Answerly Bridge] Extension not connected — reload the page after installing.');
+        return;
+    }
+    chrome.runtime.sendMessage({ action: 'DISCOVERY_SMOKE_TEST' }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.error('[Answerly Bridge] Smoke test failed:', chrome.runtime.lastError.message);
+            return;
+        }
+        console.log('[Answerly Bridge] ✓ Smoke test fired. Watch the Found Accounts section — 3 fake accounts should appear within 1-2 seconds.');
+    });
+};
+
 // 5. Periodic Poll (Backup)
 setInterval(syncToExtension, 10000);
 

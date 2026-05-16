@@ -428,8 +428,47 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({
             engineLoaded: typeof self.startDiscoveryMission === 'function',
             campaignSupport: typeof self.startDiscoveryCampaign === 'function',
-            version: '1.1'
+            version: '1.2'
         });
+        return false;
+    }
+    if (request.action === 'DISCOVERY_SMOKE_TEST') {
+        // Pipeline smoke test: writes a fake completed mission to chrome.storage.
+        // If the UI shows 3 fake accounts after this, the storage→bridge→UI path
+        // is healthy and the real bug is in scraping. If the UI shows nothing,
+        // the bug is upstream of the engine.
+        (async () => {
+            try {
+                const fakeMission = {
+                    id: `smoke_${Date.now()}`,
+                    name: 'Smoke Test',
+                    status: 'completed',
+                    mode: 'surgical',
+                    filters: { platforms: ['X'], keywords: ['test'] },
+                    startedAt: new Date().toISOString(),
+                    completedAt: new Date().toISOString(),
+                    progress: { matched: 3, rejected: 0, candidatesScanned: 3, profilesAnalyzed: 3 },
+                    stealth: { humanizedBehaviorScore: 100 },
+                    results: [
+                        { id: 'smoke_1', platform: 'X', handle: 'smoketest_1', url: 'https://x.com/smoketest_1', displayName: 'Smoke Test #1', bio: 'Pipeline test account', followers: 12500, verified: true, finalScore: 88, tier: 'S', matchedSignals: ['Pipeline test'], discoveredAt: new Date().toISOString(), trackingStatus: 'untracked' },
+                        { id: 'smoke_2', platform: 'X', handle: 'smoketest_2', url: 'https://x.com/smoketest_2', displayName: 'Smoke Test #2', bio: 'Pipeline test account', followers: 8400, verified: false, finalScore: 74, tier: 'A', matchedSignals: ['Pipeline test'], discoveredAt: new Date().toISOString(), trackingStatus: 'untracked' },
+                        { id: 'smoke_3', platform: 'X', handle: 'smoketest_3', url: 'https://x.com/smoketest_3', displayName: 'Smoke Test #3', bio: 'Pipeline test account', followers: 3200, verified: false, finalScore: 58, tier: 'B', matchedSignals: ['Pipeline test'], discoveredAt: new Date().toISOString(), trackingStatus: 'untracked' }
+                    ],
+                    logs: [
+                        { timestamp: new Date().toISOString(), level: 'info', message: '🧪 SMOKE TEST: this mission was injected directly into chrome.storage to verify the storage→bridge→UI pipeline.' },
+                        { timestamp: new Date().toISOString(), level: 'success', message: '🧪 If you see 3 fake accounts in Found Accounts, the pipeline works. The real-search bug is in scraping (DOM, login wall, or filters).' }
+                    ]
+                };
+                await chrome.storage.local.set({
+                    discovery_mission_state: fakeMission,
+                    discovery_mission_completed: { ...fakeMission, _completedAt: Date.now() }
+                });
+                console.log(LOG_TAG, '[Discovery] Smoke test fired — 3 fake accounts injected.');
+            } catch (e) {
+                console.error(LOG_TAG, '[Discovery] Smoke test failed:', e);
+            }
+        })();
+        sendResponse({ success: true });
         return false;
     }
 

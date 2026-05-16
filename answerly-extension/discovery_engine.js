@@ -1011,8 +1011,54 @@ function matchCrossPlatform(allAccounts) {
 // MISSION LIFECYCLE
 // ============================================================
 async function startDiscoveryMission(missionConfig) {
+    // ─── HARD RESET ON FRESH MISSION ───
+    // Detect "fresh mission start" vs "resume from cooldown". Resume is
+    // identified by: mission has results AND has pending queue items AND no
+    // deepening rounds yet. Fresh missions clear ALL stale state including:
+    //   - lingering 'cooldown' state from a previous run that never resumed
+    //   - leftover pendingProfileQueue from a different search
+    //   - pending batch resume alarm
+    // Without this, a search that hit cooldown 4 hours ago + was abandoned
+    // will silently take precedence over the new search the user just kicked off.
+    const isResume = !!(missionConfig.pendingProfileQueue?.length
+        && missionConfig.results?.length
+        && !missionConfig.deepeningRound);
+    if (!isResume) {
+        try { await chrome.alarms.clear(BATCH_RESUME_ALARM); } catch {}
+        // Wipe stale stored state so it doesn't leak into the new mission
+        try { await chrome.storage.local.remove(['discovery_mission_state', 'discovery_mission_completed']); } catch {}
+        activeMission = null;
+        missionAborted = false;
+        missionPaused = false;
+        _sessionVisits = 0;
+        console.log(DISC_TAG, '🆕 Fresh mission — cleared stale cooldown state, alarms, and storage');
+    }
+
     if (activeMission && ['scanning', 'preparing', 'paused'].includes(activeMission.status)) {
         throw new Error('Another mission is already running');
+    }
+
+    // ─── TOP-LEVEL DIAGNOSTIC ───
+    // Surface the actual mission config we received so failures can be diagnosed.
+    const f = missionConfig.filters || {};
+    console.log(DISC_TAG, '📋 Mission config:', {
+        name: missionConfig.name,
+        mode: missionConfig.mode,
+        platforms: f.platforms,
+        keywords: f.keywords,
+        hashtags: f.hashtags,
+        authorityLevel: f.authorityLevel,
+        verifiedOnly: f.verifiedOnly,
+        minFollowers: f.minFollowers,
+        targetMatches: missionConfig.targetMatches,
+        batchCap: missionConfig.batchCap
+    });
+    // Sanity gate — fail FAST if the mission can't possibly produce results
+    if (!f.platforms?.length) {
+        throw new Error('No platforms specified in filters.platforms');
+    }
+    if (!f.keywords?.length && !f.hashtags?.length) {
+        throw new Error('No keywords or hashtags — searching for nothing will return nothing');
     }
 
     // Time-of-day check
