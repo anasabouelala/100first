@@ -1118,5 +1118,85 @@
         return true; // async response
     });
 
-    console.log(TAG, `Loaded on ${PLATFORM || 'unknown'} platform.`);
+    // Mark fully-ready state. If the probe sees __loaded__=true but __ready__=false,
+    // the IIFE crashed between the early flag and this point — listener never bound.
+    window.__answerly_discovery_agent_ready__ = true;
+    window.__answerly_discovery_agent_platform__ = PLATFORM;
+
+    // ─── DIRECT-CALL API (bypass chrome.tabs.sendMessage) ───
+    // chrome.tabs.sendMessage on x.com has been observed to time out even with a
+    // healthy listener bound. Expose every operation as a window-attached function
+    // so the engine can call it via chrome.scripting.executeScript instead. Same
+    // ISOLATED world → closures keep working.
+    window.__answerly_agent_api__ = {
+        async handle(msg) {
+            try {
+                if (!msg || !msg.type) return { error: 'No msg.type' };
+                if (msg.type === 'DISCOVERY_DETECT_BLOCK') return detectBlock();
+                if (msg.type === 'DISCOVERY_HUMANIZE_ENTRY') { await humanizedPageEnter(); return { ok: true }; }
+                if (msg.type === 'DISCOVERY_SCRAPE_SEARCH') {
+                    const max = msg.maxCandidates || 20;
+                    if (PLATFORM === 'X') return await scrapeXSearchResults(max);
+                    if (PLATFORM === 'LinkedIn') return await scrapeLinkedInSearchResults(max);
+                    if (PLATFORM === 'Reddit') return await scrapeRedditSearchResults(max);
+                    return { error: 'Platform not supported: ' + location.hostname };
+                }
+                if (msg.type === 'DISCOVERY_SCRAPE_POSTS') {
+                    const max = msg.maxCandidates || 20;
+                    if (PLATFORM === 'X') return await scrapeXPostAuthors(max);
+                    if (PLATFORM === 'LinkedIn') return await scrapeLinkedInPostAuthors(max);
+                    if (PLATFORM === 'Reddit') return await scrapeRedditPostAuthors(max);
+                    return { error: 'Platform not supported' };
+                }
+                if (msg.type === 'DISCOVERY_SCRAPE_FALLBACK') {
+                    const out = [];
+                    const seen = new Set();
+                    if (PLATFORM === 'X') {
+                        for (const a of document.querySelectorAll('a[href^="/"]')) {
+                            const h = extractXHandleFromHref(a.getAttribute('href'));
+                            if (!h || seen.has(h)) continue;
+                            seen.add(h);
+                            out.push({ handle: h, url: `https://x.com/${h}`, displayName: (a.innerText || '').trim().slice(0, 60) || h, bio: '', verified: false, platform: 'X', discoveredVia: 'fallback' });
+                            if (out.length >= 50) break;
+                        }
+                    } else if (PLATFORM === 'LinkedIn') {
+                        for (const a of document.querySelectorAll('a[href*="/in/"]')) {
+                            const m = (a.getAttribute('href') || '').match(/\/in\/([^/?#]+)/);
+                            if (!m || seen.has(m[1])) continue;
+                            seen.add(m[1]);
+                            out.push({ handle: m[1], url: `https://www.linkedin.com/in/${m[1]}`, displayName: (a.innerText || '').trim().slice(0, 60) || m[1], bio: '', verified: false, platform: 'LinkedIn', discoveredVia: 'fallback' });
+                            if (out.length >= 50) break;
+                        }
+                    } else if (PLATFORM === 'Reddit') {
+                        for (const a of document.querySelectorAll('a[href*="/user/"], a[href*="/u/"]')) {
+                            const m = (a.getAttribute('href') || '').match(/\/(?:user|u)\/([^/?#]+)/);
+                            if (!m || seen.has(m[1])) continue;
+                            seen.add(m[1]);
+                            out.push({ handle: m[1], url: `https://www.reddit.com/user/${m[1]}`, displayName: (a.innerText || '').trim().slice(0, 60) || m[1], bio: '', verified: false, platform: 'Reddit', discoveredVia: 'fallback' });
+                            if (out.length >= 50) break;
+                        }
+                    }
+                    return { candidates: out, fallback: true };
+                }
+                if (msg.type === 'DISCOVERY_SCRAPE_PROFILE') {
+                    if (PLATFORM === 'X') return await scrapeXProfile();
+                    if (PLATFORM === 'LinkedIn') return await scrapeLinkedInProfile();
+                    if (PLATFORM === 'Reddit') return await scrapeRedditProfile();
+                    return { error: 'Platform not supported' };
+                }
+                if (msg.type === 'DISCOVERY_IDLE_BEHAVIOR') {
+                    const action = Math.random();
+                    if (action < 0.3) await naturalScroll(window.scrollY + g(150, 80));
+                    else if (action < 0.6) await moveTo(g(window.innerWidth * Math.random(), 50), g(window.innerHeight * 0.5, 100));
+                    await sleep(g(msg.duration || 2000, 600));
+                    return { ok: true };
+                }
+                return { error: 'Unknown discovery op: ' + msg.type };
+            } catch (e) {
+                return { error: (e && e.message) ? e.message : String(e) };
+            }
+        }
+    };
+
+    console.log(TAG, `Loaded on ${PLATFORM || 'unknown'} platform. API exposed.`);
 })();

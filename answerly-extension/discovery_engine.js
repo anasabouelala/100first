@@ -25,6 +25,12 @@ let activeWindowId = null;
 let missionAborted = false;
 let missionPaused = false;
 let stealthCooldownUntil = 0;
+// Atomic single-instance lock. Set synchronously at the top of
+// startDiscoveryMission and released in finally. Without this, two
+// near-simultaneous DISCOVERY_START messages (React StrictMode double-dispatch,
+// duplicate dashboard tabs, retry on bridge timeout) each open their own
+// stealth window — the exact "2 windows" symptom.
+let _missionLock = false;
 
 // ─── BATCHED VERIFICATION (anti-bot-aware) ───────────────────────────
 // One mission can run across multiple "batches". Each batch visits up to
@@ -247,6 +253,42 @@ async function getTabFromWindow(win) {
 async function navigateTab(tabId, url) {
     await chrome.tabs.update(tabId, { url });
     await waitForTabComplete(tabId, 30000);
+    // Safety net: ensure discovery_agent is present even if the manifest content_script
+    // match raced the page load. Idempotent — the agent guards itself with
+    // window.__answerly_discovery_agent_loaded__.
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['discovery_agent.js']
+        });
+        // Deep diagnostic — return everything we'd need to debug why the agent's
+        // listener might not be answering. If the flag is set but messages still
+        // time out, it means the IIFE crashed AFTER setting the flag but BEFORE
+        // registering the message listener. The lastError + bodyText narrow it down.
+        const [probe] = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: () => ({
+                loaded: !!window.__answerly_discovery_agent_loaded__,
+                ready: !!window.__answerly_discovery_agent_ready__,
+                platform: window.__answerly_discovery_agent_platform__ || null,
+                hasChromeRuntime: typeof chrome !== 'undefined' && !!chrome.runtime,
+                runtimeId: (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime.id : null,
+                url: location.href,
+                title: (document.title || '').slice(0, 100),
+                bodyText: (document.body?.innerText || '').slice(0, 220).replace(/\s+/g, ' '),
+                readyState: document.readyState
+            })
+        });
+        const r = probe?.result || {};
+        logMission?.('info', `🔍 Tab: loaded=${r.loaded} ready=${r.ready} platform=${r.platform} runtime=${r.hasChromeRuntime} title="${r.title}"`);
+        if (r.loaded && !r.ready) {
+            logMission?.('error', `discovery_agent CRASHED mid-init on ${url}. Listener never bound. Open the stealth window's devtools (right-click → Inspect) to see the JS error. Body sample: "${r.bodyText}"`);
+        } else if (!r.loaded) {
+            logMission?.('error', `discovery_agent did NOT load on ${url}. Page state: "${r.bodyText}". Likely a login wall — open ${url} in a normal tab, log in, then retry.`);
+        }
+    } catch (e) {
+        logMission?.('error', `Agent injection failed on ${url}: ${e.message}`);
+    }
 }
 
 function waitForTabComplete(tabId, timeoutMs = 30000) {
@@ -287,24 +329,314 @@ async function closeStealthWindow() {
 }
 
 // ============================================================
+// SYNC AGENT — runs in the stealth tab via chrome.scripting.executeScript.
+// Self-contained: no awaits, no Promises, no external dependencies. Reads the
+// DOM once and returns. The engine waits for hydration before calling, so by
+// the time this runs, the DOM has what we need.
+// ============================================================
+function SYNC_AGENT_FN(msg) {
+    try {
+        const host = (location.hostname || '').replace(/^www\./, '');
+        const platform = (host.includes('x.com') || host.includes('twitter.com')) ? 'X'
+            : host.includes('linkedin.com') ? 'LinkedIn'
+            : host.includes('reddit.com') ? 'Reddit'
+            : null;
+
+        // ──── helpers ───────────────────────────────────────────
+        function parseCount(str) {
+            if (!str) return 0;
+            const s = String(str).replace(/[^\d.kKmMbB]/g, '');
+            const n = parseFloat(s);
+            if (isNaN(n)) return 0;
+            if (/[kK]/.test(s)) return Math.round(n * 1000);
+            if (/[mM]/.test(s)) return Math.round(n * 1e6);
+            if (/[bB]/.test(s)) return Math.round(n * 1e9);
+            return Math.round(n);
+        }
+        const X_RESERVED = new Set(['home','explore','notifications','messages','search','i','login','signup','tos','privacy','about','settings','compose','intent','jobs','communities','bookmarks','lists','topics','hashtag','followers','following','status','verified_followers','media','likes','with_replies','photo','header_photo']);
+        function xHandle(href) {
+            if (!href) return null;
+            const path = href.replace(/^https?:\/\/(?:www\.)?(?:x|twitter)\.com/, '');
+            const segs = path.split('/').filter(Boolean);
+            if (!segs.length) return null;
+            const h = segs[0].split('?')[0].split('#')[0];
+            if (X_RESERVED.has(h.toLowerCase())) return null;
+            if (!/^[a-zA-Z0-9_]{1,15}$/.test(h)) return null;
+            return h;
+        }
+
+        // ──── DETECT BLOCK ──────────────────────────────────────
+        function detectBlock() {
+            const html = (document.documentElement?.innerHTML || '').slice(0, 50000).toLowerCase();
+            const bodyText = (document.body?.innerText || '').toLowerCase();
+            const indicators = {
+                captcha: ['captcha', 'are you human', 'verify you are', 'recaptcha', 'h-captcha', 'cf-challenge'],
+                rateLimit: ['rate limit', 'too many requests', 'temporarily restricted', 'unusual activity'],
+                login: ["please log in to view", "please sign in to view", "sign up to view", "create account to view", "you'll need to log in", "don't miss what's happening", "join linkedin to", "sign up to follow"],
+                block: ['account suspended', 'access denied', 'restricted access']
+            };
+            for (const [type, words] of Object.entries(indicators)) {
+                for (const w of words) {
+                    if (html.includes(w) && bodyText.includes(w)) return { blocked: true, type, indicator: w };
+                }
+            }
+            if (document.querySelector('iframe[src*="recaptcha"], iframe[src*="hcaptcha"]')) {
+                return { blocked: true, type: 'captcha', indicator: 'iframe' };
+            }
+            return { blocked: false };
+        }
+
+        // ──── SCRAPE X SEARCH/POSTS ─────────────────────────────
+        function scrapeXSearch(max) {
+            const seen = new Set();
+            const out = [];
+            const cells = document.querySelectorAll('[data-testid="UserCell"], [data-testid="cellInnerDiv"]');
+            for (const cell of cells) {
+                if (out.length >= max) break;
+                try {
+                    const links = cell.querySelectorAll('a[href^="/"]');
+                    let handle = null;
+                    for (const a of links) {
+                        const h = xHandle(a.getAttribute('href'));
+                        if (h) { handle = h; break; }
+                    }
+                    if (!handle || seen.has(handle)) continue;
+                    seen.add(handle);
+                    const nameEl = cell.querySelector('[data-testid="User-Name"] span, [dir="ltr"] span');
+                    const bioEl = cell.querySelector('[data-testid="UserDescription"]');
+                    const postEl = cell.querySelector('[data-testid="tweetText"]');
+                    const verified = !!cell.querySelector('[data-testid="icon-verified"], svg[aria-label*="erified" i]');
+                    out.push({
+                        handle,
+                        url: `https://x.com/${handle}`,
+                        displayName: (nameEl?.innerText || '').trim().slice(0, 80) || handle,
+                        bio: (bioEl?.innerText || '').trim().slice(0, 280),
+                        samplePost: (postEl?.innerText || '').trim().slice(0, 280),
+                        verified,
+                        platform: 'X',
+                        discoveredVia: postEl ? 'post' : 'search'
+                    });
+                } catch {}
+            }
+            // Fallback path — any profile link in primary column
+            if (out.length === 0) {
+                const links = document.querySelectorAll('[data-testid="primaryColumn"] a[href^="/"], [role="region"] a[href^="/"]');
+                for (const a of links) {
+                    if (out.length >= max) break;
+                    const h = xHandle(a.getAttribute('href'));
+                    if (!h || seen.has(h)) continue;
+                    seen.add(h);
+                    out.push({ handle: h, url: `https://x.com/${h}`, displayName: (a.innerText || '').trim().slice(0, 80) || h, bio: '', verified: false, platform: 'X', discoveredVia: 'fallback' });
+                }
+            }
+            return {
+                candidates: out,
+                diagnostic: out.length === 0 ? {
+                    url: location.href,
+                    userCellCount: document.querySelectorAll('[data-testid="UserCell"]').length,
+                    primaryColumn: !!document.querySelector('[data-testid="primaryColumn"]'),
+                    pageTitle: document.title,
+                    bodyTextSample: (document.body?.innerText || '').slice(0, 300)
+                } : undefined
+            };
+        }
+
+        // ──── SCRAPE X PROFILE ──────────────────────────────────
+        function scrapeXProfile() {
+            const handle = (location.pathname || '').split('/').filter(Boolean)[0] || '';
+            const nameEl = document.querySelector('[data-testid="UserName"]');
+            const bioEl = document.querySelector('[data-testid="UserDescription"]');
+            const verified = !!document.querySelector('[data-testid="UserVerifiedBadge"], svg[aria-label*="erified" i]');
+
+            let followers = 0;
+            const followLinks = document.querySelectorAll('a[href$="/verified_followers"], a[href$="/followers"]');
+            for (const a of followLinks) {
+                const num = a.querySelector('span span');
+                if (num) {
+                    const c = parseCount(num.innerText);
+                    if (c > 0) { followers = c; break; }
+                }
+            }
+            if (followers === 0) {
+                // last-resort: scan the entire user description block for "X Followers"
+                const blocks = document.querySelectorAll('[data-testid="UserProfileHeader_Items"], main');
+                for (const b of blocks) {
+                    const m = (b.innerText || '').match(/([\d.,]+\s*[kKmMbB]?)\s*Followers/);
+                    if (m) { followers = parseCount(m[1]); if (followers > 0) break; }
+                }
+            }
+
+            // ─── ENGAGEMENT RATE — read what's currently in the DOM ─────────
+            // X renders each tweet card with like/retweet/reply counters. We sum
+            // them across visible tweets, average, and normalize by followers.
+            // Pure sync DOM read — no waits, fast enough to stay in our budget.
+            const tweets = document.querySelectorAll('article[data-testid="tweet"], [data-testid="tweet"]');
+            let posts = 0, totalLikes = 0, totalRTs = 0, totalReplies = 0;
+            const sampleHooks = [];
+            let samplePost = '';
+            const readCount = (parent, testId) => {
+                if (!parent) return 0;
+                // Common patterns on X: count lives in a span inside an aria-described group
+                const btn = parent.querySelector(`[data-testid="${testId}"]`);
+                if (!btn) return 0;
+                // The displayed count text is inside the button; "0" often renders as empty
+                const txt = (btn.innerText || btn.getAttribute('aria-label') || '').trim();
+                if (!txt) return 0;
+                const m = txt.match(/([\d.,]+\s*[kKmMbB]?)/);
+                return m ? parseCount(m[1]) : 0;
+            };
+            for (const tw of tweets) {
+                if (posts >= 10) break;          // 10 most-recent tweets is enough signal
+                posts++;
+                totalLikes += readCount(tw, 'like') + readCount(tw, 'unlike');
+                totalRTs += readCount(tw, 'retweet') + readCount(tw, 'unretweet');
+                totalReplies += readCount(tw, 'reply');
+                const txt = tw.querySelector('[data-testid="tweetText"]')?.innerText?.trim();
+                if (txt) {
+                    if (!samplePost) samplePost = txt.slice(0, 280);
+                    if (sampleHooks.length < 5) sampleHooks.push(txt.slice(0, 120));
+                }
+            }
+            // engagement_rate = avg (likes+RTs+replies) per post / followers * 100
+            let engagementRate = 0;
+            if (posts > 0 && followers > 0) {
+                const avgEngagement = (totalLikes + totalRTs + totalReplies) / posts;
+                engagementRate = +((avgEngagement / followers) * 100).toFixed(2);
+                // Sanity cap — avoid runaway values from parsing glitches
+                if (engagementRate > 100) engagementRate = 100;
+            }
+            // Last-active proxy: most recent tweet's time tag if present
+            let lastActive = null;
+            const firstTime = tweets[0]?.querySelector('time')?.getAttribute('datetime');
+            if (firstTime) lastActive = firstTime;
+
+            return {
+                profile: {
+                    handle,
+                    displayName: ((nameEl?.innerText || '').split('\n')[0] || handle).trim().slice(0, 80),
+                    bio: (bioEl?.innerText || '').trim().slice(0, 500),
+                    followers,
+                    verified,
+                    engagementRate,
+                    postsAnalyzed: posts,
+                    samplePost,
+                    sampleHooks,
+                    lastActive,
+                    platform: 'X'
+                }
+            };
+        }
+
+        // ──── SCRAPE LINKEDIN/REDDIT (minimal stubs) ────────────
+        function scrapeLinkedInSearch(max) {
+            const seen = new Set();
+            const out = [];
+            const links = document.querySelectorAll('a[href*="/in/"]');
+            for (const a of links) {
+                if (out.length >= max) break;
+                const m = (a.getAttribute('href') || '').match(/\/in\/([^/?#]+)/);
+                if (!m || seen.has(m[1])) continue;
+                seen.add(m[1]);
+                out.push({ handle: m[1], url: `https://www.linkedin.com/in/${m[1]}`, displayName: (a.innerText || '').trim().slice(0, 80) || m[1], bio: '', verified: false, platform: 'LinkedIn', discoveredVia: 'search' });
+            }
+            return { candidates: out };
+        }
+        function scrapeLinkedInProfile() {
+            const nameEl = document.querySelector('h1');
+            const bioEl = document.querySelector('.text-body-medium, [data-section="summary"]');
+            return {
+                profile: {
+                    handle: (location.pathname.match(/\/in\/([^/?#]+)/) || [])[1] || '',
+                    displayName: (nameEl?.innerText || '').trim().slice(0, 80),
+                    bio: (bioEl?.innerText || '').trim().slice(0, 500),
+                    followers: 0,
+                    verified: false,
+                    platform: 'LinkedIn'
+                }
+            };
+        }
+        function scrapeRedditSearch(max) {
+            const seen = new Set();
+            const out = [];
+            const links = document.querySelectorAll('a[href*="/user/"], a[href*="/u/"]');
+            for (const a of links) {
+                if (out.length >= max) break;
+                const m = (a.getAttribute('href') || '').match(/\/(?:user|u)\/([^/?#]+)/);
+                if (!m || seen.has(m[1])) continue;
+                seen.add(m[1]);
+                out.push({ handle: m[1], url: `https://www.reddit.com/user/${m[1]}`, displayName: (a.innerText || '').trim().slice(0, 80) || m[1], bio: '', verified: false, platform: 'Reddit', discoveredVia: 'search' });
+            }
+            return { candidates: out };
+        }
+        function scrapeRedditProfile() {
+            const handle = (location.pathname.match(/\/(?:user|u)\/([^/?#]+)/) || [])[1] || '';
+            const bioEl = document.querySelector('[data-testid="profile-description"], .ProfileSidebar__description');
+            return {
+                profile: { handle, displayName: handle, bio: (bioEl?.innerText || '').trim().slice(0, 500), followers: 0, verified: false, platform: 'Reddit' }
+            };
+        }
+
+        // ──── DISPATCH ──────────────────────────────────────────
+        switch (msg && msg.type) {
+            case 'DISCOVERY_DETECT_BLOCK':
+                return detectBlock();
+            case 'DISCOVERY_HUMANIZE_ENTRY':
+            case 'DISCOVERY_IDLE_BEHAVIOR':
+                return { ok: true };
+            case 'DISCOVERY_SCRAPE_SEARCH':
+            case 'DISCOVERY_SCRAPE_POSTS':
+                if (platform === 'X') return scrapeXSearch(msg.maxCandidates || 25);
+                if (platform === 'LinkedIn') return scrapeLinkedInSearch(msg.maxCandidates || 25);
+                if (platform === 'Reddit') return scrapeRedditSearch(msg.maxCandidates || 25);
+                return { error: 'Platform not supported: ' + host };
+            case 'DISCOVERY_SCRAPE_FALLBACK':
+                if (platform === 'X') return { candidates: scrapeXSearch(50).candidates, fallback: true };
+                if (platform === 'LinkedIn') return { candidates: scrapeLinkedInSearch(50).candidates, fallback: true };
+                if (platform === 'Reddit') return { candidates: scrapeRedditSearch(50).candidates, fallback: true };
+                return { candidates: [], fallback: true };
+            case 'DISCOVERY_SCRAPE_PROFILE':
+                if (platform === 'X') return scrapeXProfile();
+                if (platform === 'LinkedIn') return scrapeLinkedInProfile();
+                if (platform === 'Reddit') return scrapeRedditProfile();
+                return { error: 'Platform not supported: ' + host };
+            default:
+                return { error: 'Unknown op: ' + (msg && msg.type) };
+        }
+    } catch (e) {
+        return { error: (e && e.message) ? e.message : String(e) };
+    }
+}
+
+// ============================================================
 // CONTENT SCRIPT BRIDGE
 // ============================================================
-async function sendToAgent(tabId, message, retries = 3, timeoutMs = 15000) {
+async function sendToAgent(tabId, message, retries = 3, timeoutMs = 20000) {
+    // ─── FULLY SYNCHRONOUS in-page execution ───
+    // On x.com (and likely other heavy SPAs), neither async funcs nor microtasks
+    // nor macrotasks scheduled from inside chrome.scripting.executeScript reliably
+    // flush. So we do *everything* synchronously: a single short executeScript
+    // call inlines all scraping/detection logic, reads the DOM once, returns.
+    // The engine already waits for hydration before calling us, so the DOM is
+    // ready by the time we read it. No polling, no Promise chains.
     for (let i = 0; i < retries; i++) {
         if (missionAborted) throw new Error('Mission aborted');
         try {
-            // Verify tab still exists before sending — fails fast on closed tabs
-            // rather than waiting on Chrome's internal sendMessage timeout.
             try { await chrome.tabs.get(tabId); }
             catch { throw new Error('Stealth tab no longer exists'); }
 
-            const response = await Promise.race([
-                chrome.tabs.sendMessage(tabId, message),
+            const exec = await Promise.race([
+                chrome.scripting.executeScript({
+                    target: { tabId },
+                    func: SYNC_AGENT_FN,
+                    args: [message]
+                }),
                 new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error(`Agent timeout after ${timeoutMs}ms`)), timeoutMs)
+                    setTimeout(() => reject(new Error(`executeScript timeout ${timeoutMs}ms`)), timeoutMs)
                 )
             ]);
-            return response;
+            const result = exec?.[0]?.result;
+            if (!result) throw new Error('executeScript returned no result');
+            return result;
         } catch (e) {
             if (i === retries - 1) throw e;
             console.warn(DISC_TAG, `Agent attempt ${i + 1}/${retries} failed: ${e.message} — retry in 1.5s`);
@@ -1011,6 +1343,25 @@ function matchCrossPlatform(allAccounts) {
 // MISSION LIFECYCLE
 // ============================================================
 async function startDiscoveryMission(missionConfig) {
+    // ─── ATOMIC SINGLE-INSTANCE LOCK ───
+    // Sync check — must run BEFORE the first await so concurrent calls bail out.
+    if (_missionLock) {
+        console.warn(DISC_TAG, '⚠ Duplicate DISCOVERY_START ignored — a mission is already starting/running');
+        return;
+    }
+    if (activeMission && ['scanning', 'preparing', 'paused'].includes(activeMission.status)) {
+        console.warn(DISC_TAG, `⚠ Duplicate DISCOVERY_START ignored — activeMission.status=${activeMission.status}`);
+        return;
+    }
+    _missionLock = true;
+    try {
+        await _startDiscoveryMissionInner(missionConfig);
+    } finally {
+        _missionLock = false;
+    }
+}
+
+async function _startDiscoveryMissionInner(missionConfig) {
     // ─── HARD RESET ON FRESH MISSION ───
     // Detect "fresh mission start" vs "resume from cooldown". Resume is
     // identified by: mission has results AND has pending queue items AND no
@@ -1027,11 +1378,23 @@ async function startDiscoveryMission(missionConfig) {
         try { await chrome.alarms.clear(BATCH_RESUME_ALARM); } catch {}
         // Wipe stale stored state so it doesn't leak into the new mission
         try { await chrome.storage.local.remove(['discovery_mission_state', 'discovery_mission_completed']); } catch {}
+        // ─── KILL THE LEGACY RECON ENGINE ───
+        // If an old ICP-recon mission left state behind, its queueProcessor alarm
+        // will keep firing every 5min and open shadow windows in parallel with
+        // ours. That's exactly the "2 windows for no reason" symptom. Clear it.
+        try {
+            await chrome.storage.local.set({
+                recon_queue: [],
+                active_campaign: null,
+                stop_recon_mission: true
+            });
+            await chrome.alarms.clear('queueProcessor');
+        } catch {}
         activeMission = null;
         missionAborted = false;
         missionPaused = false;
         _sessionVisits = 0;
-        console.log(DISC_TAG, '🆕 Fresh mission — cleared stale cooldown state, alarms, and storage');
+        console.log(DISC_TAG, '🆕 Fresh mission — cleared stale cooldown state, alarms, recon queue, and storage');
     }
 
     if (activeMission && ['scanning', 'preparing', 'paused'].includes(activeMission.status)) {
@@ -1120,6 +1483,11 @@ async function startDiscoveryMission(missionConfig) {
 
         // Wait for tab to be ready & content script to load (shortened settle)
         await waitForTabComplete(tabId, 30000);
+        // Inject the agent here too: the manifest match covers later loads, but the
+        // initial landing tab may race with the content_script auto-load.
+        try {
+            await chrome.scripting.executeScript({ target: { tabId }, files: ['discovery_agent.js'] });
+        } catch (_) {}
         await dsleep(gauss(1500, 400));
 
         await updateMission({ status: 'scanning' });
@@ -1149,7 +1517,15 @@ async function startDiscoveryMission(missionConfig) {
                 }
 
                 const queries = planQueries(activeMission.filters, activeMission.mode, activeMission.deepeningRound);
-                logMission('info', `Planned ${queries.length} queries (deepening round ${activeMission.deepeningRound})`, platform);
+                // Recalibrate the UI's progress denominator to the actual work the
+                // engine will do (queries × 2 tabs each — Posts/Live + People/User).
+                // Without this, the UI's predicted total (based on keywords-or-mode
+                // assumption) diverges from reality and the bar gets stuck partial.
+                const realPlanned = queries.length * 2 * activeMission.filters.platforms.length;
+                if (realPlanned !== activeMission.progress.totalQueriesPlanned) {
+                    await patchProgress({ totalQueriesPlanned: realPlanned });
+                }
+                logMission('info', `Planned ${queries.length} queries × 2 tabs = ${queries.length * 2} searches (deepening round ${activeMission.deepeningRound})`, platform);
                 await executePlatform(platform, queries, tabId);
 
                 // Inter-platform pause (long, looks like switching context)

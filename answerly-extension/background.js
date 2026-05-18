@@ -143,13 +143,35 @@ function withTimeout(promise, ms, label) {
   return Promise.race([promise, timeout]);
 }
 
+// 1.7 Discovery-active mutex helper.
+// Any code path that opens a stealth `chrome.windows.create` should call this
+// FIRST and bail if true — otherwise we end up with 2 windows side by side,
+// which is the exact symptom the user reported.
+async function isDiscoveryActive() {
+  try {
+    const r = await chrome.storage.local.get(['discovery_mission_state']);
+    const m = r.discovery_mission_state;
+    return !!(m && ['scanning', 'preparing', 'paused', 'cooldown'].includes(m.status));
+  } catch (e) {
+    return false;
+  }
+}
+
 // ─── Engagement Queue ────────────────────────────────────────────────────────
 const engagementQueue = [];
 let isEngaging = false;
 
 async function processEngagementQueue() {
     if (isEngaging) return;
-    
+
+    // Defer engagement work while a discovery mission is in flight — both open
+    // shadow windows on the same domains and would race each other.
+    if (await isDiscoveryActive()) {
+        console.log(LOG_TAG, '[ENGAGE] Deferred — discovery mission active');
+        setTimeout(() => processEngagementQueue(), 60000);
+        return;
+    }
+
     // Load queue and stats
     const result = await chrome.storage.local.get(['answerly_engagement_queue', 'answerly_engagements']);
     const queue = result.answerly_engagement_queue || [];
@@ -313,35 +335,47 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === 'performReconSearch') {
         console.log(LOG_TAG, "Received Recon Pulse! Queueing mission...", request.keywords?.length);
+        // Reject the legacy recon mission while a discovery mission is alive —
+        // otherwise both engines open competing windows for the same domains.
+        isDiscoveryActive().then(active => {
+            if (active) {
+                console.warn(LOG_TAG, "Refusing recon — discovery mission in progress.");
+                sendResponse({ success: false, error: 'Discovery mission in progress — wait for it to finish.' });
+                return;
+            }
+            startLegacyRecon();
+        });
         const keywords = request.keywords || [];
         const campaign = request.campaign || null;
-        
-        chrome.storage.local.get(['keyword_stats'], (res) => {
-            const stats = res.keyword_stats || {};
-            keywords.forEach(kw => {
-                const key = `${kw.platform}__${kw.query}`;
-                stats[key] = { 
-                    query: kw.query, 
-                    platform: kw.platform, 
-                    status: 'queued', 
-                    found: 0, 
-                    hot: 0, 
-                    warm: 0 
-                };
+
+        function startLegacyRecon() {
+            chrome.storage.local.get(['keyword_stats'], (res) => {
+                const stats = res.keyword_stats || {};
+                keywords.forEach(kw => {
+                    const key = `${kw.platform}__${kw.query}`;
+                    stats[key] = {
+                        query: kw.query,
+                        platform: kw.platform,
+                        status: 'queued',
+                        found: 0,
+                        hot: 0,
+                        warm: 0
+                    };
+                });
+                chrome.storage.local.set({
+                    keyword_stats: stats,
+                    recon_queue: keywords,
+                    active_campaign: campaign,
+                    stop_recon_mission: false
+                }, () => {
+                    chrome.alarms.create("stealthCheck", { periodInMinutes: 15 });
+                    chrome.alarms.create("queueProcessor", { periodInMinutes: 5 });
+                    console.log(LOG_TAG, "Mission initialized. Starting first keyword...");
+                    processNextReconKeyword();
+                    sendResponse({ success: true });
+                });
             });
-            chrome.storage.local.set({ 
-                keyword_stats: stats,
-                recon_queue: keywords,
-                active_campaign: campaign,
-                stop_recon_mission: false
-            }, () => {
-                chrome.alarms.create("stealthCheck", { periodInMinutes: 15 });
-                chrome.alarms.create("queueProcessor", { periodInMinutes: 5 });
-                console.log(LOG_TAG, "Mission initialized. Starting first keyword...");
-                processNextReconKeyword();
-                sendResponse({ success: true });
-            });
-        });
+        }
         return true;
     }
 
@@ -551,9 +585,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // 2.5 Full Sweep (For manual triggers)
 async function executeFullSweep() {
+  if (await isDiscoveryActive()) {
+    await setPulse("Sweep skipped — discovery mission in progress.");
+    return { count: 0, skipped: 'discovery_active' };
+  }
   const result = await chrome.storage.local.get(['answerly_creator_configs']);
   const configs = result.answerly_creator_configs || [];
-  
+
   if (configs.length === 0) {
     await setPulse("Sweep Skipped: No creators configured in Web App.");
     return { count: 0 };
@@ -601,6 +639,13 @@ async function executeFullSweep() {
 
 // 3. Main Execution Cycle (Automated rotation)
 async function executeCycle() {
+  // Mutex: never open a tracking window while a discovery mission is in flight.
+  if (await isDiscoveryActive()) {
+    console.log(LOG_TAG, '[Tracking] Skipping poll — discovery mission in progress');
+    await rescheduleStealthCheck();
+    return;
+  }
+
   const result = await chrome.storage.local.get(['answerly_creator_configs', 'answerly_diagnostic', 'answerly_backoff_until']);
   const configs = result.answerly_creator_configs || [];
   const diagnostic = result.answerly_diagnostic || { lastRuns: [], errors: [] };
@@ -1806,8 +1851,15 @@ async function runPipelineSweepReddit(keywords, campaign = null) {
 // ─── Reconnaissance Loop ───────────────────────────────────────────────────
 
 async function processNextReconKeyword() {
+    // Mutex: legacy ICP-recon engine must yield to a running discovery mission.
+    if (await isDiscoveryActive()) {
+        console.log(LOG_TAG, 'Recon trickle deferred — discovery mission in progress');
+        currentReconTimeout = setTimeout(() => processNextReconKeyword(), 60000);
+        return;
+    }
+
     const res = await chrome.storage.local.get(['recon_queue', 'active_campaign', 'stop_recon_mission']);
-    
+
     // Safety: If stop flag is true OR active_campaign is missing, HALT EVERYTHING
     if (res.stop_recon_mission || !res.active_campaign) {
         console.log(LOG_TAG, "Mission stop flag detected or no active campaign. Halting trickle loop.");

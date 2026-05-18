@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Answerly Meta-Radar",
-  "version": "1.2",
-  "description": "Stealth profile monitoring and engagement for founders.",
+  "version": "1.4",
+  "description": "Stealth profile monitoring, account discovery and engagement for founders.",
   "icons": {
     "16": "icon.png",
     "48": "icon.png",
@@ -50,7 +50,7 @@
         "http://127.0.0.1/*"
       ],
       "js": ["content_bridge.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     },
     {
       "matches": [
@@ -65,7 +65,7 @@
         "https://producthunt.com/*",
         "https://*.producthunt.com/*"
       ],
-      "js": ["engagement_agent.js"],
+      "js": ["engagement_agent.js", "discovery_agent.js"],
       "run_at": "document_idle"
     }
   ],
