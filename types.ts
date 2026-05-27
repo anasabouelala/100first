@@ -346,6 +346,15 @@ export interface DiscoveredAccount {
   discoveredAt: string;
   trackingStatus: 'untracked' | 'tracking' | 'dismissed';
   sampleHooks?: string[];
+  // Verification lifecycle: 'preliminary' = score from search-card only;
+  // 'verified' = post-profile-visit; 'incomplete' = visited but post data unreadable.
+  // Absent = legacy entries that always went through full verification (treat as 'verified').
+  verificationStatus?: 'preliminary' | 'verified' | 'incomplete';
+  // LinkedIn post signals (only populated after verification)
+  recentPostCount?: number;            // posts in last 7d
+  maturePostMedianEngagement?: number; // median (reactions+comments) on posts ≥3d old
+  daysSinceLastPost?: number;
+  filterMismatchReasons?: string[];    // why this account doesn't match filters (informational, not gating)
 }
 
 export interface MissionLog {

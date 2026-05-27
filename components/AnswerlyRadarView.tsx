@@ -165,218 +165,228 @@ export const AnswerlyRadarView: React.FC<AnswerlyRadarViewProps> = ({ onRespond 
                         <CheckCircle2 size={16} />
                     </div>
                     <div>
-                        <p className="text-sm font-bold">Signal tracked successfully!</p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Moved to Conversion Pipeline</p>
+                        <p className="text-sm font-bold">Post moved to pipeline</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Ready to engage</p>
                     </div>
                 </div>
             )}
             
-            {/* ── Header Area ── */}
-            <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-12 border-b border-gray-100 pb-8">
-                <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                            <Radar size={28} className="text-blue-400 animate-pulse" />
-                        </div>
-                        <div>
-                            <h2 className="text-3xl font-display font-bold text-gray-900 tracking-tight">
-                                Inbound <span className="text-blue-600">Radar</span>
-                            </h2>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Live Pulse Monitor</p>
-                            </div>
-                        </div>
+            {/* ── Header ── compact, matches app palette ──────────── */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 pb-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                    {/* Radar icon with concentric pulse — real sweep, not just animate-pulse */}
+                    <div className="relative w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-sm">
+                        <Radar size={22} className="text-indigo-400" />
+                        <span className="absolute inset-0 rounded-2xl ring-2 ring-indigo-400/50 animate-ping pointer-events-none"></span>
+                    </div>
+                    <div>
+                        <h2 className="text-2xl md:text-3xl font-display font-bold text-gray-900 tracking-tight">
+                            Inbound <span className="text-indigo-600">Radar</span>
+                        </h2>
+                        <p className="text-xs text-gray-500 mt-1">New posts from accounts you track — surfaced the moment they go up.</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-8 bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm">
-                        <div className="text-right border-r border-gray-100 pr-8">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">Capture Rate</span>
-                            <span className="text-sm font-bold text-gray-900">High Velocity</span>
-                        </div>
-                        <div className={`flex items-center gap-2 transition-all ${
-                            extensionConnected ? 'text-emerald-600' : 'text-amber-600'
-                        }`}>
-                            {extensionConnected ? <Activity size={16} /> : <AlertCircle size={16} />}
-                            <span className="text-xs font-black uppercase tracking-widest">
-                                {extensionConnected ? 'Sync Active' : 'Waiting...'}
-                            </span>
-                        </div>
-                    </div>
+                {/* Status pill — tone-of-voice matches the rest of the app */}
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border ${
+                    extensionConnected
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}>
+                    {extensionConnected
+                        ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        : <AlertCircle size={12} />
+                    }
+                    {extensionConnected ? 'Extension connected' : 'Waiting for extension'}
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* ── Sidebar: Tracked Influencers ── */}
-                <div className="lg:col-span-3 space-y-6">
-                    <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 shadow-minimal overflow-hidden relative">
-                        <div className="flex items-center justify-between mb-6 px-2">
-                            <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                <Users size={18} className="text-blue-600" />
-                                Tracked Creators
+                {/* ── Sidebar: Tracked Creators (rounded-2xl, matches app) ── */}
+                <div className="lg:col-span-3 space-y-4">
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xs font-bold uppercase tracking-widest text-gray-600 flex items-center gap-2">
+                                <Users size={14} className="text-indigo-600" />
+                                Tracked creators
                             </h3>
-                            <Filter size={14} className="text-gray-300" />
+                            <span className="text-[10px] font-bold text-gray-400">{creators.length}</span>
                         </div>
 
-                        <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                            <button 
+                        <div className="space-y-1 max-h-[560px] overflow-y-auto pr-1 custom-scrollbar">
+                            <button
                                 onClick={() => setSelectedCreator(null)}
-                                className={`w-full text-left px-4 py-3 rounded-2xl transition-all flex items-center justify-between group ${
-                                    selectedCreator === null 
-                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
-                                    : 'hover:bg-gray-50 text-gray-600'
+                                className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center justify-between ${
+                                    selectedCreator === null
+                                    ? 'bg-gray-900 text-white'
+                                    : 'hover:bg-gray-50 text-gray-700'
                                 }`}
                             >
-                                <span className="text-sm font-bold">All Signal Sources</span>
-                                <span className={`text-[10px] font-black ${selectedCreator === null ? 'text-white/70' : 'text-gray-300'}`}>
+                                <span className="text-sm font-bold">All posts</span>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${selectedCreator === null ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
                                     {history.length}
                                 </span>
                             </button>
 
-                            <div className="h-px bg-gray-50 my-4"></div>
+                            {creators.length > 0 && <div className="h-px bg-gray-100 my-2"></div>}
 
                             {creators.map((c) => (
-                                <button 
+                                <button
                                     key={c.id}
                                     onClick={() => setSelectedCreator(c.label)}
-                                    className={`w-full text-left px-4 py-3 rounded-2xl transition-all flex items-center justify-between group ${
-                                        selectedCreator === c.label 
-                                        ? 'bg-gray-900 text-white shadow-xl' 
-                                        : 'hover:bg-gray-50 text-gray-600'
+                                    className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center justify-between gap-2 ${
+                                        selectedCreator === c.label
+                                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                        : 'hover:bg-gray-50 text-gray-700'
                                     }`}
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black ${
-                                            selectedCreator === c.label ? 'bg-white/10' : 'bg-gray-100'
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 ${
+                                            selectedCreator === c.label ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'
                                         }`}>
-                                            {c.label.charAt(0)}
+                                            {c.label.charAt(0).toUpperCase()}
                                         </div>
-                                        <div>
-                                            <span className="text-sm font-bold block leading-none">{c.label}</span>
-                                            <span className={`text-[9px] uppercase font-black tracking-widest mt-1 block opacity-50`}>{c.platform}</span>
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-bold truncate">{c.label}</div>
+                                            <div className="text-[9px] uppercase font-bold tracking-widest opacity-60">{c.platform}</div>
                                         </div>
                                     </div>
-                                    <ChevronRight size={14} className={`transition-transform ${selectedCreator === c.label ? 'translate-x-1' : 'opacity-0'}`} />
+                                    <ChevronRight size={12} className={`flex-shrink-0 transition-opacity ${selectedCreator === c.label ? 'opacity-100' : 'opacity-0'}`} />
                                 </button>
                             ))}
+
+                            {creators.length === 0 && (
+                                <div className="text-center py-6 text-xs text-gray-400">
+                                    No tracked creators yet.<br />Track accounts from the <span className="font-bold text-gray-600">Account Finder</span>.
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
-                        <TrendingUp size={120} className="absolute -bottom-8 -right-8 opacity-10 group-hover:scale-110 transition-transform" />
-                        <h4 className="text-lg font-bold mb-2 relative z-10">Capture Strategy</h4>
-                        <p className="text-xs text-blue-100 leading-relaxed relative z-10">
-                            Radar detects influencers' latest posts. Move high-relevance signals to your pipeline to start engaging.
-                        </p>
+                    {/* Compact tip card — replaces the heavy gradient block */}
+                    <div className="bg-indigo-50/50 border border-indigo-100 p-5 rounded-2xl">
+                        <div className="flex items-start gap-2.5">
+                            <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0">
+                                <TrendingUp size={14} />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-gray-900">How the radar works</h4>
+                                <p className="text-xs text-gray-600 leading-relaxed mt-1">
+                                    Posts from your tracked creators land here in real time. Hit <b>Draft reply</b> for a voice-matched response, or <b>Track post</b> to move it into your pipeline.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 {/* ── Main Feed: Pulse Timeline ── */}
-                <div className="lg:col-span-9 space-y-6">
+                <div className="lg:col-span-9 space-y-4">
                     {filteredHistory.length === 0 ? (
-                        <div className="bg-white rounded-[3rem] border border-gray-100 p-24 text-center space-y-6">
-                            <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto text-gray-200 border border-gray-100">
-                                <Radar size={40} />
+                        // Modernized empty state — softer, with a real CTA hint
+                        <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-16 text-center">
+                            <div className="relative w-20 h-20 mx-auto mb-5">
+                                <div className="absolute inset-0 rounded-full bg-indigo-50"></div>
+                                <div className="absolute inset-3 rounded-full bg-indigo-100"></div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Radar size={32} className="text-indigo-600" />
+                                </div>
+                                <span className="absolute inset-0 rounded-full ring-2 ring-indigo-300/60 animate-ping pointer-events-none"></span>
                             </div>
-                            <div>
-                                <h4 className="text-xl font-bold text-gray-900">No signals detected yet</h4>
-                                <p className="text-sm text-gray-400 mt-2 max-w-sm mx-auto">
-                                    {selectedCreator 
-                                        ? `Still scanning for recent activity from ${selectedCreator}.` 
-                                        : "Your stealth engine is monitoring sources in the background. Fresh posts will appear here."}
-                                </p>
-                            </div>
+                            <h4 className="text-base font-bold text-gray-900">No new posts yet</h4>
+                            <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto leading-relaxed">
+                                {selectedCreator
+                                    ? `Still watching ${selectedCreator}. We'll surface their next post the moment it goes up.`
+                                    : creators.length === 0
+                                        ? 'Track some accounts first, then their new posts will land here.'
+                                        : 'Watching your tracked accounts. New posts land here in real time.'}
+                            </p>
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-6">
+                        <div className="flex flex-col gap-3">
                             {filteredHistory.map((item, idx) => {
                                 const isTracked = isSignalTracked(item.url);
                                 return (
-                                    <div key={idx} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-minimal hover:shadow-md transition-all group overflow-hidden flex flex-col md:flex-row">
-                                        {/* Post Sidebar/Platform */}
-                                        <div className="w-full md:w-20 bg-gray-900 flex flex-row md:flex-col items-center justify-center gap-4 py-4 md:py-8 border-r border-gray-100 shrink-0">
-                                            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                                                {getPlatformIcon(item.platform)}
-                                            </div>
-                                            <div className="h-px w-8 bg-white/10 hidden md:block"></div>
-                                            <Clock size={16} className="text-gray-500" />
-                                        </div>
+                                    // Cleaner card: rounded-2xl matches AccountCard.
+                                    // Hierarchy: identity → post content (primary) → actions (bottom).
+                                    // Removed fake "Signal Strength: High" / "Context: Growth" placeholders.
+                                    <div key={idx} className={`bg-white rounded-2xl border ${isTracked ? 'border-emerald-200 bg-emerald-50/30' : 'border-gray-200'} hover:border-gray-300 hover:shadow-md transition-all overflow-hidden`}>
+                                        <div className="flex">
+                                            {/* Platform stripe — thin, not a full sidebar */}
+                                            <div className={`w-1.5 flex-shrink-0 ${
+                                                item.platform?.toLowerCase().includes('linkedin') ? 'bg-blue-600' :
+                                                item.platform?.toLowerCase().includes('reddit')   ? 'bg-orange-500' :
+                                                'bg-gray-900'
+                                            }`}></div>
 
-                                        {/* Post Content */}
-                                        <div className="flex-1 p-8">
-                                            <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <h3 className="text-lg font-bold text-gray-900">@{item.creator}</h3>
-                                                        <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest">
-                                                            {item.platform}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
-                                                        Captured {new Date(item.timestamp).toLocaleTimeString()} • {new Date(item.timestamp).toLocaleDateString()}
-                                                    </p>
-                                                </div>
-
-                                                <div className="flex items-center gap-2">
-                                                    <button 
-                                                        onClick={() => onRespond(item)}
-                                                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95"
-                                                    >
-                                                        <Zap size={14} fill="currentColor" /> Draft Reply
-                                                    </button>
-                                                    
-                                                    {isTracked ? (
-                                                        <div className="flex items-center gap-2 px-5 py-2.5 bg-emerald-50 text-emerald-600 rounded-xl font-bold text-xs border border-emerald-100">
-                                                            <CheckCircle2 size={14} /> Tracked
+                                            <div className="flex-1 p-5">
+                                                {/* IDENTITY ROW */}
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                                            item.platform?.toLowerCase().includes('linkedin') ? 'bg-blue-600' :
+                                                            item.platform?.toLowerCase().includes('reddit')   ? 'bg-orange-500' :
+                                                            'bg-gray-900'
+                                                        }`}>
+                                                            {getPlatformIcon(item.platform)}
                                                         </div>
-                                                    ) : (
-                                                        <button 
-                                                            onClick={() => handleTrackInPipeline(item)}
-                                                            className="flex items-center gap-2 px-5 py-2.5 bg-gray-50 text-gray-900 rounded-xl font-bold text-xs border border-gray-100 hover:bg-gray-100 transition-all active:scale-95"
-                                                        >
-                                                            <Target size={14} /> Track Signal
-                                                        </button>
-                                                    )}
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <h3 className="text-sm font-bold text-gray-900 truncate">@{item.creator}</h3>
+                                                                <span className="text-[9px] uppercase font-bold tracking-widest text-gray-500 flex-shrink-0">{item.platform}</span>
+                                                            </div>
+                                                            <p className="text-[11px] text-gray-400">
+                                                                <Clock size={9} className="inline -mt-0.5 mr-0.5" />
+                                                                {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date(item.timestamp).toLocaleDateString()}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <a
+                                                        href={item.postUrl || item.url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors flex-shrink-0"
+                                                        title="Open original post"
+                                                    >
+                                                        <ArrowUpRight size={16} />
+                                                    </a>
                                                 </div>
-                                            </div>
 
-                                            <div className="relative">
-                                                <div className="p-6 bg-gray-50/50 rounded-3xl border border-gray-100/50">
+                                                {/* POST CONTENT — the most important thing on the card */}
+                                                <div className="mb-4">
                                                     {item.platform === 'Reddit' && item.body ? (
-                                                        <div className="space-y-3">
+                                                        <div className="space-y-2">
                                                             <p className="text-sm font-bold text-gray-900 leading-relaxed">{item.text}</p>
-                                                            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                                                            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap line-clamp-4">
                                                                 {item.body}
                                                             </p>
                                                         </div>
                                                     ) : (
-                                                        <p className="text-sm text-gray-800 leading-relaxed font-medium">
+                                                        <p className="text-sm text-gray-800 leading-relaxed line-clamp-4">
                                                             {item.text}
                                                         </p>
                                                     )}
                                                 </div>
-                                                
-                                                <a 
-                                                    href={item.postUrl || item.url} 
-                                                    target="_blank" 
-                                                    rel="noreferrer" 
-                                                    className="absolute -top-3 -right-3 p-3 bg-white rounded-2xl shadow-xl border border-gray-100 text-blue-600 hover:scale-110 transition-all"
-                                                    title="View Original Post"
-                                                >
-                                                    <ArrowUpRight size={18} />
-                                                </a>
-                                            </div>
 
-                                            <div className="mt-6 flex items-center gap-6">
+                                                {/* ACTIONS — equal-weight buttons, primary first */}
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Signal Strength: High</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Context: Growth</span>
+                                                    <button
+                                                        onClick={() => onRespond(item)}
+                                                        className="flex-1 h-9 px-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                                                    >
+                                                        <Zap size={13} /> Draft reply
+                                                    </button>
+                                                    {isTracked ? (
+                                                        <div className="flex-1 h-9 px-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border border-emerald-200">
+                                                            <CheckCircle2 size={13} /> In pipeline
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleTrackInPipeline(item)}
+                                                            className="flex-1 h-9 px-3 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                                                        >
+                                                            <Target size={13} /> Track post
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LaunchVelocity — find the right people to engage with on LinkedIn, X, and Reddit</title>
+<meta name="description" content="An AI account finder for indie founders. Scans LinkedIn, X, and Reddit for the exact creators and communities your buyers follow — scored, ranked, ready to track. So you reach your first 1,000 users by talking to the right people, not posting into the void." />
+<meta property="og:title" content="LaunchVelocity — find the right people to engage with" />
+<meta property="og:description" content="Scans LinkedIn, X, and Reddit for accounts worth following. Scored. Ranked. Ready to track." />
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            fontFamily: {
+                sans: ['Inter', 'sans-serif'],
+                display: ['Space Grotesk', 'sans-serif'],
+            },
+            animation: {
+                'fade-in': 'fadeIn 0.6s ease-out forwards',
+                'fade-up': 'fadeUp 0.6s ease-out forwards',
+                'pulse-dot': 'pulseDot 2s ease-in-out infinite',
+            },
+            keyframes: {
+                fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                fadeUp: { '0%': { opacity: '0', transform: 'translateY(12px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                pulseDot: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '.4' } },
+            }
+        }
+    }
+}
+</script>
+<style>
+    body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+    h1, h2, h3, h4 { font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.015em; }
+    .grid-bg {
+        background-image:
+            linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+        background-size: 32px 32px;
+        background-position: -1px -1px;
+    }
+    .reveal { opacity: 0; transform: translateY(16px); transition: opacity .8s ease-out, transform .8s ease-out; }
+    .reveal.in { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body class="bg-white text-gray-900">
+
+<!-- ───────────── NAV ───────────── -->
+<nav class="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+    <a href="#top" class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-md bg-gray-900 text-white flex items-center justify-center">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+        </div>
+        <span class="font-display font-semibold text-base">LaunchVelocity</span>
+    </a>
+    <div class="hidden md:flex items-center gap-7 text-sm text-gray-500">
+        <a href="#how" class="hover:text-gray-900 transition-colors">How it works</a>
+        <a href="#features" class="hover:text-gray-900 transition-colors">Features</a>
+        <a href="#pricing" class="hover:text-gray-900 transition-colors">Pricing</a>
+        <a href="#faq" class="hover:text-gray-900 transition-colors">FAQ</a>
+    </div>
+    <a href="#cta" class="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-medium transition-all duration-200 ease-out active:scale-[0.98]">
+        Start free <span class="opacity-70">→</span>
+    </a>
+</nav>
+
+<!-- ───────────── HERO ───────────── -->
+<section id="top" class="relative grid-bg">
+    <div class="max-w-6xl mx-auto px-6 pt-12 md:pt-20 pb-24 md:pb-32 relative">
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-xs mb-6 animate-fade-up">
+            <span class="relative flex h-2 w-2">
+                <span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping"></span>
+                <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+            </span>
+            <span class="text-gray-700 font-medium">AI account finder · for indie founders</span>
+        </div>
+
+        <h1 class="font-display text-4xl md:text-6xl lg:text-7xl font-semibold leading-[1.04] tracking-tight max-w-4xl animate-fade-up" style="animation-delay: 80ms; animation-fill-mode: backwards;">
+            Find the right people to <span class="text-gray-400">engage with</span> on LinkedIn, X, and Reddit.
+        </h1>
+
+        <p class="text-base md:text-lg text-gray-500 mt-6 max-w-2xl leading-relaxed animate-fade-up" style="animation-delay: 160ms; animation-fill-mode: backwards;">
+            LaunchVelocity scans LinkedIn, X, and Reddit for the exact creators and communities your buyers actually follow. Every account is scored, ranked, and ready to track — so you stop posting into the void and start talking to the people who matter.
+        </p>
+
+        <div class="mt-8 flex flex-wrap items-center gap-3 animate-fade-up" style="animation-delay: 240ms; animation-fill-mode: backwards;">
+            <a href="#cta" class="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-medium transition-all duration-200 ease-out hover:shadow-lg hover:shadow-gray-300/40 active:scale-[0.98]">
+                Start free
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </a>
+            <a href="#how" class="inline-flex items-center gap-2 px-5 py-3 border border-gray-200 hover:border-gray-400 bg-white text-gray-700 rounded-xl text-sm font-medium transition-all duration-200 ease-out hover:shadow-sm active:scale-[0.98]">
+                See how it works
+            </a>
+            <span class="text-xs text-gray-400 ml-1">Browser extension · no API keys required to start</span>
+        </div>
+
+        <!-- The Hero Visual — a stylized mock of the agent at work -->
+        <div class="mt-16 md:mt-20 relative animate-fade-up" style="animation-delay: 320ms; animation-fill-mode: backwards;">
+            <div class="relative rounded-3xl border border-gray-200 bg-white shadow-2xl shadow-gray-200/50 overflow-hidden">
+                <!-- Window chrome -->
+                <div class="flex items-center gap-1.5 px-4 py-3 border-b border-gray-100">
+                    <span class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
+                    <span class="text-[11px] text-gray-400 ml-2">launchvelocity / Account Finder</span>
+                </div>
+                <div class="grid md:grid-cols-3 gap-0">
+                    <!-- Sidebar mock -->
+                    <div class="hidden md:block border-r border-gray-100 p-5 space-y-1 bg-gray-50/30">
+                        <div class="text-[10px] uppercase tracking-widest text-gray-400 mb-2">Growth Ops</div>
+                        <div class="flex items-center gap-2 px-2 py-1.5 rounded-md bg-gray-900 text-white text-xs font-medium"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot"></span> Account Finder</div>
+                        <div class="flex items-center gap-2 px-2 py-1.5 rounded-md text-gray-500 text-xs">Radar</div>
+                        <div class="text-[10px] uppercase tracking-widest text-gray-400 mt-5 mb-2">Mission Control</div>
+                        <div class="flex items-center gap-2 px-2 py-1.5 rounded-md text-gray-500 text-xs">Dashboard</div>
+                        <div class="text-[10px] uppercase tracking-widest text-gray-400 mt-5 mb-2">Execution</div>
+                        <div class="flex items-center gap-2 px-2 py-1.5 rounded-md text-gray-500 text-xs">Content Engine</div>
+                    </div>
+                    <!-- Results mock -->
+                    <div class="md:col-span-2 p-5 space-y-3">
+                        <div class="flex items-baseline justify-between">
+                            <h3 class="font-display font-medium text-base">42 accounts found</h3>
+                            <span class="text-[11px] text-gray-400">scanning LinkedIn · 18 verified</span>
+                        </div>
+                        <!-- LinkedIn account — Top match -->
+                        <div class="flex items-start gap-4 p-4 rounded-xl border border-blue-200 bg-blue-50/60">
+                            <div class="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0 font-bold">GV</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 text-xs mb-1">
+                                    <span class="font-medium text-gray-900">Growth VP</span>
+                                    <span class="text-blue-700 px-1.5 py-0.5 rounded-md bg-white border border-blue-200 text-[10px] font-medium">LinkedIn · 28K</span>
+                                </div>
+                                <div class="flex items-center gap-2 mt-1.5">
+                                    <span class="text-base">🔥🔥🔥</span>
+                                    <span class="text-[11px] font-semibold text-rose-600">Top match</span>
+                                    <span class="text-[10px] text-gray-400 ml-auto">Posted today · ~94 median engagement</span>
+                                </div>
+                                <div class="mt-2 flex items-center gap-1.5">
+                                    <button class="text-[11px] font-medium px-2.5 py-1 bg-gray-900 text-white rounded-md">Track</button>
+                                    <button class="text-[11px] font-medium px-2.5 py-1 bg-white border border-gray-200 text-gray-600 rounded-md">Details</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- X / Twitter account — Strong match -->
+                        <div class="flex items-start gap-4 p-4 rounded-xl border border-gray-300 bg-gray-50">
+                            <div class="w-9 h-9 rounded-lg bg-gray-900 text-white flex items-center justify-center flex-shrink-0 font-bold">L</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 text-xs mb-1">
+                                    <span class="font-medium text-gray-900">@levelsio</span>
+                                    <span class="text-gray-900 px-1.5 py-0.5 rounded-md bg-white border border-gray-300 text-[10px] font-medium">X · 540K</span>
+                                </div>
+                                <div class="flex items-center gap-2 mt-1.5">
+                                    <span class="text-base">🔥🔥</span>
+                                    <span class="text-[11px] font-semibold text-orange-600">Strong match</span>
+                                    <span class="text-[10px] text-gray-400 ml-auto">Active 2d ago · 3.1% engagement</span>
+                                </div>
+                                <div class="mt-2 flex items-center gap-1.5">
+                                    <button class="text-[11px] font-medium px-2.5 py-1 bg-emerald-600 text-white rounded-md">✓ Tracking</button>
+                                    <button class="text-[11px] font-medium px-2.5 py-1 bg-white border border-gray-200 text-gray-600 rounded-md">Details</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Reddit community — Decent match -->
+                        <div class="flex items-start gap-4 p-4 rounded-xl border border-orange-200 bg-orange-50/60">
+                            <div class="w-9 h-9 rounded-lg bg-orange-500 text-white flex items-center justify-center flex-shrink-0 font-bold">r/</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 text-xs mb-1">
+                                    <span class="font-medium text-gray-900">r/SaaS</span>
+                                    <span class="text-orange-700 px-1.5 py-0.5 rounded-md bg-white border border-orange-200 text-[10px] font-medium">Reddit · 312K</span>
+                                </div>
+                                <div class="flex items-center gap-2 mt-1.5">
+                                    <span class="text-base">🔥</span>
+                                    <span class="text-[11px] font-semibold text-amber-600">Decent match</span>
+                                    <span class="text-[10px] text-gray-400 ml-auto">12 posts this week</span>
+                                </div>
+                                <div class="mt-2 flex items-center gap-1.5">
+                                    <button class="text-[11px] font-medium px-2.5 py-1 bg-gray-900 text-white rounded-md">Track</button>
+                                    <button class="text-[11px] font-medium px-2.5 py-1 bg-white border border-gray-200 text-gray-600 rounded-md">Details</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Glow -->
+            <div class="absolute -bottom-12 left-1/2 -translate-x-1/2 w-[60%] h-24 bg-gray-900/10 blur-3xl rounded-full pointer-events-none"></div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── PROBLEM ───────────── -->
+<section class="border-t border-gray-100">
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-gray-400">The problem</span>
+            <h2 class="font-display text-3xl md:text-5xl font-semibold mt-3 leading-tight max-w-3xl">
+                Shipping is easy now. <span class="text-gray-400">Distribution is the moat.</span>
+            </h2>
+            <p class="text-base text-gray-500 mt-5 max-w-2xl leading-relaxed">
+                AI made building cheap. Everyone has a SaaS. The bottleneck shifted: now the founder who finds buyers fastest wins. Most don't.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12">
+            <div class="reveal p-5 rounded-2xl border border-gray-200">
+                <div class="text-2xl mb-2">🥱</div>
+                <h3 class="font-display font-semibold text-base mb-1">You posted. Crickets.</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">Your launch tweet got 12 likes. Your subreddit post got auto-removed. You don't know which channel to try next.</p>
+            </div>
+            <div class="reveal p-5 rounded-2xl border border-gray-200" style="transition-delay: .1s">
+                <div class="text-2xl mb-2">🌀</div>
+                <h3 class="font-display font-semibold text-base mb-1">Marketing tax is real.</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">Two hours scrolling X, one hour writing a comment, half a day "doing growth." You'd rather be building.</p>
+            </div>
+            <div class="reveal p-5 rounded-2xl border border-gray-200" style="transition-delay: .2s">
+                <div class="text-2xl mb-2">🤖</div>
+                <h3 class="font-display font-semibold text-base mb-1">AI slop fatigue.</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">Generic ChatGPT replies kill trust. You need posts that sound like <em>you</em> — not like the 47th SaaS launching that day.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── HOW IT WORKS ───────────── -->
+<section id="how" class="bg-gray-50/50 border-t border-gray-100">
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-gray-400">How it works</span>
+            <h2 class="font-display text-3xl md:text-5xl font-semibold mt-3 leading-tight max-w-3xl">
+                The agent does the marketing. <span class="text-gray-400">You ship the product.</span>
+            </h2>
+        </div>
+
+        <div class="mt-14 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12">
+            <!-- Step 1 -->
+            <div class="reveal flex gap-5">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-display font-semibold">1</div>
+                <div>
+                    <h3 class="font-display font-semibold text-lg mb-1.5">Tell it about your product</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">One form. Product, pitch, audience, stage. The agent remembers — every section uses this context without asking again.</p>
+                </div>
+            </div>
+            <!-- Step 2 -->
+            <div class="reveal flex gap-5" style="transition-delay: .1s">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-display font-semibold">2</div>
+                <div>
+                    <h3 class="font-display font-semibold text-lg mb-1.5">It maps your buyers</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Personas, watering holes, distribution channels, competitors. Built from your pitch with real receipts — TAM estimates, subreddit member counts, channel benchmarks.</p>
+                </div>
+            </div>
+            <!-- Step 3 -->
+            <div class="reveal flex gap-5" style="transition-delay: .2s">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-display font-semibold">3</div>
+                <div>
+                    <h3 class="font-display font-semibold text-lg mb-1.5">It finds the right accounts to engage with</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">A stealth browser extension scans X, LinkedIn, and Reddit for creators and communities that match your buyers. Every account is scored on authority, niche match, posting cadence, and engagement on mature posts — so you see who actually matters at a glance.</p>
+                </div>
+            </div>
+            <!-- Step 4 -->
+            <div class="reveal flex gap-5" style="transition-delay: .3s">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-display font-semibold">4</div>
+                <div>
+                    <h3 class="font-display font-semibold text-lg mb-1.5">It drafts in your voice</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Voice profile calibrated by a 7-question quiz. Posts that sound like you, not like AI. You press Send. The pipeline updates itself.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FEATURES GRID ───────────── -->
+<section id="features" class="border-t border-gray-100">
+    <div class="max-w-6xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-gray-400">What's inside</span>
+            <h2 class="font-display text-3xl md:text-5xl font-semibold mt-3 leading-tight max-w-3xl">
+                Every tool a founder needs to reach 1,000 — <span class="text-gray-400">in one place.</span>
+            </h2>
+        </div>
+
+        <div class="mt-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <!-- Card template, repeated -->
+            <div class="reveal p-6 rounded-2xl border border-gray-200 hover:border-gray-400 hover:shadow-sm transition-all duration-200 ease-out">
+                <div class="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                </div>
+                <h3 class="font-display font-semibold text-base mb-1">Account Finder</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">Stealth-scan X, LinkedIn, and Reddit for the exact creators and communities your buyers follow. Every account scored on authority, niche match, recency, and engagement on mature posts.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl border border-gray-200 hover:border-gray-400 hover:shadow-sm transition-all duration-200 ease-out" style="transition-delay: .05s">
+                <div class="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                </div>
+                <h3 class="font-display font-semibold text-base mb-1">Live Radar</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">Once you've tracked the accounts that matter, the radar surfaces their new posts the moment they go up. Reddit orange, X black, LinkedIn blue — you read the feed at a glance.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl border border-gray-200 hover:border-gray-400 hover:shadow-sm transition-all duration-200 ease-out" style="transition-delay: .1s">
+                <div class="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+                </div>
+                <h3 class="font-display font-semibold text-base mb-1">Content Engine</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">Voice-matched drafts across X, LinkedIn, Reddit, and Threads. Voice profile saved once — every post sounds like you, not like AI.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl border border-gray-200 hover:border-gray-400 hover:shadow-sm transition-all duration-200 ease-out" style="transition-delay: .15s">
+                <div class="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="22"/><path d="M2 12h20"/></svg>
+                </div>
+                <h3 class="font-display font-semibold text-base mb-1">Distribution Lab</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">Find the channels where your buyers already are — launchpads, subreddits, newsletters, communities. Ranked by fit, with channel-specific drafts.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl border border-gray-200 hover:border-gray-400 hover:shadow-sm transition-all duration-200 ease-out" style="transition-delay: .2s">
+                <div class="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                </div>
+                <h3 class="font-display font-semibold text-base mb-1">Launch Strategy</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">A 2026-era roadmap: wedge, compounding loops, first-72-hours plan, risk register. No more cargo-culting Y Combinator playbooks from 2018.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl border border-gray-200 hover:border-gray-400 hover:shadow-sm transition-all duration-200 ease-out" style="transition-delay: .25s">
+                <div class="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <h3 class="font-display font-semibold text-base mb-1">Competitor Analysis</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">Reverse-engineer what's working for the winners in your space: positioning, pricing, tech stack, community behavior. Their moves become your map.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── OUTCOME / METRICS ───────────── -->
+<section class="bg-gray-900 text-white">
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-white/40">What changes</span>
+            <h2 class="font-display text-3xl md:text-5xl font-semibold mt-3 leading-tight max-w-3xl">
+                The path from zero to 1,000 <span class="text-white/40">stops being a guess.</span>
+            </h2>
+        </div>
+
+        <div class="mt-14 grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-10">
+            <div class="reveal">
+                <div class="font-display text-4xl md:text-5xl font-semibold tracking-tight">100s</div>
+                <div class="text-sm text-white/50 mt-2 leading-snug">Of scored accounts surfaced per scan — every one ranked by how well they match your buyer.</div>
+            </div>
+            <div class="reveal" style="transition-delay: .1s">
+                <div class="font-display text-4xl md:text-5xl font-semibold tracking-tight">~30s</div>
+                <div class="text-sm text-white/50 mt-2 leading-snug">From spotting a tracked account's post to a draft reply in your voice — ready to send.</div>
+            </div>
+            <div class="reveal" style="transition-delay: .2s">
+                <div class="font-display text-4xl md:text-5xl font-semibold tracking-tight">3</div>
+                <div class="text-sm text-white/50 mt-2 leading-snug">Platforms unified into one finder — X, LinkedIn, Reddit.</div>
+            </div>
+            <div class="reveal" style="transition-delay: .3s">
+                <div class="font-display text-4xl md:text-5xl font-semibold tracking-tight">0</div>
+                <div class="text-sm text-white/50 mt-2 leading-snug">API keys required to start. The extension does the heavy lifting locally.</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── AGENT POSITIONING ───────────── -->
+<section class="border-t border-gray-100">
+    <div class="max-w-4xl mx-auto px-6 py-20 md:py-28 text-center">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-gray-400">The shift</span>
+            <h2 class="font-display text-3xl md:text-5xl font-semibold mt-3 leading-[1.1]">
+                Not a tool you check.<br/>
+                <span class="text-gray-400">An agent that ships work for you.</span>
+            </h2>
+            <p class="text-base text-gray-500 mt-6 max-w-2xl mx-auto leading-relaxed">
+                The old playbook: open ten tabs, hop between dashboards, copy-paste into ChatGPT, paste back, edit, ship. The new one: the agent watches, drafts, and queues. You approve.
+            </p>
+            <div class="mt-12 grid grid-cols-2 md:grid-cols-3 gap-3 text-left">
+                <div class="p-4 rounded-xl border border-gray-200 reveal">
+                    <div class="text-xs text-gray-400 mb-1">It does</div>
+                    <ul class="text-sm space-y-1 text-gray-700">
+                        <li>· Map your buyers</li>
+                        <li>· Scan LinkedIn, X, Reddit</li>
+                        <li>· Score and rank every account</li>
+                        <li>· Watch tracked accounts' posts</li>
+                        <li>· Draft replies in your voice</li>
+                        <li>· Track the pipeline</li>
+                    </ul>
+                </div>
+                <div class="p-4 rounded-xl border border-gray-200 reveal" style="transition-delay: .1s">
+                    <div class="text-xs text-gray-400 mb-1">You do</div>
+                    <ul class="text-sm space-y-1 text-gray-700">
+                        <li>· Approve drafts</li>
+                        <li>· Press Send</li>
+                        <li>· Build the product</li>
+                    </ul>
+                </div>
+                <div class="p-4 rounded-xl border border-gray-200 reveal hidden md:block" style="transition-delay: .2s">
+                    <div class="text-xs text-gray-400 mb-1">It never does</div>
+                    <ul class="text-sm space-y-1 text-gray-700">
+                        <li>· Auto-post on your account</li>
+                        <li>· Spam DMs</li>
+                        <li>· Sound like ChatGPT</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── PRICING ───────────── -->
+<section id="pricing" class="bg-gray-50/50 border-t border-gray-100">
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal text-center mb-14">
+            <span class="text-xs tracking-[0.2em] uppercase text-gray-400">Pricing</span>
+            <h2 class="font-display text-3xl md:text-5xl font-semibold mt-3 leading-tight">
+                Honest. Two plans. <span class="text-gray-400">Cancel anytime.</span>
+            </h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+            <!-- Free -->
+            <div class="reveal p-7 rounded-2xl border border-gray-200 bg-white">
+                <div class="text-xs uppercase tracking-widest text-gray-400 mb-2">Solo</div>
+                <div class="flex items-baseline gap-1">
+                    <span class="font-display text-4xl font-semibold">$0</span>
+                    <span class="text-sm text-gray-400">/ forever</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-2 leading-relaxed">For your first product. Bring your own Gemini API key.</p>
+                <ul class="text-sm space-y-2 mt-6 text-gray-700">
+                    <li class="flex gap-2"><span class="text-emerald-500">✓</span> Browser extension + radar</li>
+                    <li class="flex gap-2"><span class="text-emerald-500">✓</span> Up to 25 tracked accounts</li>
+                    <li class="flex gap-2"><span class="text-emerald-500">✓</span> All AI sections (your API key)</li>
+                    <li class="flex gap-2"><span class="text-emerald-500">✓</span> One active project</li>
+                </ul>
+                <a href="#cta" class="mt-7 block text-center px-5 py-2.5 border border-gray-300 hover:border-gray-900 hover:bg-gray-900 hover:text-white rounded-xl text-sm font-medium transition-all duration-200 ease-out active:scale-[0.98]">
+                    Start free
+                </a>
+            </div>
+
+            <!-- Pro -->
+            <div class="reveal p-7 rounded-2xl border-2 border-gray-900 bg-white relative" style="transition-delay: .1s">
+                <div class="absolute -top-2.5 left-7 px-2 py-0.5 bg-gray-900 text-white text-[10px] font-medium tracking-wider uppercase rounded-md">Most popular</div>
+                <div class="text-xs uppercase tracking-widest text-gray-400 mb-2">Founder</div>
+                <div class="flex items-baseline gap-1">
+                    <span class="font-display text-4xl font-semibold">$29</span>
+                    <span class="text-sm text-gray-400">/ month</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-2 leading-relaxed">For founders shipping seriously. We provide the AI capacity.</p>
+                <ul class="text-sm space-y-2 mt-6 text-gray-700">
+                    <li class="flex gap-2"><span class="text-emerald-500">✓</span> Everything in Solo</li>
+                    <li class="flex gap-2"><span class="text-emerald-500">✓</span> Unlimited tracked accounts</li>
+                    <li class="flex gap-2"><span class="text-emerald-500">✓</span> No API key needed (managed)</li>
+                    <li class="flex gap-2"><span class="text-emerald-500">✓</span> Multi-project switching</li>
+                    <li class="flex gap-2"><span class="text-emerald-500">✓</span> Priority Gemini capacity</li>
+                </ul>
+                <a href="#cta" class="mt-7 block text-center px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-medium transition-all duration-200 ease-out hover:shadow-lg hover:shadow-gray-300/40 active:scale-[0.98]">
+                    Go Founder
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FAQ ───────────── -->
+<section id="faq" class="border-t border-gray-100">
+    <div class="max-w-3xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-gray-400">FAQ</span>
+            <h2 class="font-display text-3xl md:text-5xl font-semibold mt-3 leading-tight">Questions, answered.</h2>
+        </div>
+        <div class="mt-12 divide-y divide-gray-200">
+            <details class="group py-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium">
+                    <span>Will this get my X / LinkedIn account banned?</span>
+                    <span class="ml-4 text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-gray-500 mt-3 leading-relaxed">No. The agent uses a stealth browser extension that mimics human browsing — natural scrolling, randomised timing, session breaks, captcha detection. It never auto-posts on your behalf. You always press Send.</p>
+            </details>
+            <details class="group py-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium">
+                    <span>Where does my data live?</span>
+                    <span class="ml-4 text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-gray-500 mt-3 leading-relaxed">Everything is stored locally in your browser. The only data leaving your machine is the prompts you send to the Gemini API for content generation — same as if you were using ChatGPT yourself.</p>
+            </details>
+            <details class="group py-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium">
+                    <span>Do I need a Gemini API key?</span>
+                    <span class="ml-4 text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-gray-500 mt-3 leading-relaxed">On the Solo plan, yes — free at <a href="https://aistudio.google.com/app/apikey" class="underline underline-offset-2 hover:text-gray-900">aistudio.google.com/app/apikey</a>. On the Founder plan we provide managed capacity, no key required.</p>
+            </details>
+            <details class="group py-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium">
+                    <span>Does it actually sound like me?</span>
+                    <span class="ml-4 text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-gray-500 mt-3 leading-relaxed">A 7-question Voice Match quiz calibrates a voice profile across six dimensions — authority, energy, vulnerability, provocation, specificity, intimacy — plus rhythm and hook architecture. You can paste a writing sample for the AI to fine-tune against. The output is dramatically closer to your voice than a one-shot ChatGPT reply.</p>
+            </details>
+            <details class="group py-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium">
+                    <span>What if I'm not technical?</span>
+                    <span class="ml-4 text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-gray-500 mt-3 leading-relaxed">You install the extension and fill in one form about your product. That's the technical bar. The agent does the rest.</p>
+            </details>
+            <details class="group py-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium">
+                    <span>How is this different from ChatGPT or Copy.ai?</span>
+                    <span class="ml-4 text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-gray-500 mt-3 leading-relaxed">ChatGPT writes content on demand. LaunchVelocity tells you who to write to — it scans LinkedIn, X, and Reddit and surfaces the exact accounts your buyers follow, scored and ranked. It also knows your voice, your product, your audience, your strategy, and your competitors. Everything stays in context.</p>
+            </details>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FINAL CTA ───────────── -->
+<section id="cta" class="border-t border-gray-100 bg-gradient-to-b from-white to-gray-50">
+    <div class="max-w-3xl mx-auto px-6 py-20 md:py-28 text-center">
+        <div class="reveal">
+            <h2 class="font-display text-3xl md:text-5xl font-semibold leading-[1.1]">
+                Your first 1,000 users <span class="text-gray-400">are waiting.</span>
+            </h2>
+            <p class="text-base md:text-lg text-gray-500 mt-5 max-w-xl mx-auto leading-relaxed">
+                Install the extension. Set up your project in 60 seconds. Let the agent take it from there.
+            </p>
+            <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <a href="#" class="inline-flex items-center gap-2 px-7 py-3.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-medium transition-all duration-200 ease-out hover:shadow-lg hover:shadow-gray-300/40 active:scale-[0.98]">
+                    Get the extension
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </a>
+                <a href="#" class="inline-flex items-center gap-2 px-6 py-3.5 border border-gray-200 hover:border-gray-400 bg-white text-gray-700 rounded-xl text-sm font-medium transition-all duration-200 ease-out hover:shadow-sm active:scale-[0.98]">
+                    Open the dashboard
+                </a>
+            </div>
+            <p class="text-xs text-gray-400 mt-6">No credit card on Solo · Cancel anytime on Founder</p>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FOOTER ───────────── -->
+<footer class="border-t border-gray-100">
+    <div class="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-md bg-gray-900 text-white flex items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+            </div>
+            <span class="font-display font-semibold text-sm">LaunchVelocity</span>
+            <span class="text-xs text-gray-400 ml-2">© 2026 · Built for founders</span>
+        </div>
+        <div class="flex items-center gap-6 text-xs text-gray-400">
+            <a href="#how" class="hover:text-gray-900 transition-colors">How it works</a>
+            <a href="#features" class="hover:text-gray-900 transition-colors">Features</a>
+            <a href="#pricing" class="hover:text-gray-900 transition-colors">Pricing</a>
+            <a href="#faq" class="hover:text-gray-900 transition-colors">FAQ</a>
+        </div>
+    </div>
+</footer>
+
+<!-- Tiny reveal-on-scroll script — no framework -->
+<script>
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

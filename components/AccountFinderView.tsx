@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Target, Zap, Users, Crosshair, ShieldCheck, ShieldAlert, ShieldOff,
   Twitter, Linkedin, MessageCircle, Plus, X, Play, Pause, StopCircle,
-  Activity, Eye, ExternalLink, Check, Star, TrendingUp, Globe, Filter,
+  Activity, Eye, ExternalLink, Check, CheckCircle2, Star, TrendingUp, Globe, Filter,
   ChevronDown, ChevronUp, Sparkles, Loader2, Radar, Hash, AlertTriangle,
   Verified, Settings2, Terminal, Clock, Gauge, Skull, Brain, Heart,
   ArrowUpRight, BarChart3, FileSearch, Trash2, Download, Share2,
@@ -79,7 +79,7 @@ export const AccountFinderView: React.FC = () => {
   const [activeHashtagInput, setActiveHashtagInput] = useState('');
   const [activeExcludeInput, setActiveExcludeInput] = useState('');
   const [resultFilter, setResultFilter] = useState<'all' | AccountTier | 'untracked'>('all');
-  const [resultSort, setResultSort] = useState<'score' | 'followers' | 'engagement' | 'recent'>('score');
+  const [resultSort, setResultSort] = useState<'score' | 'followers' | 'engagement' | 'recent' | 'lastpost'>('score');
   const [selectedAccount, setSelectedAccount] = useState<DiscoveredAccount | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -340,6 +340,12 @@ export const AccountFinderView: React.FC = () => {
       if (resultSort === 'score') return b.finalScore - a.finalScore;
       if (resultSort === 'followers') return b.followers - a.followers;
       if (resultSort === 'engagement') return (b.engagementRate || 0) - (a.engagementRate || 0);
+      if (resultSort === 'lastpost') {
+        // Smaller daysSinceLastPost = more recent. Unknown sinks to the bottom.
+        const ad = typeof a.daysSinceLastPost === 'number' ? a.daysSinceLastPost : Number.POSITIVE_INFINITY;
+        const bd = typeof b.daysSinceLastPost === 'number' ? b.daysSinceLastPost : Number.POSITIVE_INFINITY;
+        return ad - bd;
+      }
       return new Date(b.discoveredAt).getTime() - new Date(a.discoveredAt).getTime();
     });
     return r;
@@ -998,29 +1004,43 @@ const ResultsPanel: React.FC<{
         <div className="ml-auto">
           <select
             value={resultSort}
-            onChange={(e) => setResultSort(e.target.value)}
+            onChange={(e) => setResultSort(e.target.value as typeof resultSort)}
             className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white"
           >
             <option value="score">Sort: Best match</option>
             <option value="followers">Sort: Followers</option>
             <option value="engagement">Sort: Engagement</option>
-            <option value="recent">Sort: Newest</option>
+            <option value="lastpost">Sort: Most recently active</option>
+            <option value="recent">Sort: Newest discovery</option>
           </select>
         </div>
       </div>
 
-      {/* Results Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {results.map(account => (
-          <AccountCard
-            key={account.id}
-            account={account}
-            onTrack={() => onTrack(account)}
-            onDismiss={() => onDismiss(account)}
-            onInspect={() => onInspect(account)}
-          />
-        ))}
+      {/* Results List — table-style rows, all columns aligned. Replaces the card grid. */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        {/* Sticky column header — labels every numeric KPI and the action column. */}
+        <div className="hidden md:grid sticky top-0 z-10 bg-gray-50 border-b border-gray-200 text-[9px] font-bold uppercase tracking-widest text-gray-500"
+             style={{ gridTemplateColumns: '1fr 130px 90px 90px 110px 240px', columnGap: '0px' }}>
+          <div className="px-4 py-2.5">Account</div>
+          <div className="px-3 py-2.5 text-center">Match</div>
+          <div className="px-3 py-2.5 text-right">Followers</div>
+          <div className="px-3 py-2.5 text-right">Last post</div>
+          <div className="px-3 py-2.5 text-right">Median engage</div>
+          <div className="px-3 py-2.5 text-center">Actions</div>
+        </div>
+        <ul className="divide-y divide-gray-100">
+          {results.map(account => (
+            <AccountRow
+              key={account.id}
+              account={account}
+              onTrack={() => onTrack(account)}
+              onDismiss={() => onDismiss(account)}
+              onInspect={() => onInspect(account)}
+            />
+          ))}
+        </ul>
       </div>
+      {/* End of row-list. (AccountCard component remains defined below as a one-line revert path.) */}
 
       {results.length === 0 && (
         <div className="text-center py-12 text-gray-400">
@@ -1029,6 +1049,209 @@ const ResultsPanel: React.FC<{
         </div>
       )}
     </div>
+  );
+};
+
+// ────────────────────────────────────────────────────────────────────
+// AccountRow — single-line row form, all KPIs aligned, all four
+// original action buttons restored (Track / Skip / Inspect / Open profile).
+// Tracked rows get an emerald background tint so they stand out from
+// the long list of untracked discoveries. Replaces the card grid as
+// the default view of the results.
+// ────────────────────────────────────────────────────────────────────
+const AccountRow: React.FC<{
+  account: DiscoveredAccount;
+  onTrack: () => void;
+  onDismiss: () => void;
+  onInspect: () => void;
+}> = ({ account, onTrack, onDismiss, onInspect }) => {
+  const tierConfig: Record<AccountTier, { gradient: string }> = {
+    S: { gradient: 'from-purple-500 to-pink-500' },
+    A: { gradient: 'from-indigo-500 to-blue-500' },
+    B: { gradient: 'from-blue-500 to-cyan-500' },
+    C: { gradient: 'from-gray-500 to-gray-600' }
+  };
+  const tc = tierConfig[account.tier];
+  const platformIcon = account.platform === 'X' ? <Twitter size={11} /> :
+                       account.platform === 'LinkedIn' ? <Linkedin size={11} /> :
+                       <MessageCircle size={11} />;
+
+  const fmt = (n: number) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : (n || 0).toString();
+
+  const isTracked = account.trackingStatus === 'tracking';
+  const isDismissed = account.trackingStatus === 'dismissed';
+  const isPreliminary = account.verificationStatus === 'preliminary';
+  const isIncomplete = account.verificationStatus === 'incomplete';
+
+  // Match strength — 1 to 3 fires, or empty for low match.
+  const fires =
+    account.finalScore >= 85 ? '🔥🔥🔥' :
+    account.finalScore >= 65 ? '🔥🔥' :
+    account.finalScore >= 45 ? '🔥' :
+    '';
+  const fireLabel =
+    account.finalScore >= 85 ? 'Top match' :
+    account.finalScore >= 65 ? 'Strong match' :
+    account.finalScore >= 45 ? 'Decent match' :
+    'Low match';
+
+  const rowBg =
+    isTracked    ? 'bg-emerald-50/70 hover:bg-emerald-50' :
+    isDismissed  ? 'bg-gray-50 opacity-60' :
+                   'bg-white hover:bg-gray-50';
+
+  return (
+    <li className={`group relative transition-colors ${rowBg}`}>
+      {/* Tracked accent stripe on the left edge so the eye finds tracked rows at a glance */}
+      {isTracked && <span className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></span>}
+
+      {/* Mobile layout: stacked. Desktop: 6-column grid that lines up with the sticky header. */}
+      <div className="md:grid md:items-center md:gap-0 flex flex-col"
+           style={{ gridTemplateColumns: '1fr 130px 90px 90px 110px 240px' }}>
+
+        {/* ── Identity column ── */}
+        <div className="px-4 py-3 flex items-center gap-3 min-w-0">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 bg-gradient-to-br ${tc.gradient}`}>
+            {account.avatar
+              ? <img src={account.avatar} alt={account.handle} className="w-full h-full rounded-xl object-cover" />
+              : (account.displayName?.[0] || account.handle[0] || '?').toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-bold text-sm text-gray-900 truncate">{account.displayName || account.handle}</span>
+              {account.verified && <Verified size={11} className="text-blue-500 flex-shrink-0" />}
+              {isTracked && (
+                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Tracking</span>
+              )}
+              {isPreliminary && (
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded flex items-center gap-1"
+                      title="Score from search card only — will refine after profile visit">
+                  <Loader2 size={8} className="animate-spin" /> Preliminary
+                </span>
+              )}
+              {isIncomplete && (
+                <span className="text-[9px] font-black uppercase tracking-widest text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded"
+                      title="Visited profile but post data was unreadable">Incomplete</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mt-0.5">
+              <span className="flex items-center gap-1">{platformIcon}@{account.handle}</span>
+              <span className={`text-[9px] font-black tracking-widest px-1 rounded ${
+                account.tier === 'S' ? 'text-purple-600' :
+                account.tier === 'A' ? 'text-indigo-600' :
+                account.tier === 'B' ? 'text-blue-600' :
+                'text-gray-500'
+              }`}>· {account.tier}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Match strength ── */}
+        <div className="px-3 py-2 md:py-3 flex md:flex-col items-center md:items-center justify-between md:justify-center gap-2 md:gap-0.5">
+          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Match</span>
+          <div className="flex flex-col items-center">
+            <div className="text-base leading-none">{fires || <span className="text-gray-300">·</span>}</div>
+            <div className={`text-[9px] uppercase tracking-widest font-bold mt-0.5 ${
+              account.finalScore >= 85 ? 'text-rose-600' :
+              account.finalScore >= 65 ? 'text-orange-600' :
+              account.finalScore >= 45 ? 'text-amber-600' :
+              'text-gray-400'
+            }`}>{fireLabel}</div>
+          </div>
+        </div>
+
+        {/* ── Followers ── */}
+        <div className="px-3 py-2 md:py-3 flex md:block items-center justify-between md:text-right">
+          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Followers</span>
+          <span className="text-sm font-bold text-gray-900 tabular-nums">{fmt(account.followers || 0)}</span>
+        </div>
+
+        {/* ── Last post ── */}
+        <div className="px-3 py-2 md:py-3 flex md:block items-center justify-between md:text-right">
+          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Last post</span>
+          <span className="text-sm font-bold text-gray-700 tabular-nums">
+            {typeof account.daysSinceLastPost !== 'number' ? <span className="text-gray-300">—</span>
+              : account.daysSinceLastPost < 1 ? 'Today'
+              : `${Math.round(account.daysSinceLastPost)}d`}
+          </span>
+        </div>
+
+        {/* ── Median engagement ── */}
+        <div className="px-3 py-2 md:py-3 flex md:block items-center justify-between md:text-right">
+          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Median engage</span>
+          <span className="text-sm font-bold text-gray-700 tabular-nums">
+            {typeof account.maturePostMedianEngagement === 'number'
+              ? `~${account.maturePostMedianEngagement}`
+              : <span className="text-gray-300">—</span>}
+          </span>
+        </div>
+
+        {/* ── Actions ── pixel-aligned across all states.
+            Desktop layout is a fixed 4-cell grid:
+              [primary 100px][gap][inspect 28px][gap][open 28px]
+            The "primary" cell is the same width whether the row shows
+            "Track + Skip" (untracked) or "Tracking" (tracked) — so the
+            right edge of every row's Inspect/Open icons lines up
+            perfectly down the column. */}
+        <div className="px-3 py-2 md:py-2.5 flex items-center justify-end gap-1.5">
+          <div className="md:w-[100px] flex items-center gap-1.5 w-full md:w-auto">
+            {isTracked ? (
+              <button
+                onClick={onDismiss}
+                className="flex-1 md:w-[100px] h-8 px-2 bg-emerald-600 text-white rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-emerald-700 transition-colors"
+                title="Stop tracking this account"
+              >
+                <CheckCircle2 size={12} /> Tracking
+              </button>
+            ) : isDismissed ? (
+              <button
+                onClick={onTrack}
+                className="flex-1 md:w-[100px] h-8 px-2 bg-gray-100 text-gray-500 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-gray-200 transition-colors"
+                title="Restore (track this account)"
+              >
+                <Radar size={12} /> Skipped
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={onTrack}
+                  className="flex-1 md:w-[68px] h-8 px-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                  title="Watch this account for new posts"
+                >
+                  <Radar size={12} /> Track
+                </button>
+                <button
+                  onClick={onDismiss}
+                  className="w-[28px] h-8 flex-shrink-0 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center justify-center"
+                  title="Skip"
+                  aria-label="Skip"
+                >
+                  <X size={13} />
+                </button>
+              </>
+            )}
+          </div>
+          <button
+            onClick={onInspect}
+            className="w-[28px] h-8 flex-shrink-0 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center justify-center"
+            title="Inspect details"
+            aria-label="Inspect"
+          >
+            <Eye size={13} />
+          </button>
+          <a
+            href={account.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-[28px] h-8 flex-shrink-0 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center justify-center"
+            title="Open profile in new tab"
+            aria-label="Open profile"
+          >
+            <ExternalLink size={13} />
+          </a>
+        </div>
+      </div>
+    </li>
   );
 };
 
@@ -1053,45 +1276,77 @@ const AccountCard: React.FC<{
 
   const isTracked = account.trackingStatus === 'tracking';
   const isDismissed = account.trackingStatus === 'dismissed';
+  const isPreliminary = account.verificationStatus === 'preliminary';
+  const isIncomplete = account.verificationStatus === 'incomplete';
+  const hasMismatch = (account.filterMismatchReasons?.length || 0) > 0;
+
+  // ── MATCH STRENGTH (fire emoji + label) ────────────────────────
+  // Replaces the numeric "Score" KPI. Fire count scales with match strength
+  // so users see relative quality at a glance without having to interpret
+  // an arbitrary 0-100 number. Below 45 we drop fire entirely so weak
+  // matches are clearly differentiated from strong ones.
+  const matchStrength =
+    account.finalScore >= 85 ? { fires: '🔥🔥🔥', label: 'Top match',  tone: 'text-rose-600' } :
+    account.finalScore >= 65 ? { fires: '🔥🔥',   label: 'Strong match', tone: 'text-orange-600' } :
+    account.finalScore >= 45 ? { fires: '🔥',     label: 'Decent match', tone: 'text-amber-600' } :
+                                { fires: '',       label: 'Low match',    tone: 'text-gray-400' };
+
+  // Card surface: tracked accounts get a solid emerald fill so they pop
+  // out of a long list. Dismissed accounts fade. Untracked stays clean white.
+  const surfaceClass = isTracked
+    ? 'bg-emerald-50 border-emerald-500 shadow-lg shadow-emerald-200/50 ring-2 ring-emerald-300/60'
+    : isDismissed
+      ? 'bg-gray-50 border-gray-100 opacity-50'
+      : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md';
 
   return (
-    <div className={`relative p-5 rounded-2xl border-2 transition-all overflow-hidden ${
-      isTracked ? 'bg-gradient-to-br from-emerald-50 via-white to-emerald-50/30 border-emerald-400 shadow-lg shadow-emerald-100/60 ring-2 ring-emerald-200/50' :
-      isDismissed ? 'bg-gray-50 border-gray-100 opacity-50' :
-      'bg-white border-gray-100 hover:border-gray-300 hover:shadow-lg'
-    }`}>
+    <div className={`relative p-5 rounded-2xl border-2 transition-all overflow-hidden flex flex-col ${surfaceClass}`}>
       {/* TRACKED — animated radar pulse on top edge */}
       {isTracked && (
-        <>
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-400">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-pulse"></div>
-          </div>
-          {/* Live dot */}
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-md shadow-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-            Tracking
-          </div>
-        </>
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-400">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-pulse"></div>
+        </div>
       )}
 
-      {/* Tier Badge */}
-      <div className={`absolute top-3 right-3 px-2 py-0.5 rounded-lg bg-gradient-to-br ${tc.gradient} text-white text-[10px] font-black tracking-widest`}>
-        {account.tier}
+      {/* TOP BAR — tier (left) + verification status (right). Symmetric. */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1.5">
+          {isTracked && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+              Tracking
+            </span>
+          )}
+          <span className={`px-2 py-0.5 rounded-lg bg-gradient-to-br ${tc.gradient} text-white text-[10px] font-black tracking-widest`}>
+            {account.tier}
+          </span>
+        </div>
+
+        {(isPreliminary || isIncomplete) && !isTracked && (
+          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${
+            isPreliminary ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-orange-100 text-orange-800 border border-orange-200'
+          }`}
+            title={isPreliminary ? 'Score from search card only — will refine after profile visit' : 'Visited profile but post data was unreadable'}
+          >
+            {isPreliminary ? <Loader2 size={9} className="animate-spin" /> : null}
+            {isPreliminary ? 'Preliminary' : 'Incomplete'}
+          </span>
+        )}
       </div>
 
-      {/* Header */}
-      <div className={`flex items-start gap-3 mb-3 ${isTracked ? 'mt-7' : ''}`}>
-        <div className={`relative w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-base flex-shrink-0 bg-gradient-to-br ${tc.gradient} ${isTracked ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-white' : ''}`}>
+      {/* IDENTITY — avatar + name + handle. No bio (removed per redesign). */}
+      <div className="flex items-start gap-3 mb-4">
+        <div className={`relative w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0 bg-gradient-to-br ${tc.gradient} ${isTracked ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-emerald-50' : ''}`}>
           {account.avatar
-            ? <img src={account.avatar} alt={account.handle} className="w-full h-full rounded-xl object-cover" />
+            ? <img src={account.avatar} alt={account.handle} className="w-full h-full rounded-2xl object-cover" />
             : (account.displayName?.[0] || account.handle[0]).toUpperCase()}
           {isTracked && (
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center">
-              <Eye size={8} className="text-white" strokeWidth={3} />
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center">
+              <Eye size={9} className="text-white" strokeWidth={3} />
             </div>
           )}
         </div>
-        <div className="flex-1 min-w-0 pr-12">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <h3 className="font-bold text-sm truncate">{account.displayName || account.handle}</h3>
             {account.verified && <Verified size={12} className="text-blue-500 flex-shrink-0" />}
@@ -1103,77 +1358,98 @@ const AccountCard: React.FC<{
         </div>
       </div>
 
-      {/* Bio */}
-      {account.bio && (
-        <p className="text-xs text-gray-600 line-clamp-2 mb-3 leading-relaxed">{account.bio}</p>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-2 mb-3 p-3 bg-gray-50 rounded-xl">
-        <Stat label="Followers" value={fmt(account.followers)} />
-        <Stat label="Engagement" value={`${account.engagementRate?.toFixed(1) || '—'}%`} />
-        <Stat label="Score" value={account.finalScore.toFixed(0)} highlight />
+      {/* KPI GRID — 2x2 symmetric. Match strength is featured (full row). */}
+      <div className="mb-4 p-4 bg-gray-50 rounded-xl space-y-3">
+        {/* Match strength — the headline KPI, replaces numeric score */}
+        <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+          <div>
+            <div className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-0.5">Match strength</div>
+            <div className={`text-sm font-black ${matchStrength.tone}`}>{matchStrength.label}</div>
+          </div>
+          <div className="text-2xl leading-none" aria-label={`${matchStrength.label}, ${matchStrength.fires.length / 2} out of 3`}>
+            {matchStrength.fires || <span className="text-gray-300">·</span>}
+          </div>
+        </div>
+        {/* 2x2 grid below for numeric KPIs */}
+        <div className="grid grid-cols-2 gap-3">
+          <KpiCell label="Followers" value={fmt(account.followers)} />
+          <KpiCell label="Engagement" value={`${account.engagementRate?.toFixed(1) || '—'}%`} />
+          <KpiCell
+            label="Last post"
+            value={
+              typeof account.daysSinceLastPost !== 'number' ? '—'
+              : account.daysSinceLastPost < 1 ? 'Today'
+              : `${Math.round(account.daysSinceLastPost)}d ago`
+            }
+          />
+          <KpiCell
+            label="Median engagement"
+            value={typeof account.maturePostMedianEngagement === 'number' ? `~${account.maturePostMedianEngagement}` : '—'}
+          />
+        </div>
       </div>
 
-      {/* Signals */}
-      {account.matchedSignals.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3">
-          {account.matchedSignals.slice(0, 3).map((s, i) => (
-            <span key={i} className="text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
-              {s}
-            </span>
-          ))}
+      {/* Filter mismatch — informational, not exclusionary */}
+      {hasMismatch && !isPreliminary && (
+        <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-800"
+          title={account.filterMismatchReasons?.join(' · ')}
+        >
+          <span className="font-bold">Doesn't match all filters:</span> {account.filterMismatchReasons!.slice(0, 2).join(', ')}
+          {(account.filterMismatchReasons?.length || 0) > 2 ? ` +${account.filterMismatchReasons!.length - 2}` : ''}
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center gap-1.5">
+      {/* Spacer pushes actions to the bottom so cards of different heights still align action rows */}
+      <div className="flex-1" />
+
+      {/* ACTIONS — three equal-width buttons. Same height, same paddings. */}
+      <div className="grid grid-cols-3 gap-2 mt-1">
         {isTracked ? (
-          <div className="flex-1 px-3 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-200">
-            <Radar size={14} className="animate-pulse" /> Tracking posts
+          <div className="col-span-2 h-10 px-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-200">
+            <Radar size={14} className="animate-pulse" /> Tracking
           </div>
         ) : isDismissed ? (
-          <div className="flex-1 px-3 py-2 bg-gray-100 text-gray-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+          <div className="col-span-2 h-10 px-3 bg-gray-100 text-gray-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
             <X size={14} /> Skipped
           </div>
         ) : (
           <>
             <button
               onClick={onTrack}
-              className="flex-1 px-3 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+              className="h-10 px-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
               title="Watch this account for new posts. They'll show up in the Pipeline."
             >
               <Radar size={14} /> Track
             </button>
             <button
               onClick={onDismiss}
-              className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 text-gray-600"
+              className="h-10 px-3 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 flex items-center justify-center gap-1.5 transition-colors"
               title="Skip"
             >
-              <X size={14} />
+              <X size={14} /> Skip
             </button>
           </>
         )}
         <button
           onClick={onInspect}
-          className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 text-gray-600"
-          title="Inspect"
+          className="h-10 px-3 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 flex items-center justify-center gap-1.5 transition-colors"
+          title="Inspect details"
         >
-          <Eye size={14} />
+          <Eye size={14} /> Details
         </button>
-        <a
-          href={account.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 text-gray-600"
-          title="Open profile"
-        >
-          <ExternalLink size={14} />
-        </a>
       </div>
     </div>
   );
 };
+
+// Symmetric KPI cell used inside the AccountCard grid. Fixed height keeps
+// rows aligned across cards even when one value is "—".
+const KpiCell: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="flex flex-col justify-center h-12">
+    <div className="text-[9px] uppercase tracking-widest text-gray-500 font-bold leading-none mb-1">{label}</div>
+    <div className="text-sm font-bold text-gray-900 leading-tight truncate">{value}</div>
+  </div>
+);
 
 const InspectModal: React.FC<{
   account: DiscoveredAccount;
@@ -1223,6 +1499,50 @@ const InspectModal: React.FC<{
           <BigStat label="Reach score" value={`${account.authorityScore}/100`} />
           <BigStat label="Topic match" value={`${account.nicheMatch}/100`} />
         </div>
+
+        {/* LinkedIn post signals — surface in the inspector so the user can judge cadence */}
+        {account.platform === 'LinkedIn' && (typeof account.daysSinceLastPost === 'number' || typeof account.maturePostMedianEngagement === 'number' || typeof account.recentPostCount === 'number') && (
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <BigStat
+              label="Last post"
+              value={
+                typeof account.daysSinceLastPost !== 'number' ? '—'
+                : account.daysSinceLastPost < 1 ? 'Today'
+                : `${Math.round(account.daysSinceLastPost)}d ago`
+              }
+            />
+            <BigStat
+              label="Posts last 7d"
+              value={typeof account.recentPostCount === 'number' ? `${account.recentPostCount}` : '—'}
+            />
+            <BigStat
+              label="Median engagement (3d+)"
+              value={typeof account.maturePostMedianEngagement === 'number' ? `~${account.maturePostMedianEngagement}` : '—'}
+            />
+          </div>
+        )}
+
+        {/* Filter mismatch reasons — non-blocking, informational */}
+        {(account.filterMismatchReasons?.length || 0) > 0 && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+            <div className="text-[10px] uppercase tracking-widest text-amber-800 font-bold mb-2">Doesn't match all your filters</div>
+            <ul className="space-y-1">
+              {account.filterMismatchReasons!.map((r, i) => (
+                <li key={i} className="text-sm text-amber-900 flex items-start gap-2">
+                  <span className="text-amber-600 mt-0.5">·</span>
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {account.verificationStatus === 'preliminary' && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-900 flex items-center gap-2">
+            <Loader2 size={14} className="animate-spin" />
+            Preliminary score from search results. Will refine once we visit the profile.
+          </div>
+        )}
 
         {account.topTopics && account.topTopics.length > 0 && (
           <div className="mb-6">

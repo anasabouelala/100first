@@ -1,30 +1,33 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { MessageSquarePlus, RefreshCw, Github, Sparkles, Twitter, Linkedin, MessageCircle, Hash, Loader2, Copy, Check, ChevronRight, ChevronLeft, Zap, ExternalLink, BookOpen, Flame, Link, Wand2, AlertCircle, Sliders, Brain, Target, Skull, Heart, Crown, Eye, Layers, X } from 'lucide-react';
+import { MessageSquarePlus, RefreshCw, Github, Sparkles, Twitter, Linkedin, MessageCircle, Hash, Loader2, Copy, Check, ChevronRight, ChevronLeft, ChevronDown, Zap, ExternalLink, BookOpen, Flame, Link, Wand2, AlertCircle, Sliders, Brain, Target, Skull, Heart, Crown, Eye, Layers, X, Settings2 } from 'lucide-react';
 import {
   generateContentEnginePost, suggestVoiceProfile, ContentEngineParams, ContentEngineDraft,
   VoiceMix, HookArchitecture, PerspectiveInjector, ViralPhysics, CloserStrategy
 } from '../services/geminiService';
 import { fetchRepoPulse, parseGitHubUrl } from '../services/githubService';
+import { Section, SubSection } from './ui/Section';
+import { useVoiceProfile } from '../hooks/useVoiceProfile';
+import { AppMode } from '../types';
 
 // ────────────────────────────────────────────────────────────────────
 // VOICE ARCHITECTURE — Defaults, Presets, Catalogues
 // ────────────────────────────────────────────────────────────────────
-const DEFAULT_VOICE_MIX: VoiceMix = {
+export const DEFAULT_VOICE_MIX: VoiceMix = {
   authority: 60, energy: 50, vulnerability: 50, provocation: 50, specificity: 75, intimacy: 60, rhythm: 'punchy'
 };
-const DEFAULT_HOOK: HookArchitecture = {
+export const DEFAULT_HOOK: HookArchitecture = {
   patternInterrupt: 'shocking_number', tensionMechanism: 'curiosity_gap', promisePayoff: 'what_to_avoid'
 };
-const DEFAULT_VIRAL: ViralPhysics = {
+export const DEFAULT_VIRAL: ViralPhysics = {
   statusCurrency: true, inGroupSignaling: false, tribalFraming: false,
   fortuneCookieClose: true, loopOpener: false, concessionMove: true,
   baitAndSwitch: false, forbiddenSpecificity: true
 };
-const DEFAULT_PERSPECTIVE: PerspectiveInjector = {
+export const DEFAULT_PERSPECTIVE: PerspectiveInjector = {
   uniqueAngle: '', contrarian: '', forbiddenTakes: '', receipts: ''
 };
 
-const VOICE_PRESETS: Array<{
+export const VOICE_PRESETS: Array<{
   id: string; name: string; emoji: string; tagline: string;
   voiceMix: VoiceMix; hook: HookArchitecture; viral: ViralPhysics; closer: CloserStrategy;
 }> = [
@@ -142,7 +145,9 @@ const PLATFORM_ICONS: Record<string, React.ReactNode> = {
     'Threads':  <Hash size={14} />,
 };
 
-export const ContentEngineView: React.FC = () => {
+// Section/SubSection now live in ui/Section.tsx — shared across all views.
+
+export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({ onOpenParameters }) => {
     const [step, setStep] = useState<1 | 2 | 3>(1);
     const [origin, setOrigin] = useState<OriginType>('fresh');
     const [sourceContent, setSourceContent] = useState('');
@@ -161,115 +166,14 @@ export const ContentEngineView: React.FC = () => {
     const [format, setFormat] = useState<ContentEngineParams['format']>('single');
     const [ctaType, setCtaType] = useState<ContentEngineParams['cta']>('soft');
 
-    // ─── Voice Architecture (FULLY PERSISTED to localStorage) ───
-    const VOICE_PROFILE_KEY = 'content_voice_profile_v2';
-    type VoiceProfile = {
-        voiceMix: VoiceMix;
-        hook: HookArchitecture;
-        viral: ViralPhysics;
-        closer: CloserStrategy;
-        variants: number;
-        activePreset: string | null;
-    };
-    const defaultProfile: VoiceProfile = {
-        voiceMix: VOICE_PRESETS[0].voiceMix,
-        hook: VOICE_PRESETS[0].hook,
-        viral: VOICE_PRESETS[0].viral,
-        closer: VOICE_PRESETS[0].closer,
-        variants: 1,
-        activePreset: 'brutal_founder'
-    };
-    const loadedProfile: VoiceProfile = (() => {
-        try {
-            const raw = localStorage.getItem(VOICE_PROFILE_KEY);
-            return raw ? { ...defaultProfile, ...JSON.parse(raw) } : defaultProfile;
-        } catch { return defaultProfile; }
-    })();
+    // ─── Voice profile — read from the shared hook ───
+    // All voice/hook/viral/closer/variants/perspective/style live in
+    // ContentParametersView and are persisted there. This view consumes
+    // them at generation time. Anything edited in Parameters takes effect
+    // on the next post without a reload.
+    const vp = useVoiceProfile();
+    const { voiceMix, hook, viral, closer, variants, activePreset, perspective, styleInspiration } = vp;
 
-    const [activePreset, setActivePreset] = useState<string | null>(loadedProfile.activePreset);
-    const [voiceMix, setVoiceMix] = useState<VoiceMix>(loadedProfile.voiceMix);
-    const [hook, setHook] = useState<HookArchitecture>(loadedProfile.hook);
-    const [viral, setViral] = useState<ViralPhysics>(loadedProfile.viral);
-    const [closer, setCloser] = useState<CloserStrategy>(loadedProfile.closer);
-    const [variants, setVariants] = useState(loadedProfile.variants);
-
-    // Persist every change
-    useEffect(() => {
-        const profile: VoiceProfile = { voiceMix, hook, viral, closer, variants, activePreset };
-        localStorage.setItem(VOICE_PROFILE_KEY, JSON.stringify(profile));
-    }, [voiceMix, hook, viral, closer, variants, activePreset]);
-
-    // AI auto-set state
-    const [aiSuggesting, setAiSuggesting] = useState(false);
-    const [aiSuggestionReason, setAiSuggestionReason] = useState<string | null>(null);
-    const [aiSuggestError, setAiSuggestError] = useState<string | null>(null);
-
-    // Voice Match quiz
-    const [quizOpen, setQuizOpen] = useState(false);
-    const handleQuizComplete = (result: { voiceMix: VoiceMix; hook: HookArchitecture; viral: ViralPhysics; closer: CloserStrategy; personaName: string; tagline: string }) => {
-        setVoiceMix(result.voiceMix);
-        setHook(result.hook);
-        setViral(result.viral);
-        setCloser(result.closer);
-        setActivePreset(null);
-        setAiSuggestionReason(`${result.personaName} — ${result.tagline}`);
-        setQuizOpen(false);
-    };
-
-    // Perspective Injector — persisted (signature)
-    const [perspective, setPerspective] = useState<PerspectiveInjector>(() => {
-        try {
-            const raw = localStorage.getItem('content_perspective_v1');
-            return raw ? JSON.parse(raw) : DEFAULT_PERSPECTIVE;
-        } catch { return DEFAULT_PERSPECTIVE; }
-    });
-    useEffect(() => {
-        localStorage.setItem('content_perspective_v1', JSON.stringify(perspective));
-    }, [perspective]);
-
-    const applyPreset = (presetId: string) => {
-        const p = VOICE_PRESETS.find(x => x.id === presetId);
-        if (!p) return;
-        setActivePreset(presetId);
-        setVoiceMix(p.voiceMix);
-        setHook(p.hook);
-        setViral(p.viral);
-        setCloser(p.closer);
-        setAiSuggestionReason(null);
-    };
-
-    const handleAiAutoSet = async () => {
-        if (!sourceContent.trim()) {
-            setAiSuggestError('Add some source content first so the AI knows what you\'re writing about.');
-            return;
-        }
-        setAiSuggesting(true);
-        setAiSuggestError(null);
-        try {
-            const suggestion = await suggestVoiceProfile({
-                sourceContent,
-                perspective,
-                format,
-                targetPlatforms,
-                styleInspiration: styleInspiration || undefined
-            });
-            setVoiceMix(suggestion.voiceMix);
-            setHook(suggestion.hook);
-            setViral(suggestion.viral);
-            setCloser(suggestion.closer);
-            setActivePreset(null);
-            setAiSuggestionReason(suggestion.reasoning);
-        } catch (e: any) {
-            setAiSuggestError(e?.message || 'AI suggestion failed');
-        } finally {
-            setAiSuggesting(false);
-        }
-    };
-
-    // Markers: any manual edit clears preset & AI reasoning
-    const customizeVoice = (patch: Partial<VoiceMix>) => { setVoiceMix(v => ({ ...v, ...patch })); setActivePreset(null); setAiSuggestionReason(null); };
-    const customizeHook = (patch: Partial<HookArchitecture>) => { setHook(h => ({ ...h, ...patch })); setActivePreset(null); setAiSuggestionReason(null); };
-    const toggleViral = (key: keyof ViralPhysics) => { setViral(v => ({ ...v, [key]: !v[key] })); setActivePreset(null); setAiSuggestionReason(null); };
     // Output
     const [drafts, setDrafts] = useState<ContentEngineDraft[]>([]);
     const [generating, setGenerating] = useState(false);
@@ -277,11 +181,7 @@ export const ContentEngineView: React.FC = () => {
     // DNA
     const [dnaString, setDnaString] = useState('');
     const [bannedWords, setBannedWords] = useState<string[]>([]);
-    // Style Inspiration
-    const [styleInspiration, setStyleInspiration] = useState('');
-    const [styleUrl, setStyleUrl] = useState('');
-    const [styleUrlLoading, setStyleUrlLoading] = useState(false);
-    const [styleUrlError, setStyleUrlError] = useState('');
+    // Style Inspiration — now lives in Parameters; read from hook (vp.styleInspiration above)
 
     // Load Content DNA and check for Radar context on mount
     useEffect(() => {
@@ -318,30 +218,6 @@ export const ContentEngineView: React.FC = () => {
 
     const togglePlatform = (p: string) => {
         setTargetPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
-    };
-
-    const fetchStyleFromUrl = async () => {
-        if (!styleUrl.trim()) return;
-        setStyleUrlLoading(true);
-        setStyleUrlError('');
-        try {
-            const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(styleUrl)}`);
-            if (!res.ok) throw new Error('Could not fetch URL');
-            const data = await res.json();
-            const text = (data.contents || '')
-                .replace(/<script[\s\S]*?<\/script>/gi, '')
-                .replace(/<style[\s\S]*?<\/style>/gi, '')
-                .replace(/<[^>]+>/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .substring(0, 3000);
-            if (text.length < 50) throw new Error('Could not extract readable content. Paste the content manually.');
-            setStyleInspiration(prev => prev ? prev + '\n\n' + text : text);
-        } catch (e: any) {
-            setStyleUrlError(e.message || 'Fetch failed. Paste the content manually instead.');
-        } finally {
-            setStyleUrlLoading(false);
-        }
     };
 
     const handleRepoSync = async () => {
@@ -430,64 +306,61 @@ export const ContentEngineView: React.FC = () => {
     };
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-24">
+        <div className="max-w-5xl mx-auto space-y-10 animate-fade-in pb-24">
 
-            {/* Header */}
-            <div className="border-b border-gray-100 pb-8">
-                <h2 className="text-4xl font-display font-medium text-brand-primary tracking-tight flex items-center gap-3">
-                    <Flame size={32} className="text-amber-500" />
-                    Content <span className="text-amber-500">Engine</span>
-                </h2>
-                <p className="text-brand-secondary mt-1 text-base">Unified AI content creation. From origin to polished, multi-platform drafts.</p>
-            </div>
+            {/* Header — minimalist, no icon box, no colored word */}
+            <header className="space-y-1">
+                <h2 className="text-2xl font-display font-medium text-gray-900 tracking-tight">Content Engine</h2>
+                <p className="text-gray-500 text-sm">From a source idea to platform-native drafts.</p>
+            </header>
 
-            {/* Step Indicator */}
-            <div className="flex items-center gap-2">
+            {/* Step indicator — thin, discreet */}
+            <div className="flex items-center gap-3">
                 {([1,2,3] as const).map((s) => (
                     <React.Fragment key={s}>
                         <button
                             onClick={() => s < step ? setStep(s) : undefined}
-                            className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center transition-all ${
-                                step === s ? 'bg-amber-500 text-white scale-110 shadow-md shadow-amber-200' :
-                                step > s   ? 'bg-gray-900 text-white cursor-pointer' :
-                                             'bg-gray-100 text-gray-400'
+                            className={`w-7 h-7 rounded-full text-[11px] font-medium flex items-center justify-center transition-all ${
+                                step === s ? 'bg-gray-900 text-white' :
+                                step > s   ? 'bg-gray-200 text-gray-700 cursor-pointer hover:bg-gray-300' :
+                                             'bg-gray-50 text-gray-400'
                             }`}
                         >{s}</button>
-                        {s < 3 && <div className={`flex-1 h-0.5 rounded-full transition-all ${step > s ? 'bg-gray-900' : 'bg-gray-100'}`} />}
+                        {s < 3 && <div className={`flex-1 h-px transition-all ${step > s ? 'bg-gray-300' : 'bg-gray-100'}`} />}
                     </React.Fragment>
                 ))}
-                <span className="ml-3 text-xs font-bold text-gray-400 uppercase tracking-widest">
-                    {step === 1 ? 'Choose Origin' : step === 2 ? 'Set Parameters' : 'Your Drafts'}
+                <span className="ml-2 text-xs text-gray-400">
+                    {step === 1 ? 'Origin' : step === 2 ? 'Parameters' : 'Drafts'}
                 </span>
             </div>
 
             {/* ─── STEP 1: Origin ───────────────────────────────────────── */}
             {step === 1 && (
-                <div className="space-y-6 animate-fade-in">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {ORIGINS.map((o) => (
-                            <button
-                                key={o.id}
-                                onClick={() => setOrigin(o.id)}
-                                className={`p-6 rounded-3xl border-2 text-left transition-all hover:scale-[1.01] ${
-                                    origin === o.id
-                                    ? `${colorMap[o.color]} ring-2 ${colorRing[o.color]} ring-offset-2`
-                                    : 'border-gray-100 bg-white hover:border-gray-200'
-                                }`}
-                            >
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${
-                                    origin === o.id ? colorMap[o.color] : 'bg-gray-50 text-gray-400'
-                                }`}>{o.icon}</div>
-                                <h3 className="font-bold text-lg text-brand-primary">{o.label}</h3>
-                                <p className="text-xs text-brand-secondary mt-1">{o.desc}</p>
-                            </button>
-                        ))}
-                    </div>
+                <div className="space-y-8 animate-fade-in">
+                    <Section title="Where does this post come from?" subtitle="Pick an origin — the engine adapts its voice to it.">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {ORIGINS.map((o) => (
+                                <button
+                                    key={o.id}
+                                    onClick={() => setOrigin(o.id)}
+                                    className={`p-5 rounded-2xl border text-left transition-all ${
+                                        origin === o.id
+                                        ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900'
+                                        : 'border-gray-100 bg-white hover:border-gray-300'
+                                    }`}
+                                >
+                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${
+                                        origin === o.id ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-400'
+                                    }`}>{React.cloneElement(o.icon as React.ReactElement, { size: 18 })}</div>
+                                    <h4 className="font-medium text-sm text-gray-900">{o.label}</h4>
+                                    <p className="text-xs text-gray-500 mt-0.5 leading-snug">{o.desc}</p>
+                                </button>
+                            ))}
+                        </div>
+                    </Section>
 
                     {/* Source Input per origin */}
-                    <div className="bg-white rounded-3xl border border-gray-100 p-6 space-y-4">
-                        <h3 className="font-bold text-base text-brand-primary">{originConfig.label} — Source</h3>
-
+                    <Section title="Source" subtitle={originConfig.desc}>
                         {origin === 'build_in_public' ? (
                             <div className="space-y-3">
                                 <input
@@ -585,15 +458,15 @@ export const ContentEngineView: React.FC = () => {
                                 />
                             </div>
                         )}
-                    </div>
+                    </Section>
 
                     <div className="flex justify-end">
                         <button
                             onClick={() => setStep(2)}
                             disabled={!sourceContent}
-                            className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-2xl font-bold text-sm disabled:opacity-40 hover:bg-gray-700 transition-all"
+                            className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl font-medium text-sm disabled:opacity-40 hover:bg-gray-700 transition-all"
                         >
-                            Set Parameters <ChevronRight size={18} />
+                            Next <ChevronRight size={16} />
                         </button>
                     </div>
                 </div>
@@ -601,27 +474,22 @@ export const ContentEngineView: React.FC = () => {
 
             {/* ─── STEP 2: Parameters ───────────────────────────────────── */}
             {step === 2 && (
-                <div className="space-y-6 animate-fade-in">
+                <div className="space-y-10 animate-fade-in">
 
-                    {/* Context preview banner */}
+                    {/* Context preview banner — slim, no uppercase */}
                     {sourceContent && (
-                        <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-xs text-amber-800 flex items-start gap-2">
-                            <BookOpen size={14} className="mt-0.5 shrink-0" />
-                            <div>
-                                <span className="font-bold uppercase tracking-wider">{originConfig.label} — </span>
-                                {sourceContent.substring(0, 160)}{sourceContent.length > 160 ? '...' : ''}
-                            </div>
+                        <div className="border-l-2 border-gray-300 pl-3 text-xs text-gray-500 italic">
+                            <span className="text-gray-700 not-italic font-medium">{originConfig.label}:</span>{' '}
+                            {sourceContent.substring(0, 160)}{sourceContent.length > 160 ? '…' : ''}
                         </div>
                     )}
 
-                    <div className="space-y-6">
+                    <div className="space-y-10">
 
-                        {/* Target Platforms — MULTI SELECT */}
-                        <div className="bg-white rounded-3xl border border-gray-100 p-6 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest block">Target Platforms</label>
-                                <span className="text-[10px] text-gray-400">Select multiple — one draft per platform</span>
-                            </div>
+                        {/* Target Platforms */}
+                        <Section
+                            title="Target platforms"
+                            subtitle="One draft per platform, length-adapted to each.">
                             <div className="grid grid-cols-2 gap-3">
                                 {[
                                     { id: 'X',        icon: <Twitter size={18} />,       limit: '280 chars',   color: 'bg-gray-900 border-gray-900 text-white' },
@@ -653,152 +521,108 @@ export const ContentEngineView: React.FC = () => {
                                 ))}
                             </div>
                             {targetPlatforms.length > 0 && (
-                                <p className="text-[10px] text-gray-400 text-center">Generating {targetPlatforms.length} platform-adapted draft{targetPlatforms.length > 1 ? 's' : ''} with native length constraints</p>
+                                <p className="text-[11px] text-gray-400">Generating {targetPlatforms.length} draft{targetPlatforms.length > 1 ? 's' : ''} — one per platform, length-adapted.</p>
                             )}
-                        </div>
+                        </Section>
 
                         {/* Format */}
-                        <div className="bg-white rounded-3xl border border-gray-100 p-6 space-y-4">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest block">Format</label>
-                            <div className="grid grid-cols-2 gap-2">
+                        <Section title="Format" subtitle="The shape the post takes.">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                 {([
-                                    { id: 'single',   label: 'Single Post',    icon: '📝' },
-                                    { id: 'thread',   label: 'Thread',         icon: '🧵' },
-                                    { id: 'longform', label: 'Long-form',      icon: '📰' },
-                                    { id: 'comment',  label: 'Comment/Reply',  icon: '💬' },
+                                    { id: 'single',   label: 'Single post',  icon: '📝' },
+                                    { id: 'thread',   label: 'Thread',       icon: '🧵' },
+                                    { id: 'longform', label: 'Long-form',    icon: '📰' },
+                                    { id: 'comment',  label: 'Comment',      icon: '💬' },
                                 ] as const).map(f => (
                                     <button type="button" key={f.id} onClick={() => setFormat(f.id)}
-                                        className={`py-3 px-4 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 ${
+                                        className={`py-2.5 px-3 rounded-xl text-xs font-medium border transition-all flex items-center gap-2 ${
                                             format === f.id
                                             ? 'bg-gray-900 text-white border-gray-900'
-                                            : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'
+                                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                                         }`}>
                                         <span>{f.icon}</span>{f.label}
                                     </button>
                                 ))}
                             </div>
-                        </div>
+                        </Section>
 
-                        {/* ────────── VOICE ARCHITECTURE ────────── */}
-                        <VoiceArchitectureSection
-                            activePreset={activePreset} applyPreset={applyPreset}
-                            voiceMix={voiceMix} customizeVoice={customizeVoice} setVoiceMix={setVoiceMix} setActivePreset={setActivePreset}
-                            hook={hook} customizeHook={customizeHook}
-                            perspective={perspective} setPerspective={setPerspective}
-                            viral={viral} toggleViral={toggleViral}
-                            closer={closer} setCloser={(c) => { setCloser(c); setActivePreset(null); setAiSuggestionReason(null); }}
-                            variants={variants} setVariants={setVariants}
-                            onAiAutoSet={handleAiAutoSet}
-                            aiSuggesting={aiSuggesting}
-                            aiSuggestionReason={aiSuggestionReason}
-                            aiSuggestError={aiSuggestError}
-                            sourceContent={sourceContent}
-                            onOpenQuiz={() => setQuizOpen(true)}
-                        />
-                        {quizOpen && <VoiceMatchQuiz onClose={() => setQuizOpen(false)} onComplete={handleQuizComplete} />}
+                        {/* Voice summary — linked to Content Parameters view */}
+                        <Section
+                            title="Voice"
+                            subtitle={
+                                activePreset
+                                    ? `Preset · ${VOICE_PRESETS.find(p => p.id === activePreset)?.name} · ${variants} variant${variants > 1 ? 's' : ''}`
+                                    : `Custom profile · ${variants} variant${variants > 1 ? 's' : ''} per platform`
+                            }
+                            aside={
+                                onOpenParameters ? (
+                                    <button
+                                        type="button"
+                                        onClick={onOpenParameters}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 hover:border-gray-400 bg-white text-gray-700 rounded-lg text-xs font-medium transition-all duration-200 ease-out active:scale-[0.97]"
+                                    >
+                                        <Settings2 size={12} /> Adjust voice
+                                    </button>
+                                ) : null
+                            }
+                        >
+                            <p className="text-[12px] text-gray-500 leading-relaxed">
+                                Voice mix, hook, viral physics, closer and perspective are managed in{' '}
+                                <button
+                                    type="button"
+                                    onClick={onOpenParameters}
+                                    className="text-gray-900 underline underline-offset-2 hover:text-gray-700 transition-colors"
+                                >Content parameters</button>.
+                                Changes there apply to the next generation automatically.
+                            </p>
+                        </Section>
 
                         {/* CTA */}
-                        <div className="bg-white rounded-3xl border border-gray-100 p-6 space-y-4">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest block">Call to Action</label>
-                            <div className="grid grid-cols-2 gap-2">
+                        <Section title="Call to action" subtitle="How hard you push at the end.">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                 {([
-                                    { id: 'none',   label: 'None',        sub: 'Pure content' },
-                                    { id: 'soft',   label: 'Soft',        sub: 'Spark discussion' },
-                                    { id: 'medium', label: 'Medium',      sub: 'Visit / learn more' },
-                                    { id: 'hard',   label: 'Strong CTA',  sub: 'Trial / signup' },
+                                    { id: 'none',   label: 'None',     sub: 'Pure content' },
+                                    { id: 'soft',   label: 'Soft',     sub: 'Spark discussion' },
+                                    { id: 'medium', label: 'Medium',   sub: 'Learn more' },
+                                    { id: 'hard',   label: 'Strong',   sub: 'Trial / signup' },
                                 ] as const).map(c => (
                                     <button type="button" key={c.id} onClick={() => setCtaType(c.id)}
-                                        className={`py-2 px-3 rounded-xl border text-xs font-bold flex flex-col items-start gap-0.5 transition-all ${ctaType === c.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}>
+                                        className={`py-2.5 px-3 rounded-xl border text-xs font-medium flex flex-col items-start gap-0.5 transition-all ${ctaType === c.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
                                         <span>{c.label}</span>
-                                        <span className={`text-[10px] ${ctaType === c.id ? 'opacity-60' : 'opacity-50'}`}>{c.sub}</span>
+                                        <span className={`text-[10px] ${ctaType === c.id ? 'opacity-60' : 'text-gray-400'}`}>{c.sub}</span>
                                     </button>
                                 ))}
                             </div>
-                        </div>
+                        </Section>
 
                     </div>
 
-                    {/* Style Inspiration Panel */}
-                    <div className="bg-white rounded-3xl border-2 border-dashed border-gray-200 p-6 space-y-4">
-                        <div>
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest block flex items-center gap-2">
-                                <Wand2 size={13} /> Style Inspiration <span className="text-gray-300 font-normal normal-case tracking-normal">(optional)</span>
-                            </label>
-                            <p className="text-[10px] text-gray-400 mt-1">
-                                Paste posts from a creator you admire or extract from a URL. The AI will clone their writing rhythm and voice — not their ideas.
-                            </p>
-                        </div>
-
-                        {/* URL extractor */}
-                        <div className="flex gap-2">
-                            <div className="relative flex-1">
-                                <Link size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input
-                                    type="url"
-                                    placeholder="https://x.com/levelsio or any profile/post URL..."
-                                    value={styleUrl}
-                                    onChange={e => { setStyleUrl(e.target.value); setStyleUrlError(''); }}
-                                    className="w-full pl-8 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
-                                />
-                            </div>
-                            <button
-                                type="button"
-                                onClick={fetchStyleFromUrl}
-                                disabled={styleUrlLoading || !styleUrl}
-                                className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold disabled:opacity-40 hover:bg-gray-700 transition-all shrink-0"
-                            >
-                                {styleUrlLoading ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                                {styleUrlLoading ? 'Extracting...' : 'Extract Style'}
-                            </button>
-                        </div>
-                        {styleUrlError && (
-                            <div className="flex items-center gap-1.5 text-[10px] text-red-500">
-                                <AlertCircle size={11} /> {styleUrlError}
-                            </div>
-                        )}
-
-                        {/* Paste area */}
-                        <textarea
-                            rows={4}
-                            placeholder={"Paste 2-5 posts from your inspiration creator here...\n\nExample: tweets, LinkedIn posts, Reddit comments — any writing you want to emulate."}
-                            value={styleInspiration}
-                            onChange={e => setStyleInspiration(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none placeholder-gray-300 leading-relaxed"
-                        />
-
-                        {styleInspiration && (
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-xl">
-                                    <Wand2 size={10} /> Style DNA captured — {styleInspiration.length.toLocaleString()} characters of inspiration loaded
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => { setStyleInspiration(''); setStyleUrl(''); }}
-                                    className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
-                                >Clear</button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* DNA Status */}
-                    {dnaString && (
-                        <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-2xl text-xs text-indigo-700 flex items-center gap-2">
-                            <Zap size={14} fill="currentColor" />
-                            <span>Content DNA loaded — your brand voice will be applied automatically.</span>
-                        </div>
-
+                    {/* Style inspiration status — lives in Parameters now */}
+                    {styleInspiration && (
+                        <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                            <Wand2 size={11} className="text-gray-400" />
+                            Style inspiration loaded ({styleInspiration.length.toLocaleString()} chars) — managed in Parameters.
+                        </p>
                     )}
 
-                    <div className="flex justify-between">
-                        <button onClick={() => setStep(1)} className="flex items-center gap-2 px-5 py-2.5 rounded-2xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50 transition-all">
+                    {/* DNA Status — slim inline note */}
+                    {dnaString && (
+                        <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                            <Zap size={11} className="text-amber-500" fill="currentColor" />
+                            Brand DNA loaded — voice will apply automatically.
+                        </p>
+                    )}
+
+                    <div className="flex justify-between pt-2">
+                        <button onClick={() => setStep(1)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-900 transition-all">
                             <ChevronLeft size={16} /> Back
                         </button>
                         <button
                             onClick={handleGenerate}
                             disabled={generating || targetPlatforms.length === 0}
-                            className="flex items-center gap-2 px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold text-sm disabled:opacity-50 transition-all shadow-lg shadow-amber-200"
+                            className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-medium text-sm disabled:opacity-40 transition-all"
                         >
-                            {generating ? <><Loader2 size={18} className="animate-spin" /> Drafting...</> : <><Sparkles size={18} /> Generate Drafts</>}
+                            {generating ? <><Loader2 size={16} className="animate-spin" /> Drafting…</> : <><Sparkles size={16} /> Generate</>}
                         </button>
                     </div>
                     {generationError && (
@@ -814,105 +638,107 @@ export const ContentEngineView: React.FC = () => {
 
             {/* ─── STEP 3: Output ───────────────────────────────────────── */}
             {step === 3 && (
-                <div className="space-y-6 animate-fade-in">
-                    <div className="flex justify-between items-center">
-                        <h3 className="text-xl font-bold text-brand-primary">Your Drafts</h3>
-                        <div className="flex gap-2">
-                            <button onClick={() => setStep(2)} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-500 hover:bg-gray-50 transition-all">
-                                <ChevronLeft size={14} /> Tweak Params
-                            </button>
-                            <button
-                                onClick={handleGenerate}
-                                disabled={generating}
-                                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold disabled:opacity-50 transition-all"
-                            >
-                                {generating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                                Regenerate All
-                            </button>
-                        </div>
-                    </div>
-
-                    {generating && (
-                        <div className="flex items-center justify-center p-20 text-brand-secondary gap-3">
-                            <Loader2 size={24} className="animate-spin text-amber-500" />
-                            <span className="text-sm font-medium">Crafting your drafts...</span>
-                        </div>
-                    )}
-
-                    <div className="space-y-6">
-                        {drafts.map((draft, idx) => (
-                            <div key={idx} className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-minimal">
-                                {/* Card Header */}
-                                <div className={`px-6 py-4 flex items-center justify-between ${
-                                    draft.platform === 'X' ? 'bg-gray-900' :
-                                    draft.platform === 'LinkedIn' ? 'bg-blue-600' :
-                                    draft.platform === 'Reddit' ? 'bg-orange-500' :
-                                    'bg-purple-600'
-                                }`}>
-                                    <div className="flex items-center gap-2 text-white">
-                                        {PLATFORM_ICONS[draft.platform]}
-                                        <span className="font-bold text-sm">{draft.platform}</span>
-                                        <span className="text-white/60 text-xs">— {draft.hookUsed}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {draft.platform === 'X' && (
-                                            <a href="https://x.com/compose/tweet" target="_blank" rel="noreferrer"
-                                               className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all">
-                                                <ExternalLink size={14} />
-                                            </a>
-                                        )}
-                                        {draft.platform === 'LinkedIn' && (
-                                            <a href="https://www.linkedin.com/feed/" target="_blank" rel="noreferrer"
-                                               className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all">
-                                                <ExternalLink size={14} />
-                                            </a>
-                                        )}
-                                        <button onClick={() => copy(draft.content, idx)}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs text-white font-bold transition-all">
-                                            {copiedIdx === idx ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Content */}
-                                <div className="p-6">
-                                    {/* Variant + voice metadata */}
-                                    {(draft.variantNote || draft.voiceProfile) && (
-                                        <div className="flex flex-wrap items-center gap-2 mb-3">
-                                            {draft.variantNote && (
-                                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-amber-100 to-orange-100 border border-amber-200 text-amber-900 rounded-lg text-[10px] font-bold">
-                                                    <Layers size={10} /> {draft.variantNote}
-                                                </div>
-                                            )}
-                                            {draft.voiceProfile && (
-                                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] italic">
-                                                    <Eye size={10} /> {draft.voiceProfile}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                    <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 text-sm text-brand-primary leading-relaxed whitespace-pre-wrap font-sans">
-                                        {draft.content}
-                                    </div>
-
-                                    {draft.tips.length > 0 && (
-                                        <div className="mt-4 flex flex-wrap gap-2">
-                                            {draft.tips.map((tip, i) => (
-                                                <div key={i} className="flex items-center gap-1.5 bg-amber-50 border border-amber-100 text-amber-800 px-3 py-1.5 rounded-xl text-[10px] font-bold">
-                                                    <Sparkles size={10} /> {tip}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                <div className="space-y-8 animate-fade-in">
+                    <Section
+                        title="Drafts"
+                        subtitle={`${drafts.length} platform-adapted post${drafts.length === 1 ? '' : 's'}.`}
+                        aside={
+                            <>
+                                <button onClick={() => setStep(2)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-900 transition-all">
+                                    <ChevronLeft size={13} /> Tweak
+                                </button>
+                                <button
+                                    onClick={handleGenerate}
+                                    disabled={generating}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-all"
+                                >
+                                    {generating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                                    Regenerate
+                                </button>
+                            </>
+                        }
+                    >
+                        {generating && (
+                            <div className="flex items-center justify-center py-16 text-gray-500 gap-3">
+                                <Loader2 size={20} className="animate-spin" />
+                                <span className="text-sm">Crafting your drafts…</span>
                             </div>
-                        ))}
-                    </div>
+                        )}
+
+                        <div className="space-y-6">
+                            {drafts.map((draft, idx) => (
+                                <div key={idx} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                                    {/* Card Header — discreet, no big colored bar */}
+                                    <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
+                                        <div className="flex items-center gap-2 text-gray-700">
+                                            <span className={`w-6 h-6 rounded-md flex items-center justify-center ${
+                                                draft.platform === 'X' ? 'bg-gray-900 text-white' :
+                                                draft.platform === 'LinkedIn' ? 'bg-blue-600 text-white' :
+                                                draft.platform === 'Reddit' ? 'bg-orange-500 text-white' :
+                                                'bg-purple-600 text-white'
+                                            }`}>{PLATFORM_ICONS[draft.platform]}</span>
+                                            <span className="font-medium text-sm text-gray-900">{draft.platform}</span>
+                                            <span className="text-gray-400 text-xs">· {draft.hookUsed}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {draft.platform === 'X' && (
+                                                <a href="https://x.com/compose/tweet" target="_blank" rel="noreferrer"
+                                                   className="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 transition-all">
+                                                    <ExternalLink size={13} />
+                                                </a>
+                                            )}
+                                            {draft.platform === 'LinkedIn' && (
+                                                <a href="https://www.linkedin.com/feed/" target="_blank" rel="noreferrer"
+                                                   className="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 transition-all">
+                                                    <ExternalLink size={13} />
+                                                </a>
+                                            )}
+                                            <button onClick={() => copy(draft.content, idx)}
+                                                className="flex items-center gap-1 px-2.5 py-1 hover:bg-gray-100 rounded-md text-xs text-gray-600 font-medium transition-all">
+                                                {copiedIdx === idx ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Content */}
+                                    <div className="p-5">
+                                        {(draft.variantNote || draft.voiceProfile) && (
+                                            <div className="flex flex-wrap items-center gap-3 mb-3 text-[11px] text-gray-500">
+                                                {draft.variantNote && (
+                                                    <span className="flex items-center gap-1">
+                                                        <Layers size={10} /> {draft.variantNote}
+                                                    </span>
+                                                )}
+                                                {draft.voiceProfile && (
+                                                    <span className="flex items-center gap-1 italic">
+                                                        <Eye size={10} /> {draft.voiceProfile}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap font-sans">
+                                            {draft.content}
+                                        </div>
+
+                                        {draft.tips.length > 0 && (
+                                            <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500">
+                                                {draft.tips.map((tip, i) => (
+                                                    <span key={i} className="flex items-center gap-1">
+                                                        <Sparkles size={10} className="text-amber-500" /> {tip}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Section>
 
                     {/* Start Over */}
-                    <div className="text-center pt-4">
+                    <div className="text-center">
                         <button onClick={() => { setStep(1); setDrafts([]); setSourceContent(''); setSourceUrl(''); }}
-                            className="text-sm text-gray-400 hover:text-gray-600 transition-colors font-medium underline underline-offset-4">
+                            className="text-xs text-gray-400 hover:text-gray-700 transition-colors underline underline-offset-4">
                             Start a new draft
                         </button>
                     </div>
@@ -925,7 +751,7 @@ export const ContentEngineView: React.FC = () => {
 // ════════════════════════════════════════════════════════════════════
 // VOICE ARCHITECTURE SECTION
 // ════════════════════════════════════════════════════════════════════
-const VoiceArchitectureSection: React.FC<{
+export const VoiceArchitectureSection: React.FC<{
     activePreset: string | null; applyPreset: (id: string) => void;
     voiceMix: VoiceMix; customizeVoice: (p: Partial<VoiceMix>) => void;
     setVoiceMix: React.Dispatch<React.SetStateAction<VoiceMix>>; setActivePreset: (id: string | null) => void;
@@ -945,249 +771,417 @@ const VoiceArchitectureSection: React.FC<{
     hook, customizeHook, perspective, setPerspective, viral, toggleViral, closer, setCloser, variants, setVariants,
     onAiAutoSet, aiSuggesting, aiSuggestionReason, aiSuggestError, sourceContent, onOpenQuiz
 }) => (
-    <div className="bg-white rounded-3xl border border-gray-100 p-6 space-y-6 col-span-full">
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white">
-                    <Layers size={18} />
-                </div>
-                <div>
-                    <h3 className="font-bold text-base">Voice Architecture</h3>
-                    <p className="text-[11px] text-gray-500">
-                        {aiSuggestionReason ? <><Sparkles size={10} className="inline mr-1 text-amber-500" />{aiSuggestionReason}</> :
-                         activePreset ? `Preset: ${VOICE_PRESETS.find(p => p.id === activePreset)?.name}` :
-                         'Custom voice profile · saved automatically'}
-                    </p>
-                </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
+    <Section
+        title="Voice"
+        subtitle={
+            aiSuggestionReason ? aiSuggestionReason :
+            activePreset ? `Preset · ${VOICE_PRESETS.find(p => p.id === activePreset)?.name}` :
+            'Custom voice profile — saved automatically.'
+        }
+        aside={
+            <>
                 <button
                     type="button"
                     onClick={onOpenQuiz}
-                    className="group relative flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-200/60 hover:shadow-xl hover:shadow-amber-300/70 transition-all overflow-hidden"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium transition-all"
                 >
-                    <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></span>
-                    <span className="text-base relative">🎙️</span>
-                    <span className="relative">Voice Match</span>
-                    <span className="relative text-[9px] bg-white/20 px-1.5 py-0.5 rounded-md uppercase tracking-wider">30s</span>
+                    <span>🎙️</span>
+                    Voice match
                 </button>
+                {/* AI calibrate — always clickable. If a sample is missing,
+                    the parent's onAiAutoSet handles the feedback (scroll +
+                    flash on the calibration sample field). Disabling the
+                    button was the root of "AI calibrate doesn't work" — it
+                    was greyed out and the prereq lived below the fold. */}
                 <button
                     type="button"
                     onClick={onAiAutoSet}
-                    disabled={aiSuggesting || !sourceContent.trim()}
-                    title={!sourceContent.trim() ? 'Add some source content first' : 'Let AI choose the optimal voice profile for your context'}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-md transition-all"
+                    disabled={aiSuggesting}
+                    title={!sourceContent.trim() ? 'Click to set up calibration — needs a writing sample' : 'Let AI calibrate the voice for your context'}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                        aiSuggesting
+                            ? 'opacity-60 cursor-wait bg-white border-gray-200 text-gray-700'
+                            : !sourceContent.trim()
+                                ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100 hover:border-amber-400'
+                                : 'bg-white border-gray-200 text-gray-700 hover:border-gray-400'
+                    }`}
                 >
                     {aiSuggesting ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
-                    {aiSuggesting ? 'Analyzing…' : 'AI auto-set'}
+                    {aiSuggesting ? 'Analyzing…' : !sourceContent.trim() ? 'AI calibrate — needs sample' : 'AI calibrate'}
                 </button>
                 <button
                     type="button"
                     onClick={() => { setVoiceMix(DEFAULT_VOICE_MIX); setActivePreset(null); }}
-                    className="text-[10px] text-gray-400 hover:text-gray-700 font-bold uppercase tracking-wider px-2"
+                    className="text-[11px] text-gray-400 hover:text-gray-700 transition-colors px-1"
                 >Reset</button>
-            </div>
-        </div>
+            </>
+        }
+    >
+        <div className="space-y-8">
+            {/* AI calibrate error */}
+            {aiSuggestError && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <AlertCircle size={14} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-900 font-medium leading-relaxed">{aiSuggestError}</div>
+                </div>
+            )}
 
-        {/* AI suggest error */}
-        {aiSuggestError && (
-            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 flex items-start gap-2">
-                <AlertCircle size={12} className="text-amber-600 flex-shrink-0 mt-0.5" /> {aiSuggestError}
+            {/* QUICK PRESETS — chips, no eyebrow label */}
+            <div>
+                <div className="flex flex-wrap gap-2">
+                    {VOICE_PRESETS.map(p => (
+                        <button key={p.id} type="button" onClick={() => applyPreset(p.id)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${
+                                activePreset === p.id
+                                  ? 'border-gray-900 bg-gray-900 text-white'
+                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+                            }`}>
+                            <span>{p.emoji}</span> {p.name}
+                        </button>
+                    ))}
+                </div>
             </div>
-        )}
 
-        {/* QUICK PRESETS — always visible chips */}
-        <div>
-            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Quick presets</div>
-            <div className="flex flex-wrap gap-2">
-                {VOICE_PRESETS.map(p => (
-                    <button key={p.id} type="button" onClick={() => applyPreset(p.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
-                            activePreset === p.id
-                              ? 'border-amber-500 bg-gradient-to-r from-amber-50 to-orange-50 text-gray-900 shadow-sm'
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                        }`}>
-                        <span>{p.emoji}</span> {p.name}
-                    </button>
-                ))}
-            </div>
-        </div>
-
-        {/* INTERACTIVE POLYGON — primary control */}
-        <div className="bg-gradient-to-br from-gray-50 to-white border border-gray-100 rounded-3xl p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-center">
+            {/* INTERACTIVE POLYGON */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
                 <div className="lg:col-span-3 flex flex-col items-center">
                     <InteractivePolygon mix={voiceMix} onChange={(patch) => customizeVoice(patch)} />
-                    <p className="text-[10px] text-gray-500 mt-2 text-center">
-                        <Wand2 size={10} className="inline mr-1" />
-                        Drag the orange dots to fine-tune. Each axis = one dimension of your voice.
+                    <p className="text-[11px] text-gray-400 mt-2 text-center">
+                        Drag a vertex to adjust. Click an axis to snap.
                     </p>
                 </div>
                 <div className="lg:col-span-2 space-y-1.5">
-                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Live values</div>
                     {VOICE_DIMENSIONS.map(dim => (
                         <PolygonValueRow key={dim.key} label={dim.label} value={voiceMix[dim.key]}
                             low={dim.low} high={dim.high} />
                     ))}
                 </div>
             </div>
-        </div>
 
-        {/* Rhythm picker */}
-        <div>
-            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sentence Rhythm</div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {([
-                    { id: 'staccato', label: 'Staccato', desc: 'Short. Bursts.' },
-                    { id: 'punchy', label: 'Punchy mix', desc: 'Mostly short. Sometimes long.' },
-                    { id: 'flowing', label: 'Flowing', desc: 'Long, building, momentum.' },
-                    { id: 'contemplative', label: 'Contemplative', desc: 'Comma-rich, deliberate, paused.' },
-                ] as const).map(r => (
-                    <button key={r.id} type="button" onClick={() => customizeVoice({ rhythm: r.id })}
-                        className={`p-2.5 rounded-xl text-left text-xs border transition-all ${
-                            voiceMix.rhythm === r.id
-                              ? 'bg-gray-900 text-white border-gray-900'
-                              : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-white'
-                        }`}>
-                        <div className="font-bold">{r.label}</div>
-                        <div className={`text-[10px] mt-0.5 ${voiceMix.rhythm === r.id ? 'text-white/60' : 'text-gray-400'}`}>{r.desc}</div>
-                    </button>
-                ))}
-            </div>
-        </div>
-
-        <div className="space-y-6">
-
-                {/* Hook Architecture Builder */}
-                <div className="border-t border-gray-100 pt-6">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Target size={14} className="text-gray-500" />
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Hook Architecture</span>
-                        <span className="text-[10px] text-gray-400">— first 3 lines decide everything</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <HookSelector label="1. Pattern Interrupt" sub="Open with..."
-                            options={PATTERN_INTERRUPTS.map(o => ({ id: o.id, label: o.label, hint: o.example }))}
-                            value={hook.patternInterrupt}
-                            onChange={(v) => customizeHook({ patternInterrupt: v as HookArchitecture['patternInterrupt'] })} />
-                        <HookSelector label="2. Tension Mechanism" sub="Pull them in by..."
-                            options={TENSION_MECHANISMS.map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
-                            value={hook.tensionMechanism}
-                            onChange={(v) => customizeHook({ tensionMechanism: v as HookArchitecture['tensionMechanism'] })} />
-                        <HookSelector label="3. Promise / Payoff" sub="Why keep reading"
-                            options={PROMISE_PAYOFFS.map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
-                            value={hook.promisePayoff}
-                            onChange={(v) => customizeHook({ promisePayoff: v as HookArchitecture['promisePayoff'] })} />
-                    </div>
+            {/* Rhythm */}
+            <SubSection title="Rhythm" hint="How sentences move.">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {([
+                        { id: 'staccato', label: 'Staccato', desc: 'Short. Bursts.' },
+                        { id: 'punchy', label: 'Punchy', desc: 'Short, sometimes long.' },
+                        { id: 'flowing', label: 'Flowing', desc: 'Long, momentum.' },
+                        { id: 'contemplative', label: 'Contemplative', desc: 'Paused, deliberate.' },
+                    ] as const).map(r => (
+                        <button key={r.id} type="button" onClick={() => customizeVoice({ rhythm: r.id })}
+                            className={`p-2.5 rounded-xl text-left text-xs border transition-all ${
+                                voiceMix.rhythm === r.id
+                                  ? 'bg-gray-900 text-white border-gray-900'
+                                  : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
+                            }`}>
+                            <div className="font-medium">{r.label}</div>
+                            <div className={`text-[10px] mt-0.5 ${voiceMix.rhythm === r.id ? 'text-white/60' : 'text-gray-400'}`}>{r.desc}</div>
+                        </button>
+                    ))}
                 </div>
+            </SubSection>
 
-                {/* Viral Physics Toggles */}
-                <div className="border-t border-gray-100 pt-6">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Zap size={14} className="text-gray-500" />
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Viral Physics</span>
-                        <span className="text-[10px] text-gray-400">— psychological amplifiers (toggle to activate)</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {VIRAL_TOGGLES.map(t => (
-                            <button key={t.key} type="button" onClick={() => toggleViral(t.key)}
-                                className={`p-3 rounded-xl border text-left transition-all flex items-start gap-2.5 ${
-                                    viral[t.key]
-                                      ? 'bg-amber-50 border-amber-300'
-                                      : 'bg-white border-gray-200 hover:border-gray-300'
-                                }`}>
-                                <div className={`w-4 h-4 rounded mt-0.5 flex items-center justify-center flex-shrink-0 ${viral[t.key] ? 'bg-amber-500 text-white' : 'border-2 border-gray-300'}`}>
-                                    {viral[t.key] && <Check size={10} strokeWidth={3} />}
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="font-bold text-xs text-gray-900">{t.label}</div>
-                                    <div className="text-[10px] text-gray-500 leading-snug mt-0.5">{t.desc}</div>
-                                </div>
-                            </button>
-                        ))}
-                    </div>
+            {/* Hook — Visual sentence treatment.
+                Instead of 3 stacked vertical button lists, render the 3 hook
+                pieces as an editable English sentence. Each bracketed phrase
+                opens a dropdown chooser on click. Reads like prose, edits
+                like a form. */}
+            <SubSection title="Hook" hint="The first three lines decide everything.">
+                <HookSentence hook={hook} onChange={customizeHook} />
+            </SubSection>
+
+            {/* Viral Physics — row of illuminated bulbs.
+                One bulb per amplifier: bright = active, dim = inactive. Hover
+                for the description. Click to toggle. Replaces the heavy
+                2-col grid of card-style toggles. */}
+            <SubSection title="Amplifiers" hint="Psychological levers — tap a bulb to activate.">
+                <AmplifierBulbs viral={viral} toggle={toggleViral} />
+            </SubSection>
+
+            {/* Closer */}
+            <SubSection title="Closer" hint="How the post lands.">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                    {CLOSERS.map(c => (
+                        <button key={c.id} type="button" onClick={() => setCloser(c.id)}
+                            className={`p-2.5 rounded-xl text-left text-xs border transition-all ${
+                                closer === c.id
+                                  ? 'bg-gray-900 text-white border-gray-900'
+                                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                            }`}>
+                            <div className="font-medium">{c.label}</div>
+                            <div className={`text-[10px] mt-0.5 ${closer === c.id ? 'text-white/60' : 'text-gray-400'}`}>{c.desc}</div>
+                        </button>
+                    ))}
                 </div>
+            </SubSection>
 
-                {/* Closer */}
-                <div className="border-t border-gray-100 pt-6">
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Closer Strategy</span>
-                        <span className="text-[10px] text-gray-400">— how the post lands</span>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                        {CLOSERS.map(c => (
-                            <button key={c.id} type="button" onClick={() => setCloser(c.id)}
-                                className={`p-3 rounded-xl text-left text-xs border transition-all ${
-                                    closer === c.id
-                                      ? 'bg-gray-900 text-white border-gray-900'
-                                      : 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-white'
-                                }`}>
-                                <div className="font-bold">{c.label}</div>
-                                <div className={`text-[10px] mt-0.5 ${closer === c.id ? 'text-white/60' : 'text-gray-400'}`}>{c.desc}</div>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Variants count */}
-                <div className="border-t border-gray-100 pt-6">
-                    <div className="flex items-center justify-between mb-2">
-                        <div>
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Variants per platform</span>
-                            <p className="text-[11px] text-gray-500 mt-0.5">Generate {variants} different angle{variants > 1 ? 's' : ''} per platform — same voice, different attack.</p>
-                        </div>
-                        <span className="text-2xl font-display font-bold text-gray-900">{variants}</span>
-                    </div>
+            {/* Variants */}
+            <SubSection title="Variants per platform" hint={`${variants} angle${variants > 1 ? 's' : ''} — same voice, different attack.`}>
+                <div className="flex items-center gap-4">
                     <input type="range" min={1} max={5} value={variants} onChange={e => setVariants(parseInt(e.target.value))}
-                        className="w-full accent-amber-500" />
-                    <div className="flex justify-between text-[9px] text-gray-400 mt-1 font-bold uppercase tracking-wider">
-                        <span>1 (focused)</span>
-                        <span>5 (A/B/C/D/E test)</span>
-                    </div>
+                        className="flex-1 accent-gray-900" />
+                    <span className="text-xl font-medium text-gray-900 w-8 text-right">{variants}</span>
                 </div>
-            </div>
+            </SubSection>
 
-        {/* PERSPECTIVE INJECTOR — ALWAYS VISIBLE (the uniqueness vector) */}
-        <div className="border-t-2 border-dashed border-amber-200 pt-6">
-            <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center">
-                    <Crown size={14} />
-                </div>
-                <div>
-                    <span className="text-xs font-black text-gray-900 uppercase tracking-widest">Perspective Injector</span>
-                    <p className="text-[10px] text-gray-500 mt-0.5">This is what makes YOUR content unique. Saved automatically.</p>
-                </div>
-            </div>
-            <div className="space-y-3">
-                <PerspectiveField
-                    label="My unique angle / credential"
-                    placeholder="e.g. I shipped 47 failed products before this one"
-                    icon={<Eye size={12} />}
-                    value={perspective.uniqueAngle}
-                    onChange={v => setPerspective(p => ({ ...p, uniqueAngle: v }))} />
-                <PerspectiveField
-                    label="What I believe most people get wrong"
-                    placeholder="e.g. PMF is a lie — it's just retention with better marketing"
-                    icon={<Skull size={12} />}
-                    value={perspective.contrarian}
-                    onChange={v => setPerspective(p => ({ ...p, contrarian: v }))} />
-                <PerspectiveField
-                    label="My receipts (numbers/results to weave in)"
-                    placeholder="e.g. $2,847 MRR, 18 months bootstrap, 4 failed launches"
-                    icon={<Check size={12} />}
-                    value={perspective.receipts}
-                    onChange={v => setPerspective(p => ({ ...p, receipts: v }))} />
-                <PerspectiveField
-                    label="Forbidden takes (what to NEVER write)"
-                    placeholder="e.g. 'Hustle culture is essential', 'Move fast and break things'"
-                    icon={<AlertCircle size={12} />}
-                    value={perspective.forbiddenTakes}
-                    onChange={v => setPerspective(p => ({ ...p, forbiddenTakes: v }))} />
-            </div>
+            {/* Perspective — Mad Libs paragraph.
+                Renders all four perspective fields as a single prose paragraph
+                with click-to-edit inline blanks. Feels like a character sheet
+                you read, not 4 generic textareas to fill. */}
+            <SubSection title="Perspective" hint="Reads like prose — click any blank to edit. Saved automatically.">
+                <PerspectiveParagraph perspective={perspective} setPerspective={setPerspective} />
+            </SubSection>
         </div>
+    </Section>
+);
+
+// ────────────────────────────────────────────────────────────────────
+// HOOK SENTENCE — the Hook section as an editable English sentence.
+// Each bracketed phrase is a Pill that opens a popover with the options.
+// Prose-first; the underlying state model is identical to the old grid.
+// ────────────────────────────────────────────────────────────────────
+const HookSentence: React.FC<{
+    hook: HookArchitecture;
+    onChange: (patch: Partial<HookArchitecture>) => void;
+}> = ({ hook, onChange }) => {
+    const patternLabel = PATTERN_INTERRUPTS.find(p => p.id === hook.patternInterrupt)?.label || '—';
+    const tensionLabel = TENSION_MECHANISMS.find(t => t.id === hook.tensionMechanism)?.label || '—';
+    const payoffLabel = PROMISE_PAYOFFS.find(p => p.id === hook.promisePayoff)?.label || '—';
+
+    return (
+        <div className="p-5 bg-gray-50/60 border border-gray-200 rounded-2xl">
+            {/* The sentence — readable, with inline chips. */}
+            <p className="text-base md:text-lg leading-relaxed text-gray-800 font-medium flex flex-wrap gap-2 items-baseline">
+                <span>Open with a</span>
+                <HookPill
+                    label={patternLabel}
+                    options={PATTERN_INTERRUPTS.map(o => ({ id: o.id, label: o.label, hint: o.example }))}
+                    value={hook.patternInterrupt}
+                    onSelect={(v) => onChange({ patternInterrupt: v as HookArchitecture['patternInterrupt'] })}
+                />
+                <span>, pull readers in by</span>
+                <HookPill
+                    label={tensionLabel.toLowerCase()}
+                    options={TENSION_MECHANISMS.map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
+                    value={hook.tensionMechanism}
+                    onSelect={(v) => onChange({ tensionMechanism: v as HookArchitecture['tensionMechanism'] })}
+                />
+                <span>, and promise them</span>
+                <HookPill
+                    label={payoffLabel.toLowerCase()}
+                    options={PROMISE_PAYOFFS.map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
+                    value={hook.promisePayoff}
+                    onSelect={(v) => onChange({ promisePayoff: v as HookArchitecture['promisePayoff'] })}
+                />
+                <span>.</span>
+            </p>
+            <p className="text-[11px] text-gray-400 mt-3">Click any chip to swap. The first three lines decide everything.</p>
+        </div>
+    );
+};
+
+// Inline editable chip used inside HookSentence. Click to open a popover
+// with options. Closes on outside-click or selection.
+const HookPill: React.FC<{
+    label: string;
+    value: string;
+    options: { id: string; label: string; hint: string }[];
+    onSelect: (id: string) => void;
+}> = ({ label, value, options, onSelect }) => {
+    const [open, setOpen] = React.useState(false);
+    const ref = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (!open) return;
+        const onClickOutside = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        window.addEventListener('mousedown', onClickOutside);
+        return () => window.removeEventListener('mousedown', onClickOutside);
+    }, [open]);
+
+    return (
+        <span ref={ref} className="relative inline-block">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md border-b-2 border-dashed transition-colors ${
+                    open
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'bg-amber-100/60 text-amber-900 border-amber-400 hover:bg-amber-200/70'
+                }`}
+            >
+                <span className="font-bold">{label}</span>
+                <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+                <div className="absolute left-0 top-full mt-1 z-30 min-w-[260px] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+                    {options.map(o => (
+                        <button
+                            key={o.id}
+                            type="button"
+                            onClick={() => { onSelect(o.id); setOpen(false); }}
+                            className={`w-full text-left px-3 py-2 transition-colors ${
+                                value === o.id
+                                    ? 'bg-gray-900 text-white'
+                                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                            }`}
+                        >
+                            <div className="text-sm font-bold">{o.label}</div>
+                            <div className={`text-[11px] mt-0.5 ${value === o.id ? 'text-white/70' : 'text-gray-500'}`}>{o.hint}</div>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </span>
+    );
+};
+
+// ────────────────────────────────────────────────────────────────────
+// AMPLIFIER BULBS — 8 amplifiers rendered as illuminated lightbulbs.
+// On = saturated amber + halo; off = dim grey. Tooltip on hover.
+// ────────────────────────────────────────────────────────────────────
+const AmplifierBulbs: React.FC<{
+    viral: ViralPhysics;
+    toggle: (key: keyof ViralPhysics) => void;
+}> = ({ viral, toggle }) => {
+    const activeCount = VIRAL_TOGGLES.filter(t => viral[t.key]).length;
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-wrap gap-3 p-5 bg-gradient-to-b from-gray-50 to-white border border-gray-200 rounded-2xl">
+                {VIRAL_TOGGLES.map(t => {
+                    const on = viral[t.key];
+                    return (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => toggle(t.key)}
+                            title={`${t.label} — ${t.desc}`}
+                            className="group flex flex-col items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/60 transition-colors min-w-[88px]"
+                        >
+                            {/* The bulb */}
+                            <div className="relative w-10 h-10 flex items-center justify-center">
+                                {on && (
+                                    <span className="absolute inset-0 rounded-full bg-amber-300/60 blur-md animate-pulse"></span>
+                                )}
+                                <div className={`relative w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all ${
+                                    on
+                                        ? 'bg-gradient-to-b from-amber-300 to-amber-500 border-amber-500 shadow-lg shadow-amber-300/50'
+                                        : 'bg-gray-100 border-gray-300 group-hover:border-gray-400'
+                                }`}>
+                                    <Zap size={14} className={on ? 'text-amber-900' : 'text-gray-400'} fill={on ? 'currentColor' : 'none'} />
+                                </div>
+                            </div>
+                            <span className={`text-[10px] font-bold leading-tight text-center max-w-[88px] ${on ? 'text-gray-900' : 'text-gray-400'}`}>
+                                {t.label}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+            <p className="text-[11px] text-gray-400">
+                {activeCount === 0
+                    ? 'No amplifiers active — output will lean neutral.'
+                    : `${activeCount} amplifier${activeCount > 1 ? 's' : ''} on — hover any bulb to read what it does.`}
+            </p>
+        </div>
+    );
+};
+
+// ────────────────────────────────────────────────────────────────────
+// PERSPECTIVE PARAGRAPH — Mad Libs prose. Renders the four perspective
+// fields as a single readable paragraph with click-to-edit blanks.
+// ────────────────────────────────────────────────────────────────────
+const PerspectiveParagraph: React.FC<{
+    perspective: PerspectiveInjector;
+    setPerspective: React.Dispatch<React.SetStateAction<PerspectiveInjector>>;
+}> = ({ perspective, setPerspective }) => (
+    <div className="p-5 bg-gray-50/60 border border-gray-200 rounded-2xl">
+        <p className="text-base leading-loose text-gray-800 font-medium">
+            <span>I'm someone who </span>
+            <PerspectiveBlank
+                value={perspective.uniqueAngle}
+                placeholder="ships 47 failed products before this one"
+                color="emerald"
+                onChange={v => setPerspective(p => ({ ...p, uniqueAngle: v }))}
+            />
+            <span>. Most people get </span>
+            <PerspectiveBlank
+                value={perspective.contrarian}
+                placeholder="PMF is a lie — it's just retention with better marketing"
+                color="rose"
+                onChange={v => setPerspective(p => ({ ...p, contrarian: v }))}
+            />
+            <span> wrong. My receipts: </span>
+            <PerspectiveBlank
+                value={perspective.receipts}
+                placeholder="$2,847 MRR, 18 months bootstrap, 4 failed launches"
+                color="indigo"
+                onChange={v => setPerspective(p => ({ ...p, receipts: v }))}
+            />
+            <span>. Never write: </span>
+            <PerspectiveBlank
+                value={perspective.forbiddenTakes}
+                placeholder="'Hustle culture is essential', 'Move fast and break things'"
+                color="amber"
+                onChange={v => setPerspective(p => ({ ...p, forbiddenTakes: v }))}
+            />
+            <span>.</span>
+        </p>
     </div>
 );
+
+// Inline contenteditable-style blank used inside PerspectiveParagraph.
+// Renders as a colored underline-pill when filled, dashed placeholder
+// when empty. Tap to expand into a full editable textarea inline.
+const PerspectiveBlank: React.FC<{
+    value: string;
+    placeholder: string;
+    color: 'emerald' | 'rose' | 'indigo' | 'amber';
+    onChange: (v: string) => void;
+}> = ({ value, placeholder, color, onChange }) => {
+    const [editing, setEditing] = React.useState(false);
+    const ref = React.useRef<HTMLTextAreaElement>(null);
+
+    React.useEffect(() => {
+        if (editing && ref.current) ref.current.focus();
+    }, [editing]);
+
+    const colorMap = {
+        emerald: { bg: 'bg-emerald-50', border: 'border-emerald-400', text: 'text-emerald-900', empty: 'border-emerald-300 text-emerald-600' },
+        rose:    { bg: 'bg-rose-50',    border: 'border-rose-400',    text: 'text-rose-900',    empty: 'border-rose-300 text-rose-600' },
+        indigo:  { bg: 'bg-indigo-50',  border: 'border-indigo-400',  text: 'text-indigo-900',  empty: 'border-indigo-300 text-indigo-600' },
+        amber:   { bg: 'bg-amber-50',   border: 'border-amber-400',   text: 'text-amber-900',   empty: 'border-amber-300 text-amber-600' },
+    };
+    const c = colorMap[color];
+
+    if (editing) {
+        return (
+            <textarea
+                ref={ref}
+                rows={2}
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                onBlur={() => setEditing(false)}
+                placeholder={placeholder}
+                className={`inline-block w-full max-w-md px-3 py-2 my-1 ${c.bg} ${c.border} border-2 ${c.text} rounded-lg text-sm font-medium outline-none resize-none align-middle`}
+            />
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className={`inline px-2 py-0.5 rounded-md text-sm font-bold align-baseline border-b-2 border-dashed transition-colors ${
+                value
+                    ? `${c.bg} ${c.text} ${c.border} hover:brightness-95`
+                    : `bg-white ${c.empty} italic hover:bg-gray-50`
+            }`}
+        >
+            {value || `[ click to add — e.g. ${placeholder.slice(0, 40)}${placeholder.length > 40 ? '…' : ''} ]`}
+        </button>
+    );
+};
 
 // ────────── Helper components ──────────
 const VoiceSlider: React.FC<{ label: string; low: string; high: string; value: number; onChange: (v: number) => void }> = ({ label, low, high, value, onChange }) => (
@@ -1206,18 +1200,18 @@ const VoiceSlider: React.FC<{ label: string; low: string; high: string; value: n
 );
 
 const HookSelector: React.FC<{ label: string; sub: string; options: { id: string; label: string; hint: string }[]; value: string; onChange: (v: string) => void }> = ({ label, sub, options, value, onChange }) => (
-    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
-        <div className="text-[10px] font-black text-gray-700 uppercase tracking-wider">{label}</div>
-        <div className="text-[10px] text-gray-400 mb-2">{sub}</div>
+    <div>
+        <div className="text-[12px] font-medium text-gray-900">{label}</div>
+        <div className="text-[11px] text-gray-400 mb-2">{sub}</div>
         <div className="space-y-1">
             {options.map(o => (
                 <button key={o.id} type="button" onClick={() => onChange(o.id)}
                     className={`w-full text-left p-2 rounded-lg text-xs transition-all ${
                         value === o.id
                           ? 'bg-gray-900 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
                     }`}>
-                    <div className="font-bold">{o.label}</div>
+                    <div className="font-medium">{o.label}</div>
                     <div className={`text-[10px] mt-0.5 ${value === o.id ? 'text-white/60' : 'text-gray-500'}`}>{o.hint}</div>
                 </button>
             ))}
@@ -1228,11 +1222,11 @@ const HookSelector: React.FC<{ label: string; sub: string; options: { id: string
 const PerspectiveField: React.FC<{ label: string; placeholder: string; icon: React.ReactNode; value: string; onChange: (v: string) => void }> = ({ label, placeholder, icon, value, onChange }) => (
     <div>
         <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-amber-600">{icon}</span>
-            <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">{label}</span>
+            <span className="text-gray-400">{icon}</span>
+            <span className="text-[12px] text-gray-700">{label}</span>
         </div>
         <textarea rows={2} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-            className="w-full px-3 py-2 bg-amber-50/40 border border-amber-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-300 placeholder-gray-400 resize-none leading-relaxed" />
+            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 placeholder-gray-300 resize-none leading-relaxed" />
     </div>
 );
 
@@ -1397,16 +1391,16 @@ const InteractivePolygon: React.FC<{ mix: VoiceMix; onChange: (patch: Partial<Vo
     );
 };
 
-// Live values panel next to polygon
+// Live values panel next to polygon — minimal row, no box
 const PolygonValueRow: React.FC<{ label: string; value: number; low: string; high: string }> = ({ label, value, low, high }) => {
     const descriptor = value < 25 ? low : value > 75 ? high : 'balanced';
     return (
-        <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-white border border-gray-100">
+        <div className="flex items-center justify-between gap-2 py-1 border-b border-gray-100 last:border-b-0">
             <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs font-bold text-gray-900">{label}</span>
-                <span className="text-[10px] text-gray-400 italic truncate">{descriptor}</span>
+                <span className="text-xs font-medium text-gray-900">{label}</span>
+                <span className="text-[10px] text-gray-400 truncate">{descriptor}</span>
             </div>
-            <span className="text-xs font-mono font-bold text-amber-600 flex-shrink-0">{value}</span>
+            <span className="text-xs font-mono text-gray-700 flex-shrink-0">{value}</span>
         </div>
     );
 };
@@ -1431,24 +1425,32 @@ type QuizQuestion = {
     options: QuizOption[];
 };
 
+// ────────────────────────────────────────────────────────────────────
+// QUIZ — 7 calibrated questions covering 6 dimensions of voice.
+// Each option contributes WEIGHTED deltas so the final result is the
+// average of stated preferences — not a runaway accumulation. The persona
+// is inferred by matching the resulting voice vector against known
+// presets via cosine distance, falling back to a transparent
+// "Trait · Trait · Rhythm" descriptor when no preset is close enough.
+// ────────────────────────────────────────────────────────────────────
 const QUIZ_QUESTIONS: QuizQuestion[] = [
     {
         id: 'voice',
         prompt: 'When you\'re most convincing, you sound like…',
-        subtitle: 'Pick the one that feels most like you.',
+        subtitle: 'Pick the one that feels most like you on a good day.',
         options: [
             {
                 id: 'confession',
                 sample: '"I shipped 47 failed products before this one. Here\'s what every single one taught me."',
-                deltas: { vulnerability: 35, intimacy: 20, specificity: 10, authority: -5 },
+                deltas: { vulnerability: 30, intimacy: 18, specificity: 8, authority: -3 },
                 hook: { patternInterrupt: 'taboo_confession', tensionMechanism: 'pain_mirror' },
-                viral: { concessionMove: true, statusCurrency: false },
+                viral: { concessionMove: true },
                 weight: 1
             },
             {
                 id: 'data',
                 sample: '"Revenue: $2,847. Hours: 6. Tools: 3. Customers: 8."',
-                deltas: { specificity: 35, authority: 20, vulnerability: -15, energy: -5 },
+                deltas: { specificity: 30, authority: 18, vulnerability: -10, energy: -3 },
                 hook: { patternInterrupt: 'shocking_number', tensionMechanism: 'curiosity_gap' },
                 viral: { forbiddenSpecificity: true, statusCurrency: true },
                 weight: 1
@@ -1456,7 +1458,7 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
             {
                 id: 'provocation',
                 sample: '"PMF is a lie sold by VCs to founders who haven\'t done the work."',
-                deltas: { provocation: 35, authority: 20, vulnerability: -15 },
+                deltas: { provocation: 30, authority: 18, vulnerability: -10 },
                 hook: { patternInterrupt: 'forbidden_statement', tensionMechanism: 'cognitive_dissonance' },
                 viral: { tribalFraming: true, baitAndSwitch: true },
                 weight: 1
@@ -1466,24 +1468,24 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
     {
         id: 'tempo',
         prompt: 'Your sentences feel like…',
-        subtitle: 'The pace of your writing.',
+        subtitle: 'The pace at which you naturally write.',
         options: [
             {
                 id: 'staccato',
                 sample: '"Built it. Shipped it. Got 8 users. $355 each. Now what?"',
-                deltas: { energy: 25, rhythm: 'staccato', intimacy: 10 },
+                deltas: { energy: 20, rhythm: 'staccato', intimacy: 6 },
                 weight: 1
             },
             {
                 id: 'flowing',
                 sample: '"I started with one idea, then realized the problem was bigger than I thought, and the solution had to evolve with every new user I talked to."',
-                deltas: { energy: 5, rhythm: 'flowing', vulnerability: 10 },
+                deltas: { energy: 4, rhythm: 'flowing', vulnerability: 8 },
                 weight: 1
             },
             {
                 id: 'contemplative',
                 sample: '"I waited. Then I listened. The market told me everything — eventually."',
-                deltas: { energy: -15, rhythm: 'contemplative', authority: 10 },
+                deltas: { energy: -12, rhythm: 'contemplative', authority: 8 },
                 weight: 1
             }
         ]
@@ -1496,21 +1498,21 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
             {
                 id: 'friend',
                 sample: '"Listen — between you and me, this changed everything. You\'re going to want to try it."',
-                deltas: { intimacy: 35, vulnerability: 10, authority: -5 },
+                deltas: { intimacy: 28, vulnerability: 8, authority: -4 },
                 closer: 'open_question',
                 weight: 1
             },
             {
                 id: 'mentor',
                 sample: '"Here\'s the model. Three principles. Apply them in this order: first X, then Y, then Z."',
-                deltas: { authority: 30, specificity: 15, intimacy: -10 },
+                deltas: { authority: 24, specificity: 12, intimacy: -8 },
                 closer: 'soft_proof',
                 weight: 1
             },
             {
                 id: 'insider',
                 sample: '"What I\'m about to share, most agencies will hate me for. But you deserve to know."',
-                deltas: { intimacy: 15, authority: 20, provocation: 15 },
+                deltas: { intimacy: 12, authority: 16, provocation: 12 },
                 viral: { forbiddenSpecificity: true, inGroupSignaling: true },
                 closer: 'open_loop',
                 weight: 1
@@ -1525,7 +1527,7 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
             {
                 id: 'numbers',
                 sample: '"$0 → $10k MRR in 47 days. Here\'s the exact stack."',
-                deltas: { specificity: 25, authority: 15 },
+                deltas: { specificity: 22, authority: 12 },
                 hook: { patternInterrupt: 'shocking_number', promisePayoff: 'what_to_learn' },
                 viral: { statusCurrency: true, fortuneCookieClose: true },
                 closer: 'soft_proof',
@@ -1534,7 +1536,7 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
             {
                 id: 'story',
                 sample: '"I almost quit. Yesterday. Here\'s what changed my mind."',
-                deltas: { vulnerability: 25, intimacy: 15 },
+                deltas: { vulnerability: 22, intimacy: 12 },
                 hook: { patternInterrupt: 'taboo_confession', promisePayoff: 'what_to_feel' },
                 viral: { concessionMove: true },
                 closer: 'open_question',
@@ -1543,10 +1545,108 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
             {
                 id: 'forbidden',
                 sample: '"Stop telling founders to \'just talk to users\'. Here\'s what actually works."',
-                deltas: { provocation: 25, authority: 15 },
+                deltas: { provocation: 22, authority: 12 },
                 hook: { patternInterrupt: 'forbidden_statement', promisePayoff: 'what_to_avoid' },
                 viral: { baitAndSwitch: true, tribalFraming: true },
                 closer: 'reverse_cta',
+                weight: 1
+            }
+        ]
+    },
+    {
+        id: 'feeling',
+        prompt: 'After reading you, the reader should feel…',
+        subtitle: 'The emotional residue you want to leave.',
+        options: [
+            {
+                id: 'seen',
+                sample: '"Yeah, I\'ve been there too. Here\'s what I wish someone had told me."',
+                deltas: { intimacy: 16, vulnerability: 14, provocation: -6 },
+                viral: { concessionMove: true },
+                closer: 'open_question',
+                weight: 1
+            },
+            {
+                id: 'sharper',
+                sample: '"You can stop scrolling now. You have what you need."',
+                deltas: { specificity: 16, authority: 12, energy: 6 },
+                viral: { fortuneCookieClose: true, statusCurrency: true },
+                closer: 'punchline',
+                weight: 1
+            },
+            {
+                id: 'shaken',
+                sample: '"If you finished that and felt nothing — you\'re not the audience."',
+                deltas: { provocation: 18, authority: 8, intimacy: -4 },
+                viral: { tribalFraming: true, baitAndSwitch: true },
+                closer: 'reverse_cta',
+                weight: 1
+            },
+            {
+                id: 'curious',
+                sample: '"There\'s a second part to this. But you won\'t need it if you do part one right."',
+                deltas: { authority: 10, specificity: 6, energy: 4 },
+                viral: { loopOpener: true },
+                hook: { tensionMechanism: 'curiosity_gap' },
+                closer: 'open_loop',
+                weight: 1
+            }
+        ]
+    },
+    {
+        id: 'proof',
+        prompt: 'Where do you draw credibility from?',
+        subtitle: 'How you prove you\'re worth listening to.',
+        options: [
+            {
+                id: 'receipts',
+                sample: '"Six months. Three pivots. $2,847 MRR. Numbers don\'t lie — and neither do I."',
+                deltas: { specificity: 22, authority: 14 },
+                viral: { forbiddenSpecificity: true, statusCurrency: true },
+                hook: { promisePayoff: 'what_to_learn' },
+                weight: 1
+            },
+            {
+                id: 'scars',
+                sample: '"I\'ve made every mistake on this list. The list is the proof."',
+                deltas: { vulnerability: 20, intimacy: 10, authority: 6 },
+                viral: { concessionMove: true },
+                weight: 1
+            },
+            {
+                id: 'pattern',
+                sample: '"I\'ve watched 40 founders try this. 36 broke the same way. Here\'s the pattern."',
+                deltas: { authority: 18, specificity: 14, intimacy: -4 },
+                hook: { tensionMechanism: 'forbidden_knowledge' },
+                viral: { inGroupSignaling: true },
+                weight: 1
+            }
+        ]
+    },
+    {
+        id: 'stance',
+        prompt: 'When someone pushes back on your post, you…',
+        subtitle: 'Your default posture under disagreement.',
+        options: [
+            {
+                id: 'concede',
+                sample: '"Fair — there\'s a version of this where you\'re right. Here\'s where I think you\'re missing it."',
+                deltas: { vulnerability: 14, intimacy: 8, provocation: -10 },
+                viral: { concessionMove: true },
+                weight: 1
+            },
+            {
+                id: 'sharpen',
+                sample: '"That\'s the surface read. The deeper one is harder to swallow. Let me unpack it."',
+                deltas: { authority: 14, specificity: 8, provocation: 6 },
+                viral: { statusCurrency: true },
+                weight: 1
+            },
+            {
+                id: 'press',
+                sample: '"You\'re wrong. Here\'s why — and why most people who disagree haven\'t built the thing."',
+                deltas: { provocation: 18, authority: 10, intimacy: -8 },
+                viral: { tribalFraming: true, baitAndSwitch: true },
                 weight: 1
             }
         ]
@@ -1554,6 +1654,16 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
 ];
 
 function clamp01_100(n: number) { return Math.max(0, Math.min(100, Math.round(n))); }
+
+// Cosine similarity between two VoiceMix vectors (numeric dimensions only)
+function voiceVector(m: VoiceMix): number[] {
+    return [m.authority, m.energy, m.vulnerability, m.provocation, m.specificity, m.intimacy];
+}
+function cosineSim(a: number[], b: number[]): number {
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
+}
 
 function computePersonaResult(answers: QuizOption[]): {
     voiceMix: VoiceMix;
@@ -1563,72 +1673,181 @@ function computePersonaResult(answers: QuizOption[]): {
     personaName: string;
     tagline: string;
     sampleLine: string;
+    confidence: number;        // 0-100, how confident we are in the match
+    closestPreset: string | null;
 } {
-    // Start from neutral midpoints
+    // Mid-point baseline so a single "extreme" answer doesn't dominate.
     let mix: VoiceMix = { authority: 50, energy: 50, vulnerability: 50, provocation: 50, specificity: 50, intimacy: 50, rhythm: 'punchy' };
     let hook: HookArchitecture = { patternInterrupt: 'shocking_number', tensionMechanism: 'curiosity_gap', promisePayoff: 'what_to_avoid' };
     let viral: ViralPhysics = { statusCurrency: false, inGroupSignaling: false, tribalFraming: false, fortuneCookieClose: false, loopOpener: false, concessionMove: false, baitAndSwitch: false, forbiddenSpecificity: false };
     let closer: CloserStrategy = 'punchline';
 
+    // Aggregate deltas. Each dimension gets a weighted-average shift based on
+    // how many answers actually touched it — prevents under-touched axes
+    // from drifting and over-touched axes from saturating.
+    type Dim = 'authority'|'energy'|'vulnerability'|'provocation'|'specificity'|'intimacy';
+    const dims: Dim[] = ['authority', 'energy', 'vulnerability', 'provocation', 'specificity', 'intimacy'];
+    const sum: Record<Dim, number> = { authority: 0, energy: 0, vulnerability: 0, provocation: 0, specificity: 0, intimacy: 0 };
+    const count: Record<Dim, number> = { authority: 0, energy: 0, vulnerability: 0, provocation: 0, specificity: 0, intimacy: 0 };
+    const rhythmVotes: Record<VoiceMix['rhythm'], number> = { staccato: 0, punchy: 0, flowing: 0, contemplative: 0 };
+    const hookVotes: Partial<Record<string, number>> = {};
+    const tensionVotes: Partial<Record<string, number>> = {};
+    const payoffVotes: Partial<Record<string, number>> = {};
+    const closerVotes: Partial<Record<CloserStrategy, number>> = {};
+    const viralVotes: Partial<Record<keyof ViralPhysics, number>> = {};
+
     for (const ans of answers) {
-        // Apply numeric deltas
-        for (const k of ['authority', 'energy', 'vulnerability', 'provocation', 'specificity', 'intimacy'] as const) {
-            if (typeof ans.deltas[k] === 'number') {
-                mix[k] = clamp01_100(mix[k] + (ans.deltas[k] as number));
+        for (const k of dims) {
+            const d = ans.deltas[k];
+            if (typeof d === 'number') { sum[k] += d; count[k] += 1; }
+        }
+        if (ans.deltas.rhythm) rhythmVotes[ans.deltas.rhythm] += 1;
+        if (ans.hook?.patternInterrupt) hookVotes[ans.hook.patternInterrupt] = (hookVotes[ans.hook.patternInterrupt] || 0) + 1;
+        if (ans.hook?.tensionMechanism) tensionVotes[ans.hook.tensionMechanism] = (tensionVotes[ans.hook.tensionMechanism] || 0) + 1;
+        if (ans.hook?.promisePayoff) payoffVotes[ans.hook.promisePayoff] = (payoffVotes[ans.hook.promisePayoff] || 0) + 1;
+        if (ans.closer) closerVotes[ans.closer] = (closerVotes[ans.closer] || 0) + 1;
+        if (ans.viral) {
+            for (const [k, v] of Object.entries(ans.viral) as [keyof ViralPhysics, boolean][]) {
+                if (v) viralVotes[k] = (viralVotes[k] || 0) + 1;
             }
         }
-        if (ans.deltas.rhythm) mix.rhythm = ans.deltas.rhythm;
-        if (ans.hook) hook = { ...hook, ...ans.hook };
-        if (ans.viral) viral = { ...viral, ...ans.viral };
-        if (ans.closer) closer = ans.closer;
     }
 
-    // Persona naming from dominant traits
-    const top = [
-        { trait: 'Brutal', score: mix.provocation, sample: '"Stop pretending. Here\'s the truth."' },
-        { trait: 'Vulnerable', score: mix.vulnerability, sample: '"I lost everything. Here\'s what saved me."' },
-        { trait: 'Surgical', score: mix.specificity - 50 + 50, sample: '"$2,847 in 6 hours. The 4-step playbook."' },
-        { trait: 'Calm', score: 100 - mix.energy, sample: '"Three principles. Applied carefully."' },
-        { trait: 'Intimate', score: mix.intimacy, sample: '"Listen — between you and me…"' }
-    ].sort((a, b) => b.score - a.score);
+    // Apply averaged deltas to baseline — averaging keeps each dimension in
+    // a realistic range regardless of how many questions hit it.
+    for (const k of dims) {
+        if (count[k] > 0) {
+            const avgDelta = sum[k] / count[k];
+            // Scale: averaged delta gets full effect (each answer was already calibrated)
+            mix[k] = clamp01_100(mix[k] + avgDelta * 1.6);
+        }
+    }
 
-    const second = [
-        { archetype: 'Sniper', sample: '"$2,847. 6 hours. Done."' },
-        { archetype: 'Storyteller', sample: '"Tuesday at 3am, the email arrived…"' },
-        { archetype: 'Architect', sample: '"Three principles, in this order…"' },
-        { archetype: 'Observer', sample: '"I watched 40 founders do this. Here\'s the pattern."' },
-        { archetype: 'Insider', sample: '"What they don\'t tell you about X…"' }
-    ];
-    // Pick archetype based on authority+specificity vs intimacy+vulnerability balance
-    const archetypeScore = mix.authority + mix.specificity - mix.intimacy - mix.vulnerability;
-    let archetype = 'Observer';
-    if (archetypeScore > 40) archetype = 'Sniper';
-    else if (archetypeScore < -40) archetype = 'Storyteller';
-    else if (mix.authority > 70) archetype = 'Architect';
-    else if (mix.provocation > 70) archetype = 'Insider';
+    // Pick the rhythm with the most votes (default: punchy)
+    const rhythmEntries = (Object.entries(rhythmVotes) as [VoiceMix['rhythm'], number][])
+        .sort((a, b) => b[1] - a[1]);
+    if (rhythmEntries[0][1] > 0) mix.rhythm = rhythmEntries[0][0];
 
-    const personaName = `The ${top[0].trait} ${archetype}`;
-    const taglines: Record<string, string> = {
-        'Brutal': 'You hit first, soothe never. People listen because you don\'t soften it.',
-        'Vulnerable': 'You lead with the wound. People trust you because you go first.',
-        'Surgical': 'You hide credentials behind receipts. You don\'t claim — you show.',
-        'Calm': 'You don\'t need volume. Your authority is in the pace.',
-        'Intimate': 'You write like you\'re leaning across the table. People feel seen.'
+    // Pick top-voted hook architecture pieces
+    const topKey = <T extends string>(votes: Partial<Record<T, number>>): T | null => {
+        const e = (Object.entries(votes) as [T, number][]).sort((a, b) => (b[1] || 0) - (a[1] || 0));
+        return e.length && e[0][1] > 0 ? e[0][0] : null;
+    };
+    const piVote = topKey<HookArchitecture['patternInterrupt']>(hookVotes as any);
+    const tmVote = topKey<HookArchitecture['tensionMechanism']>(tensionVotes as any);
+    const ppVote = topKey<HookArchitecture['promisePayoff']>(payoffVotes as any);
+    if (piVote) hook.patternInterrupt = piVote;
+    if (tmVote) hook.tensionMechanism = tmVote;
+    if (ppVote) hook.promisePayoff = ppVote;
+
+    const cVote = topKey<CloserStrategy>(closerVotes as any);
+    if (cVote) closer = cVote;
+
+    // Viral toggles: enable when at least 2 answers vote for them, OR when a
+    // single high-conviction answer votes (since we have 7 questions, ≥2
+    // is a meaningful signal).
+    for (const [k, v] of Object.entries(viralVotes) as [keyof ViralPhysics, number][]) {
+        if (v >= 2) viral[k] = true;
+    }
+
+    // ─── Persona inference via nearest-preset matching ──────────────
+    const targetVec = voiceVector(mix);
+    const presetScores = VOICE_PRESETS.map(p => ({
+        preset: p,
+        sim: cosineSim(targetVec, voiceVector(p.voiceMix))
+    })).sort((a, b) => b.sim - a.sim);
+    const best = presetScores[0];
+    const confidence = Math.round(Math.max(0, Math.min(1, best.sim)) * 100);
+
+    // Compose a transparent persona descriptor — three traits, not a buzzfeed name.
+    // Each trait is anchored to a real value, so the user can sanity-check it.
+    type Trait = { label: string; score: number };
+    const traits: Trait[] = [
+        { label: 'Brutal',         score: mix.provocation },
+        { label: 'Vulnerable',     score: mix.vulnerability },
+        { label: 'Surgical',       score: mix.specificity },
+        { label: 'Authoritative',  score: mix.authority },
+        { label: 'Calm',           score: 100 - mix.energy },
+        { label: 'Intimate',       score: mix.intimacy },
+        { label: 'High-energy',    score: mix.energy }
+    ].filter(t => t.score >= 60)        // only surface traits the user actually leans into
+     .sort((a, b) => b.score - a.score);
+
+    const rhythmDescriptor: Record<VoiceMix['rhythm'], string> = {
+        staccato: 'staccato pace',
+        punchy: 'punchy pace',
+        flowing: 'flowing pace',
+        contemplative: 'contemplative pace'
     };
 
-    // Build a sample line based on the chosen settings
-    const sampleLine =
-        hook.patternInterrupt === 'shocking_number' ? `"$${(Math.random() * 9000 + 1000).toFixed(0)} in ${Math.floor(Math.random() * 30 + 1)} days. Most ${archetypeScore > 0 ? 'founders' : 'people'} would hide this. Here's why you shouldn't."` :
-        hook.patternInterrupt === 'taboo_confession' ? `"I almost quit yesterday. Here's what changed my mind — and why I should have known sooner."` :
-        hook.patternInterrupt === 'forbidden_statement' ? `"Stop chasing PMF. It's a lie sold by people who never built anything. Here's what actually works."` :
-        hook.patternInterrupt === 'precise_moment' ? `"On Tuesday at 3:14am, the email arrived. I read it three times. I haven't built the same way since."` :
-        hook.patternInterrupt === 'self_indictment' ? `"I built the wrong feature for 18 months. Then a single user message rewrote everything."` :
-        `"Stripe rejected us 4 times. I'm grateful for every single 'no'. Here's why."`;
+    let personaName: string;
+    let tagline: string;
+    // If a preset is very close, surface it as the "looks like" label — but always
+    // also show the user's actual dimensions so it's transparent, not magic.
+    if (best.sim >= 0.97 && traits.length > 0) {
+        personaName = `${traits.slice(0, 2).map(t => t.label).join(' · ')} · ${rhythmDescriptor[mix.rhythm]}`;
+        tagline = `Closest to "${best.preset.name}" — ${best.preset.tagline}`;
+    } else if (traits.length >= 2) {
+        personaName = `${traits.slice(0, 2).map(t => t.label).join(' · ')} · ${rhythmDescriptor[mix.rhythm]}`;
+        tagline = `A ${traits[0].label.toLowerCase()} voice that ${
+            traits[1].label === 'Surgical' ? 'leans on receipts over claims' :
+            traits[1].label === 'Vulnerable' ? 'trades certainty for honesty' :
+            traits[1].label === 'Intimate' ? 'writes one-to-one, not one-to-many' :
+            traits[1].label === 'Authoritative' ? 'sets the frame and holds it' :
+            traits[1].label === 'Brutal' ? 'refuses to soften the edges' :
+            traits[1].label === 'Calm' ? 'pulls authority from pace, not volume' :
+            'meets the reader where they are'
+        }.`;
+    } else {
+        personaName = `Balanced · ${rhythmDescriptor[mix.rhythm]}`;
+        tagline = 'No single dimension dominates — you adapt to the moment.';
+    }
 
-    return { voiceMix: mix, hook, viral, closer, personaName, tagline: taglines[top[0].trait] || 'A unique voice profile.', sampleLine };
+    // ─── Sample line — uses the actual computed values, not just the hook ─
+    // We pick from a richer template library based on pattern interrupt + rhythm + intimacy.
+    const rnd = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+    const templates: Record<HookArchitecture['patternInterrupt'], string[]> = {
+        shocking_number: [
+            `$${(Math.random() * 9000 + 1000).toFixed(0)} in ${Math.floor(Math.random() * 30 + 2)} days. ${mix.intimacy > 60 ? "Here's what I learned that nobody told me." : "Here's the exact mechanic."}`,
+            `${Math.floor(Math.random() * 40 + 3)} months. ${Math.floor(Math.random() * 5 + 2)} pivots. One thing finally clicked.`,
+            `${Math.floor(Math.random() * 90 + 10)}% of the value came from ${Math.floor(Math.random() * 4 + 2)}% of the work. ${mix.authority > 70 ? 'Here is the 4%.' : 'I had to be told.'}`
+        ],
+        taboo_confession: [
+            `I almost quit ${rnd(['yesterday', 'last Tuesday', 'three weeks ago', 'twice last quarter'])}. Here's what changed my mind.`,
+            `I lied in my pitch deck. ${mix.vulnerability > 70 ? 'I still think about it.' : 'Then I rebuilt the company around fixing it.'}`,
+            `For ${Math.floor(Math.random() * 18 + 3)} months I built the wrong thing. One sentence from a user rewrote everything.`
+        ],
+        forbidden_statement: [
+            `Stop chasing PMF. ${mix.provocation > 75 ? "It's a lie sold by people who never built anything." : "It's a lagging indicator, not a strategy."}`,
+            `Most ${mix.intimacy > 60 ? 'of us' : 'founders'} are doing this wrong. ${mix.authority > 70 ? "Here's the fix." : "I include myself."}`,
+            `${mix.provocation > 80 ? 'Hot take' : 'Unpopular angle'}: the metric you optimize for is the one you'll regret.`
+        ],
+        precise_moment: [
+            `${rnd(['Tuesday', 'Last Thursday', 'A Friday in March'])} at ${Math.floor(Math.random() * 4 + 2)}:${Math.floor(Math.random() * 50 + 10)}am, the email arrived. I read it three times.`,
+            `${Math.floor(Math.random() * 18 + 2)} months in, I opened ${rnd(['Stripe', 'Linear', 'our analytics'])}. The number wasn't what I expected.`,
+            `It was the ${rnd(['third', 'fourth', 'seventh'])} call that week. The customer said one sentence. Everything changed.`
+        ],
+        self_indictment: [
+            `I built the wrong feature for ${Math.floor(Math.random() * 14 + 4)} months. Then a single message rewrote the roadmap.`,
+            `I ignored the ${rnd(['churn', 'feedback', 'support load'])} for too long. Here's what it cost me — and what I do now.`,
+            `I told myself I was iterating. I was actually procrastinating. Here's how I caught it.`
+        ],
+        unexpected_name: [
+            `${rnd(['Stripe', 'YC', 'Linear', 'Notion'])} rejected us ${Math.floor(Math.random() * 4 + 2)} times. I'm grateful for every "no".`,
+            `${rnd(['Paul Graham', 'a junior PM', 'my first customer'])} said one thing that broke my model — in the best way.`,
+            `${rnd(['A 14-year-old', 'A retired CEO', 'A solo dev in Lagos'])} taught me more about distribution than any book.`
+        ]
+    };
+    const sampleLine = `"${rnd(templates[hook.patternInterrupt])}"`;
+
+    return {
+        voiceMix: mix, hook, viral, closer,
+        personaName, tagline, sampleLine, confidence,
+        closestPreset: best.preset.name
+    };
 }
 
-const VoiceMatchQuiz: React.FC<{ onClose: () => void; onComplete: (result: { voiceMix: VoiceMix; hook: HookArchitecture; viral: ViralPhysics; closer: CloserStrategy; personaName: string; tagline: string }) => void }> = ({ onClose, onComplete }) => {
+export const VoiceMatchQuiz: React.FC<{ onClose: () => void; onComplete: (result: { voiceMix: VoiceMix; hook: HookArchitecture; viral: ViralPhysics; closer: CloserStrategy; personaName: string; tagline: string }) => void }> = ({ onClose, onComplete }) => {
     const [step, setStep] = useState(0); // 0 = intro, 1-4 = questions, 5 = reveal
     const [answers, setAnswers] = useState<QuizOption[]>([]);
     const [transitioning, setTransitioning] = useState(false);
@@ -1672,16 +1891,16 @@ const VoiceMatchQuiz: React.FC<{ onClose: () => void; onComplete: (result: { voi
             {/* INTRO */}
             {step === 0 && (
                 <div className="max-w-xl w-full text-center animate-fade-in" style={{ animationDuration: '400ms' }}>
-                    <div className="text-7xl mb-6 animate-pulse">🎙️</div>
-                    <h1 className="text-5xl font-display font-bold text-white mb-3 tracking-tight">Find your voice</h1>
-                    <p className="text-white/60 text-lg mb-10 leading-relaxed">
-                        4 questions. 30 seconds. No sliders.<br />
-                        Just pick what feels like you.
+                    <div className="text-6xl mb-6">🎙️</div>
+                    <h1 className="text-4xl md:text-5xl font-display font-medium text-white mb-3 tracking-tight">Find your voice</h1>
+                    <p className="text-white/60 text-base mb-10 leading-relaxed">
+                        {totalQuestions} questions. About a minute. No sliders.<br />
+                        Pick what feels like you — we'll do the math.
                     </p>
                     <button onClick={() => setStep(1)}
-                        className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-amber-400 via-orange-400 to-pink-400 text-gray-900 rounded-2xl font-bold text-base shadow-2xl shadow-amber-500/20 hover:shadow-amber-500/40 transition-all">
-                        Start the match
-                        <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                        className="group inline-flex items-center gap-3 px-7 py-3.5 bg-white text-gray-900 rounded-xl font-medium text-sm hover:bg-gray-100 transition-all">
+                        Start
+                        <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>
             )}
@@ -1811,33 +2030,46 @@ const RevealScreen: React.FC<{ result: ReturnType<typeof computePersonaResult>; 
 
             {/* Reveal text */}
             <div className="text-white">
-                <div className="text-[10px] font-black tracking-[0.3em] text-amber-400 uppercase mb-3"
+                <div className="flex items-center gap-3 mb-3"
                     style={{ opacity: showText ? 1 : 0, transition: 'opacity 600ms' }}>
-                    Your voice is
+                    <span className="text-[10px] tracking-[0.2em] text-amber-400/80 uppercase">Your voice profile</span>
+                    <span className="text-[10px] text-white/40">·</span>
+                    <span className="text-[10px] text-white/50">{result.confidence}% match to known patterns</span>
                 </div>
-                <h1 className="text-5xl md:text-6xl font-display font-bold mb-4 tracking-tight bg-gradient-to-r from-amber-300 via-orange-300 to-pink-300 bg-clip-text text-transparent"
+                <h1 className="text-3xl md:text-4xl font-display font-medium mb-3 tracking-tight text-white"
                     style={{ opacity: showText ? 1 : 0, transform: showText ? 'translateY(0)' : 'translateY(10px)', transition: 'opacity 600ms, transform 600ms' }}>
                     {result.personaName}
                 </h1>
-                <p className="text-white/70 text-base leading-relaxed mb-6"
+                <p className="text-white/70 text-sm leading-relaxed mb-5"
                     style={{ opacity: showText ? 1 : 0, transition: 'opacity 600ms 100ms' }}>
                     {result.tagline}
                 </p>
 
-                <div className="p-4 bg-white/5 border border-amber-400/30 rounded-2xl mb-6"
+                {/* Profile vitals — actual computed values, not buzzfeed labels */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-5 text-[12px]"
+                    style={{ opacity: showText ? 1 : 0, transition: 'opacity 600ms 200ms' }}>
+                    {VOICE_DIMENSIONS.map(d => (
+                        <div key={d.key} className="flex items-center justify-between border-b border-white/5 py-1">
+                            <span className="text-white/60">{d.label}</span>
+                            <span className="text-white font-mono">{result.voiceMix[d.key]}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="p-4 bg-white/5 border border-white/10 rounded-xl mb-5"
                     style={{ opacity: showSample ? 1 : 0, transform: showSample ? 'translateY(0)' : 'translateY(10px)', transition: 'opacity 500ms, transform 500ms' }}>
-                    <div className="text-[10px] font-black tracking-[0.2em] text-amber-400 uppercase mb-2">Sample line you'd write</div>
+                    <div className="text-[10px] tracking-[0.15em] text-white/40 uppercase mb-2">Sample line at these settings</div>
                     <p className="text-white text-sm italic font-display leading-relaxed">{result.sampleLine}</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2"
                     style={{ opacity: showSample ? 1 : 0, transition: 'opacity 500ms 200ms' }}>
                     <button onClick={onLockIn}
-                        className="flex-1 min-w-[160px] px-6 py-3 bg-gradient-to-r from-amber-400 to-orange-400 text-gray-900 rounded-xl font-bold text-sm shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 transition-all flex items-center justify-center gap-2">
-                        <Check size={16} /> Lock it in
+                        className="flex-1 min-w-[160px] px-5 py-2.5 bg-white text-gray-900 rounded-xl font-medium text-sm hover:bg-gray-100 transition-all flex items-center justify-center gap-2">
+                        <Check size={15} /> Use this profile
                     </button>
                     <button onClick={onRedo}
-                        className="px-5 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-bold text-sm transition-all">
+                        className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium text-sm transition-all">
                         Try again
                     </button>
                 </div>

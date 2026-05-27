@@ -1,10 +1,31 @@
 /**
- * Answerly Engagement Agent v4.0
+ * Answerly Engagement Agent v4.1
  * Injected into social platforms to perform stealth interactions.
  * Simulates human biometrics: Bezier mouse paths, gaussian delays,
  * typo simulation, wheel events, and realistic click sequences.
+ *
+ * v4.1 changes:
+ *  - Structured instrumentation at every doComment step. Every log line
+ *    is tagged `[AUTO-COMMENT]` and includes the platform, step name,
+ *    and the payload that step received/produced. When you test, open
+ *    the stealth popup's devtools console and you'll see exactly where
+ *    the flow halts.
+ *  - LinkedIn selector hardening: scope `aria-label*="Comment"` to the
+ *    article and add fallback selectors for newer DOM.
+ *  - Quill / contenteditable robustness: dispatch InputEvent in addition
+ *    to execCommand so React-controlled editors see the value change.
+ *  - Submit-readiness polling: don't check `.disabled` once — poll for
+ *    up to 4s in case the framework re-renders after input events.
+ *  - Post-submit verification: after clicking submit, look for our text
+ *    in a newly rendered comment node before reporting success. Catches
+ *    silent failures (anti-spam, hidden captcha, etc.).
  */
 (function() {
+    const LOG = (step, payload) => {
+        try { console.info('[AUTO-COMMENT]', step, payload || ''); }
+        catch (_) { /* console may be locked down in iframes */ }
+    };
+
     // Platform-specific selectors
     const PLATFORMS = {
         'x.com': {
@@ -13,6 +34,7 @@
             replyTrigger: '[data-testid="reply"], [aria-label*="Reply"]',
             replyBoxSelector: '[data-testid="tweetTextarea_0"], .public-DraftEditor-content',
             replyButtonSelector: '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]',
+            commentVerifySelector: '[data-testid="tweetText"]'
         },
         'twitter.com': {
             likeSelector: '[data-testid="like"], [aria-label*="Like"]',
@@ -20,13 +42,18 @@
             replyTrigger: '[data-testid="reply"], [aria-label*="Reply"]',
             replyBoxSelector: '[data-testid="tweetTextarea_0"], .public-DraftEditor-content',
             replyButtonSelector: '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]',
+            commentVerifySelector: '[data-testid="tweetText"]'
         },
         'linkedin.com': {
             likeSelector: 'button[aria-label*="Like"], button.react-button__trigger, .reactions-react-button button',
             alreadyLikedSelector: 'button[aria-pressed="true"][aria-label*="Like"], button.react-button__trigger--active',
-            replyTrigger: 'button[aria-label*="Comment"], button.comment-button, .artdeco-button--tertiary.comment-button',
-            replyBoxSelector: '.ql-editor[contenteditable="true"], .comments-comment-box__content-editor',
-            replyButtonSelector: 'button.comments-comment-box__submit-button, .comments-comment-box__dispatch-area button[type="submit"]',
+            // Expanded LinkedIn reply triggers. The aria-label is sometimes
+            // "Comment on …" (starts-with), sometimes contains "Comment" elsewhere.
+            // We also accept the social-actions container's comment icon.
+            replyTrigger: 'button[aria-label^="Comment"], button[aria-label*="Comment"], button.comment-button, .artdeco-button--tertiary.comment-button, button.social-actions-button[aria-label*="comment" i]',
+            replyBoxSelector: '.ql-editor[contenteditable="true"], .comments-comment-box__content-editor [contenteditable="true"], .comments-comment-box__content-editor',
+            replyButtonSelector: 'button.comments-comment-box__submit-button:not([disabled]), .comments-comment-box__dispatch-area button[type="submit"]:not([disabled]), button.comments-comment-box__submit-button, .comments-comment-box__dispatch-area button[type="submit"]',
+            commentVerifySelector: '.comments-comment-item__main-content, .comments-comment-item .feed-shared-text'
         },
         'reddit.com': {
             likeSelector: 'button[aria-label="upvote"], [data-click-id="upvote"]',
@@ -34,13 +61,18 @@
             replyTrigger: 'button[aria-label*="Reply"], [data-click-id="body"] .reply-button',
             replyBoxSelector: '.public-DraftEditor-content, shreddit-composer textarea, textarea[placeholder*="thoughts"]',
             replyButtonSelector: 'button[type="submit"], shreddit-composer [slot="submit-button"]',
+            commentVerifySelector: '[data-testid="comment"]'
         },
         'producthunt.com': {
+            // NOTE: `button:contains("Reply")` was an invalid CSS selector
+            // (`:contains` is jQuery, not native). It silently never matched.
+            // Use a real attribute-based selector instead.
             likeSelector: 'button[aria-label*="upvote"], button.vote-button',
             alreadyLikedSelector: 'button[aria-pressed="true"][aria-label*="upvote"]',
-            replyTrigger: 'button:contains("Reply"), .reply-button',
-            replyBoxSelector: 'textarea[placeholder*="comment"], .comment-box',
+            replyTrigger: 'button[aria-label*="Reply" i], .reply-button',
+            replyBoxSelector: 'textarea[placeholder*="comment" i], .comment-box',
             replyButtonSelector: 'button[type="submit"]',
+            commentVerifySelector: '[data-test*="comment"]'
         }
     };
 
@@ -57,13 +89,24 @@
 
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+    // Element is "visible" if it has layout AND is in the viewport-reachable
+    // DOM. `offsetParent === null` alone is a false-negative for fixed/sticky
+    // containers — fall back to getBoundingClientRect dimensions.
+    function isVisible(el) {
+        if (!el) return false;
+        if (el.offsetParent !== null) return true;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+    }
+
     async function waitForElement(sel, timeout = 15000) {
         const t = Date.now();
         while (Date.now() - t < timeout) {
             const el = document.querySelector(sel);
-            if (el && el.offsetParent !== null) return el;
+            if (el && isVisible(el)) return el;
             await sleep(500);
         }
+        LOG('waitForElement TIMEOUT', { selector: sel, timeoutMs: timeout });
         return null;
     }
 
@@ -160,7 +203,20 @@
     async function typeChar(el, ch) {
         el.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
         if (el.isContentEditable) {
-            document.execCommand('insertText', false, ch);
+            // execCommand still works in Chromium for now, but some React-controlled
+            // editors (LinkedIn Quill, Twitter Draft) need an explicit InputEvent
+            // so their internal state syncs and the submit button enables.
+            const ok = document.execCommand('insertText', false, ch);
+            if (!ok) {
+                // Fallback: directly append a text node and fire a beforeinput/input pair.
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount) {
+                    const range = sel.getRangeAt(0);
+                    range.insertNode(document.createTextNode(ch));
+                    range.collapse(false);
+                }
+            }
+            el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
         } else {
             const p = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ||
                       Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
@@ -204,11 +260,13 @@
     }
 
     // Main message handler
+    LOG('agent.ready', { url: location.href, host: location.hostname });
     chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         if (msg.type === 'PERFORM_STEALTH_INTERACTION') {
+            LOG('message.received', { actionType: msg.actionType, hasText: !!msg.payload?.text });
             run(msg.actionType, msg.payload)
-                .then(r => respond(r))
-                .catch(e => respond({ success: false, error: e.message }));
+                .then(r => { LOG('message.respond', r); respond(r); })
+                .catch(e => { LOG('message.respond.ERROR', { error: e.message }); respond({ success: false, error: e.message }); });
             return true;
         }
     });
@@ -247,29 +305,117 @@
         return { success: true };
     }
 
+    // Poll for an element to become *enabled* (not just present). Used for
+    // submit buttons that initialise disabled and enable on input.
+    async function waitForEnabled(sel, timeout = 5000) {
+        const t = Date.now();
+        while (Date.now() - t < timeout) {
+            const candidates = Array.from(document.querySelectorAll(sel));
+            const ready = candidates.find(el => isVisible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true');
+            if (ready) return ready;
+            await sleep(250);
+        }
+        // Fall back to the first visible match even if disabled, so caller can report cleanly
+        const any = Array.from(document.querySelectorAll(sel)).find(isVisible);
+        LOG('waitForEnabled TIMEOUT', { selector: sel, foundDisabled: !!any });
+        return any || null;
+    }
+
     async function doComment(P, text) {
+        const platform = location.hostname.replace(/^www\./, '');
+        LOG('start', { platform, textPreview: (text || '').slice(0, 80), textLength: (text || '').length });
+
+        if (!text || typeof text !== 'string' || !text.trim()) {
+            LOG('abort.emptyText');
+            return { success: false, error: 'No comment text provided' };
+        }
+
+        // STEP 1 — find and click the reply/comment trigger
+        LOG('step1.findTrigger', { selector: P.replyTrigger });
         const trigger = await waitForElement(P.replyTrigger);
-        if (!trigger) return { success: false, error: 'Reply trigger not found' };
+        if (!trigger) {
+            LOG('step1.FAIL', { reason: 'trigger not found' });
+            return { success: false, error: 'Reply trigger not found (DOM may have changed — check selector)' };
+        }
+        LOG('step1.OK', { triggerTag: trigger.tagName, ariaLabel: trigger.getAttribute('aria-label') });
 
         await scrollTo(trigger);
         await sleep(g(600, 150));
         await click(trigger);
+        LOG('step1.clicked');
 
+        // STEP 2 — wait for the reply input to appear
+        LOG('step2.findBox', { selector: P.replyBoxSelector });
         const box = await waitForElement(P.replyBoxSelector, 8000);
-        if (!box) return { success: false, error: 'Reply box did not appear' };
+        if (!box) {
+            LOG('step2.FAIL', { reason: 'reply box did not appear' });
+            return { success: false, error: 'Reply box did not appear (clicked trigger but no editor opened)' };
+        }
+        LOG('step2.OK', { boxTag: box.tagName, contentEditable: box.isContentEditable });
 
         await sleep(g(700, 180));
         await click(box);
-        await type(box, text);
+        box.focus();
 
-        const submit = await waitForElement(P.replyButtonSelector, 5000);
-        if (!submit || submit.disabled) return { success: false, error: 'Submit button not ready' };
+        // STEP 3 — type the comment
+        LOG('step3.typing', { chars: text.length });
+        await type(box, text);
+        const observedValue = (box.isContentEditable ? (box.innerText || box.textContent) : box.value || '').trim();
+        LOG('step3.typed', { observedLength: observedValue.length, observedPreview: observedValue.slice(0, 80) });
+        if (observedValue.length < Math.min(10, text.length * 0.5)) {
+            // Typed but the value isn't reflected — likely a controlled editor
+            // that didn't accept our InputEvent. Don't submit garbage.
+            LOG('step3.FAIL', { reason: 'value not reflected in editor', expected: text.length, got: observedValue.length });
+            return { success: false, error: 'Typed text not reflected in editor (controlled/Quill issue?). Check console logs.' };
+        }
+
+        // STEP 4 — wait for submit to be enabled, then click
+        LOG('step4.findSubmit', { selector: P.replyButtonSelector });
+        const submit = await waitForEnabled(P.replyButtonSelector, 4500);
+        if (!submit) {
+            LOG('step4.FAIL', { reason: 'submit button not found' });
+            return { success: false, error: 'Submit button not found' };
+        }
+        if (submit.disabled || submit.getAttribute('aria-disabled') === 'true') {
+            LOG('step4.FAIL', { reason: 'submit still disabled after wait' });
+            return { success: false, error: 'Submit button stayed disabled — input events may not have reached the framework' };
+        }
+        LOG('step4.OK', { submitTag: submit.tagName });
 
         await scrollTo(submit);
         await sleep(g(400, 120));
         await click(submit);
+        LOG('step4.clicked');
+
+        // STEP 5 — verify the comment actually posted by looking for our text
+        // in a newly rendered comment node. Catches silent failures (anti-spam,
+        // hidden captcha, content policy blocks).
         await moveTo(cursor.x - g(100, 40), cursor.y - g(60, 20));
-        await sleep(g(1800, 400));
+        await sleep(g(2200, 500));
+
+        const verified = await verifyPosted(P.commentVerifySelector, text);
+        LOG('step5.verify', { posted: verified });
+        if (!verified) {
+            return { success: false, error: 'Submit clicked but comment not visible in feed within 4s — may have been silently rejected', soft: true };
+        }
+
+        LOG('done.success');
         return { success: true };
+    }
+
+    async function verifyPosted(verifySelector, text, timeout = 4000) {
+        if (!verifySelector) return true; // unknown platform — assume OK
+        const needle = (text || '').trim().slice(0, 40).toLowerCase();
+        if (needle.length < 8) return true; // too short to reliably match
+        const t = Date.now();
+        while (Date.now() - t < timeout) {
+            const nodes = document.querySelectorAll(verifySelector);
+            for (const n of nodes) {
+                const txt = (n.innerText || n.textContent || '').toLowerCase();
+                if (txt.includes(needle)) return true;
+            }
+            await sleep(400);
+        }
+        return false;
     }
 })();

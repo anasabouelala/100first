@@ -2,339 +2,428 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Answerly Meta-Radar 1.1</title>
+  <title>Answerly · Account Finder</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap');
 
+    /* ── Design tokens, matched to the app (light surface + indigo) ──
+       The web app uses Tailwind's white surfaces, gray-900 text,
+       indigo-600 primary, emerald success, amber warning. We mirror
+       those here so the popup feels like the same product. */
     :root {
-      --bg: #030303;
-      --surface: #0a0a0a;
-      --surface-bright: #141414;
-      --border: rgba(255, 255, 255, 0.05);
-      --text-main: #ffffff;
-      --text-muted: #888888;
-      --primary: #3b82f6;
-      --accent: #10b981;
-      --warning: #f59e0b;
-      --error: #ef4444;
+      --bg: #f9fafb;            /* gray-50 */
+      --surface: #ffffff;
+      --surface-soft: #f3f4f6;  /* gray-100 */
+      --border: #e5e7eb;        /* gray-200 */
+      --border-strong: #d1d5db; /* gray-300 */
+      --text: #111827;          /* gray-900 */
+      --text-soft: #4b5563;     /* gray-600 */
+      --text-mute: #9ca3af;     /* gray-400 */
+      --primary: #4f46e5;       /* indigo-600 */
+      --primary-soft: #eef2ff;  /* indigo-50 */
+      --success: #059669;       /* emerald-600 */
+      --success-soft: #d1fae5;  /* emerald-100 */
+      --warning: #d97706;       /* amber-600 */
+      --warning-soft: #fef3c7;  /* amber-100 */
+      --error: #dc2626;         /* red-600 */
+      --error-soft: #fee2e2;    /* red-100 */
+      /* Tier colors mirror the app's AccountCard */
+      --tier-s: #a855f7;
+      --tier-a: #6366f1;
+      --tier-b: #3b82f6;
+      --tier-c: #9ca3af;
     }
 
     * { box-sizing: border-box; }
 
     body {
-      font-family: 'Outfit', sans-serif;
+      font-family: 'Outfit', system-ui, -apple-system, sans-serif;
       width: 400px;
       margin: 0;
-      background-color: var(--bg);
-      color: var(--text-main);
-      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
       user-select: none;
+      font-size: 13px;
+      line-height: 1.4;
     }
 
+    /* ── Header ─────────────────────────────────────────────────── */
     header {
-      padding: 24px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: linear-gradient(to bottom, rgba(59, 130, 246, 0.05), transparent);
+      padding: 16px 16px 12px;
+      background: var(--surface);
       border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
     }
-
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
-
-    .logo {
-      width: 24px;
-      height: 24px;
-      background: var(--text-main);
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #000;
-      font-weight: 900;
-      font-size: 14px;
+    .brand-logo {
+      width: 28px; height: 28px;
+      background: var(--text);
+      color: var(--surface);
+      border-radius: 8px;
+      display: grid; place-items: center;
+      font-weight: 900; font-size: 14px;
     }
+    .brand-name { font-weight: 800; font-size: 15px; letter-spacing: -0.01em; }
+    .brand-sub  { font-size: 9px; color: var(--text-mute); font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; }
 
-    h1 {
-      margin: 0;
-      font-size: 18px;
+    /* ── Status pill ────────────────────────────────────────────── */
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 10px;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: 1px solid;
+    }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .status-pill.idle      { background: var(--surface-soft); color: var(--text-soft); border-color: var(--border); }
+    .status-pill.idle .status-dot { background: var(--text-mute); }
+    .status-pill.active    { background: var(--success-soft); color: var(--success); border-color: var(--success); }
+    .status-pill.active .status-dot { background: var(--success); animation: pulse 1.5s ease-in-out infinite; }
+    .status-pill.cooldown  { background: var(--warning-soft); color: var(--warning); border-color: var(--warning); }
+    .status-pill.cooldown .status-dot { background: var(--warning); }
+    .status-pill.failed    { background: var(--error-soft); color: var(--error); border-color: var(--error); }
+    .status-pill.failed .status-dot { background: var(--error); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.35; }
     }
 
-    .container {
-      padding: 20px;
-      max-height: 520px;
-      overflow-y: auto;
-    }
+    /* ── Container ──────────────────────────────────────────────── */
+    .container { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
 
-    /* KPI Grid */
+    /* ── Mission card ───────────────────────────────────────────── */
+    .mission-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+    }
+    .mission-card .row1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .mission-name { font-weight: 800; font-size: 14px; }
+    .mission-progress-bar {
+      height: 4px;
+      background: var(--surface-soft);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .mission-progress-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 0%;
+      transition: width 0.4s ease-out;
+    }
+    .mission-progress-text { font-size: 10px; color: var(--text-soft); margin-top: 6px; }
+    .mission-phase { font-size: 11px; color: var(--text-mute); margin-top: 4px; font-style: italic; }
+
+    /* ── Stats grid ─────────────────────────────────────────────── */
     .stats-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 24px;
+      gap: 8px;
     }
-
-    .stat-card {
+    .stat {
       background: var(--surface);
       border: 1px solid var(--border);
-      padding: 16px;
-      border-radius: 20px;
-      transition: all 0.3s ease;
+      border-radius: 12px;
+      padding: 10px 12px;
     }
-
-    .stat-card:hover {
-      border-color: rgba(255,255,255,0.15);
-      background: var(--surface-bright);
-    }
-
     .stat-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-      display: block;
-    }
-
-    .stat-value {
-      font-size: 24px;
+      font-size: 9px;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-mute);
+      margin-bottom: 4px;
     }
-
+    .stat-value {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--text);
+      line-height: 1;
+    }
     .stat-sub {
       font-size: 10px;
-      color: var(--text-muted);
+      color: var(--text-soft);
       margin-top: 4px;
+      font-weight: 600;
     }
+    .stat-value.primary  { color: var(--primary); }
+    .stat-value.success  { color: var(--success); }
 
-    .trend-up { color: var(--accent); }
-    .pulse-text { font-style: italic; font-size: 10px; color: var(--text-muted); }
+    /* ── Tier breakdown ─────────────────────────────────────────── */
+    .tier-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .tier-chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 6px;
+      text-align: center;
+    }
+    .tier-letter {
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
+    .tier-count { font-size: 16px; font-weight: 800; color: var(--text); }
+    .tier-chip[data-tier="S"] .tier-letter { color: var(--tier-s); }
+    .tier-chip[data-tier="A"] .tier-letter { color: var(--tier-a); }
+    .tier-chip[data-tier="B"] .tier-letter { color: var(--tier-b); }
+    .tier-chip[data-tier="C"] .tier-letter { color: var(--tier-c); }
 
-    /* Intelligence Pulse */
+    /* ── Section ────────────────────────────────────────────────── */
     .section-header {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      justify-content: space-between;
+      margin-bottom: 8px;
     }
-
     .section-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-main);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-soft);
     }
 
-    .pulse-card {
-      background: linear-gradient(135deg, #111, #050505);
+    /* ── Platform health row ────────────────────────────────────── */
+    .platforms {
+      display: flex;
+      gap: 6px;
+    }
+    .platform-chip {
+      flex: 1;
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 20px;
-      position: relative;
-      overflow: hidden;
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
     }
+    .platform-name { font-size: 10px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+    .platform-state { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .platform-chip.ok       { border-color: var(--success); }
+    .platform-chip.ok       .platform-state { color: var(--success); }
+    .platform-chip.idle     .platform-state { color: var(--text-mute); }
+    .platform-chip.blocked  { border-color: var(--error); }
+    .platform-chip.blocked  .platform-state { color: var(--error); }
 
-    .insight-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .insight-item {
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
-    }
-
-    .insight-icon {
-      width: 20px;
-      height: 20px;
-      border-radius: 6px;
-      background: rgba(255,255,255,0.05);
-      display: flex;
+    /* ── Actions ────────────────────────────────────────────────── */
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn {
+      height: 40px;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      border: 1px solid;
+      transition: all 0.15s ease;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      flex-shrink: 0;
-      font-size: 10px;
+      gap: 6px;
     }
-
-    .insight-content { flex: 1; }
-    .insight-text { font-size: 12px; font-weight: 600; line-height: 1.4; }
-    .insight-meta { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
-
-    /* Engine Status */
-    .engine-bar {
-      margin-top: 24px;
-      padding: 12px;
-      background: rgba(255,255,255,0.02);
-      border-radius: 12px;
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--text);
+      color: var(--surface);
+      border-color: var(--text);
     }
-
-    .engine-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #333;
-      position: relative;
+    .btn-primary:hover:not(:disabled) { background: #1f2937; }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border-color: var(--border-strong);
     }
-
-    .engine-dot.active {
-      background: var(--accent);
-      box-shadow: 0 0 10px var(--accent);
+    .btn-secondary:hover:not(:disabled) { background: var(--surface-soft); }
+    .btn-danger {
+      background: var(--surface);
+      color: var(--error);
+      border-color: var(--error);
     }
+    .btn-danger:hover:not(:disabled) { background: var(--error-soft); }
+    .btn-full { grid-column: 1 / -1; }
 
-    .engine-dot::after {
-      content: attr(data-label);
-      position: absolute;
-      bottom: -16px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 8px;
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-
-    .footer {
-      padding: 16px 20px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .btn-action {
-      background: #fff;
-      color: #000;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .btn-action:hover {
-      background: #eee;
-      transform: translateY(-1px);
-    }
-
-    .last-sync { font-size: 10px; color: var(--text-muted); }
-    .empty-state { padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 12px; }
-
-    #backoffNotice {
-      margin: 0 20px 12px;
-      padding: 10px;
-      background: rgba(245, 158, 11, 0.1);
+    /* ── Cooldown banner ────────────────────────────────────────── */
+    #cooldownNotice {
+      padding: 10px 12px;
+      background: var(--warning-soft);
       border: 1px solid var(--warning);
       border-radius: 12px;
       font-size: 11px;
       color: var(--warning);
       display: none;
+      font-weight: 700;
     }
 
+    /* ── Diagnostics drawer ─────────────────────────────────────── */
     #diagnostics {
-      margin: 12px 20px;
-      padding: 12px;
-      background: rgba(255,255,255,0.02);
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: 12px;
+      padding: 10px 12px;
       font-size: 10px;
       display: none;
     }
+    #diagnostics .diag-title { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-soft); margin-bottom: 6px; }
+    .diag-item { padding: 4px 0; border-left: 2px solid var(--border); padding-left: 8px; margin-bottom: 4px; color: var(--text-soft); }
+    .diag-link { font-size: 10px; color: var(--primary); cursor: pointer; font-weight: 700; }
 
-    .diag-item { margin-bottom: 8px; border-left: 2px solid #444; padding-left: 8px; }
+    /* ── Footer ─────────────────────────────────────────────────── */
+    .footer {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-mute);
+    }
 
     ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
   </style>
 </head>
 <body>
   <header>
     <div class="brand">
-      <div class="logo">A</div>
-      <h1>Answerly</h1>
+      <div class="brand-logo">A</div>
+      <div>
+        <div class="brand-name">Answerly</div>
+        <div class="brand-sub">Account Finder</div>
+      </div>
     </div>
-    <button id="syncNow" class="btn-action">Scan Now</button>
+    <div id="missionStatus" class="status-pill idle">
+      <span class="status-dot"></span>
+      <span id="missionStatusText">Idle</span>
+    </div>
   </header>
 
-  <div id="backoffNotice">
-    ⚠️ <strong>Rate Limit Backoff:</strong> Polling paused. Resuming in <span id="backoffTimer">--</span>m.
-  </div>
-  
   <div class="container">
+
+    <!-- ── Cooldown banner ──────────────────────────────────────── -->
+    <div id="cooldownNotice">
+      ⏸ Stealth cooldown. Resuming in <span id="cooldownTimer">--</span>
+    </div>
+
+    <!-- ── Mission card ─────────────────────────────────────────── -->
+    <div class="mission-card">
+      <div class="row1">
+        <div class="mission-name" id="missionName">No active mission</div>
+        <div id="missionPlatform" style="font-size: 10px; color: var(--text-mute); font-weight: 700;"></div>
+      </div>
+      <div class="mission-phase" id="missionPhase">Open the app to start a mission.</div>
+      <div class="mission-progress-bar">
+        <div class="mission-progress-fill" id="missionProgressFill"></div>
+      </div>
+      <div class="mission-progress-text" id="missionProgressText">0 / 0 matches</div>
+    </div>
+
+    <!-- ── Stats grid (Scanned / Verified) ──────────────────────── -->
     <div class="stats-grid">
-      <div class="stat-card">
-        <span class="stat-label">Pipeline Health</span>
-        <div class="stat-value" id="kpi-health">0%</div>
-        <div class="stat-sub">Lead Conversion</div>
+      <div class="stat">
+        <div class="stat-label">Scanned</div>
+        <div class="stat-value" id="statScanned">0</div>
+        <div class="stat-sub">candidates seen</div>
       </div>
-      <div class="stat-card">
-        <span class="stat-label">Total Signals</span>
-        <div class="stat-value" id="kpi-signals">0</div>
-        <div class="stat-sub">Radar Detections</div>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">Qualified Leads</span>
-        <div class="stat-value" id="kpi-leads">0</div>
-        <div class="stat-sub">Pipeline Strength</div>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">Engagements</span>
-        <div class="stat-value" id="kpi-engagements">0</div>
-        <div class="stat-sub">Daily Outreach</div>
+      <div class="stat">
+        <div class="stat-label">Verified</div>
+        <div class="stat-value success" id="statVerified">0</div>
+        <div class="stat-sub" id="statQueueSub">0 in queue</div>
       </div>
     </div>
 
-    <div style="margin-bottom: 24px; padding: 12px; background: rgba(59, 130, 246, 0.05); border-radius: 12px; border: 1px solid var(--border);">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div id="engineStatus" style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--accent);">Engine Active</div>
-            <div id="enginePulse" class="pulse-text" style="font-size: 10px;">Idle</div>
+    <!-- ── Tier breakdown ───────────────────────────────────────── -->
+    <div>
+      <div class="section-header">
+        <div class="section-title">Match strength</div>
+      </div>
+      <div class="tier-grid">
+        <div class="tier-chip" data-tier="S">
+          <div class="tier-letter">S</div>
+          <div class="tier-count" id="tierS">0</div>
         </div>
+        <div class="tier-chip" data-tier="A">
+          <div class="tier-letter">A</div>
+          <div class="tier-count" id="tierA">0</div>
+        </div>
+        <div class="tier-chip" data-tier="B">
+          <div class="tier-letter">B</div>
+          <div class="tier-count" id="tierB">0</div>
+        </div>
+        <div class="tier-chip" data-tier="C">
+          <div class="tier-letter">C</div>
+          <div class="tier-count" id="tierC">0</div>
+        </div>
+      </div>
     </div>
 
-    <div class="section-header">
-      <div class="section-title">Intelligence Pulse</div>
-      <div style="font-size: 10px; color: var(--primary); cursor: pointer;" id="showLogs">Diagnostics</div>
+    <!-- ── Platform health ──────────────────────────────────────── -->
+    <div>
+      <div class="section-header">
+        <div class="section-title">Platforms</div>
+      </div>
+      <div class="platforms" id="platforms">
+        <div class="platform-chip idle" data-platform="X">
+          <div class="platform-name">X</div>
+          <div class="platform-state">Idle</div>
+        </div>
+        <div class="platform-chip idle" data-platform="LinkedIn">
+          <div class="platform-name">LinkedIn</div>
+          <div class="platform-state">Idle</div>
+        </div>
+        <div class="platform-chip idle" data-platform="Reddit">
+          <div class="platform-name">Reddit</div>
+          <div class="platform-state">Idle</div>
+        </div>
+      </div>
     </div>
 
+    <!-- ── Diagnostics toggle (no live feed) ────────────────────── -->
+    <div class="section-header" style="margin-top: -4px;">
+      <div class="section-title">More</div>
+      <div class="diag-link" id="showLogs">Diagnostics</div>
+    </div>
+
+    <!-- ── Diagnostics drawer ───────────────────────────────────── -->
     <div id="diagnostics">
-      <div style="color: var(--error); margin-bottom: 8px; font-weight: 800;">Recent Errors:</div>
+      <div class="diag-title">Recent errors</div>
       <div id="errorList">None</div>
-      <div style="margin-top: 12px; color: var(--text-muted); font-weight: 800;">Active Scrapers:</div>
+      <div class="diag-title" style="margin-top: 10px;">Tracked accounts</div>
       <div id="configList">None</div>
-      <button id="resetEngine" class="btn-action" style="margin-top: 12px; background: var(--error); color: #fff; width: 100%;">Reset Engine</button>
+      <button id="resetEngine" class="btn btn-danger" style="margin-top: 10px; width: 100%; height: 32px; font-size: 11px;">Reset engine state</button>
     </div>
 
-    <div class="pulse-card">
-      <ul class="insight-list" id="insight-list">
-        <div class="empty-state">Gathering intel...</div>
-      </ul>
+    <!-- ── Actions ──────────────────────────────────────────────── -->
+    <div class="actions">
+      <button id="openApp" class="btn btn-primary btn-full">Open Account Finder</button>
+      <button id="scanNow" class="btn btn-secondary">Scan now</button>
+      <button id="pauseResume" class="btn btn-secondary">Pause</button>
     </div>
 
-    <div class="engine-bar">
-      <div class="engine-dot" data-label="X"></div>
-      <div class="engine-dot" data-label="LinkedIn"></div>
-      <div class="engine-dot" data-label="Reddit"></div>
-    </div>
   </div>
 
   <footer class="footer">
-    <div class="last-sync" id="check-time">Syncing data...</div>
-    <div style="font-size: 9px; opacity: 0.5;">Automated Radar Active</div>
+    <div id="lastSync">Ready</div>
+    <div>v1.1 · Stealth</div>
   </footer>
 
   <script src="popup.js"></script>

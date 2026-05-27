@@ -802,49 +802,12 @@ const SlideOverPanel: React.FC<any> = ({
       </div>
     </div>
 
-    {/* Tabs */}
-    <div className="px-6 border-b border-slate-100 flex">
-      {[
-        { id: 'INTEL',  label: 'Intel',    icon: <Shield size={14} /> },
-        { id: 'DRAFT',  label: 'Drafter',  icon: <PenTool size={14} /> },
-        { id: 'RADAR',  label: 'Radar',    icon: <Radar size={14} /> },
-      ].map(tab => (
-        <button
-          key={tab.id}
-          onClick={() => setViewMode(tab.id)}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-all ${
-            viewMode === tab.id
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-400 hover:text-slate-700'
-          }`}
-        >
-          {tab.icon} {tab.label}
-        </button>
-      ))}
-    </div>
-
-    {/* Content */}
+    {/* Content — Drafter and Radar tabs removed; Intel is now the only view. */}
     <div className="flex-1 overflow-y-auto">
-      {viewMode === 'INTEL' && (
-        <IntelTab
-          analyzing={analyzing} analysis={analysis} channel={channel}
-          onGenerateContent={onGenerateContent}
-        />
-      )}
-      {viewMode === 'DRAFT' && (
-        <DraftTab
-          generatingContent={generatingContent} generatedContent={generatedContent}
-          channel={channel} copiedField={copiedField} copyToClipboard={copyToClipboard}
-        />
-      )}
-      {viewMode === 'RADAR' && (
-        <RadarTab
-          scanningOpps={scanningOpps} opportunities={opportunities}
-          generatingReply={generatingReply} replyDraft={replyDraft}
-          onScanOpps={onScanOpps} onGenerateReply={onGenerateReply}
-          onCloseReply={onCloseReply} copyToClipboard={copyToClipboard}
-        />
-      )}
+      <IntelTab
+        analyzing={analyzing} analysis={analysis} channel={channel}
+        onGenerateContent={onGenerateContent}
+      />
     </div>
   </div>
 );

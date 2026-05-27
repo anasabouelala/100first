@@ -527,53 +527,437 @@ function SYNC_AGENT_FN(msg) {
             };
         }
 
-        // ──── SCRAPE LINKEDIN/REDDIT (minimal stubs) ────────────
+        // ──── SCRAPE LINKEDIN ────────────────────────────────────
+        // Walk each result card (li.reusable-search__result-container or the
+        // newer search-result__occluded-item), extract handle from /in/ link,
+        // and try to read the visible headline + follower hint sitting under
+        // the name. LinkedIn changes these classes regularly, so we fall
+        // back to text-content heuristics when selectors miss.
         function scrapeLinkedInSearch(max) {
             const seen = new Set();
             const out = [];
-            const links = document.querySelectorAll('a[href*="/in/"]');
-            for (const a of links) {
-                if (out.length >= max) break;
-                const m = (a.getAttribute('href') || '').match(/\/in\/([^/?#]+)/);
-                if (!m || seen.has(m[1])) continue;
-                seen.add(m[1]);
-                out.push({ handle: m[1], url: `https://www.linkedin.com/in/${m[1]}`, displayName: (a.innerText || '').trim().slice(0, 80) || m[1], bio: '', verified: false, platform: 'LinkedIn', discoveredVia: 'search' });
+
+            // Parse "1,234 followers" or "3.4K followers" out of arbitrary text
+            const parseFollowerHint = (text) => {
+                if (!text) return null;
+                const m = text.match(/([\d,.]+)\s*([KMB]?)\s*followers?/i);
+                if (!m) return null;
+                let n = parseFloat(m[1].replace(/,/g, ''));
+                if (!isFinite(n)) return null;
+                const unit = (m[2] || '').toUpperCase();
+                if (unit === 'K') n *= 1e3;
+                else if (unit === 'M') n *= 1e6;
+                else if (unit === 'B') n *= 1e9;
+                return Math.round(n);
+            };
+
+            // ── ADDITIVE TWO-PASS EXTRACTION ──
+            // Pass 1: structured cards (rich metadata — bio, followerHint, verified).
+            // Pass 2: every remaining /in/ link on the page (catches cards whose
+            // wrapper class we don't match yet). Dedup by handle so we never
+            // double-count. Each handle dropped along the way is tracked in
+            // `dropReasons` so the user can see exactly why a count is low.
+            const dropReasons = {
+                noLink: 0,           // card had no /in/ link visible
+                duplicate: 0,        // handle already captured
+                bareLinkAdded: 0,    // captured only via pass 2 (no rich card)
+                maxedOut: 0,         // hit the maxCandidates ceiling
+            };
+
+            // Expanded selector list — covers old reusable-search markup AND
+            // the newer search-results__cluster-content / data-test patterns.
+            const cardSelectors = [
+                'li.reusable-search__result-container',
+                'div.reusable-search__result-container',
+                '.search-results-container li',
+                'li.search-result__wrapper',
+                'div.search-result__wrapper',
+                '[data-chameleon-result-urn]',
+                '[data-test-search-result]',
+                'div.entity-result',
+                'li.entity-result',
+                'div.search-results__cluster-item',
+                'div.search-results__list > div',
+                'ul.search-results__list > li',
+            ];
+            // Union of all matches (newer DOM nests differently than older).
+            const cardSet = new Set();
+            for (const sel of cardSelectors) {
+                document.querySelectorAll(sel).forEach(el => cardSet.add(el));
             }
-            return { candidates: out };
+            const cards = Array.from(cardSet);
+
+            for (const card of cards) {
+                if (out.length >= max) { dropReasons.maxedOut++; continue; }
+                const link = card.querySelector('a[href*="/in/"]');
+                if (!link) { dropReasons.noLink++; continue; }
+                const m = (link.getAttribute('href') || '').match(/\/in\/([^/?#]+)/);
+                if (!m) { dropReasons.noLink++; continue; }
+                if (seen.has(m[1])) { dropReasons.duplicate++; continue; }
+                seen.add(m[1]);
+
+                const cardText = (card.innerText || '').trim();
+                const displayName = (link.innerText || '').trim().split('\n').find(s => s.trim())
+                    || cardText.split('\n').find(s => s.trim())
+                    || m[1];
+
+                const bioLines = cardText.split('\n').map(s => s.trim()).filter(Boolean);
+                const bioCandidate = bioLines
+                    .filter(l => l !== displayName.trim() && !/^view\s+.+'s profile/i.test(l) && !/^\d+(st|nd|rd|th)\b/i.test(l))
+                    .slice(0, 3)
+                    .join(' · ')
+                    .slice(0, 300);
+
+                const followerHint = parseFollowerHint(cardText);
+                const verified = !!card.querySelector('[aria-label*="verified" i], [data-test-icon="verified-small"]');
+
+                out.push({
+                    handle: m[1],
+                    url: `https://www.linkedin.com/in/${m[1]}`,
+                    displayName: displayName.slice(0, 80),
+                    bio: bioCandidate,
+                    followerHint: followerHint || undefined,
+                    verified,
+                    platform: 'LinkedIn',
+                    discoveredVia: 'search'
+                });
+            }
+
+            // ── Pass 2 — raw /in/ links not already captured by a card ──
+            // LinkedIn often renders profile chips in sidebar suggestions, "people
+            // you may know" tiles, or in newer card wrappers we don't know yet.
+            // Catch them here. Without this pass, "Accounts I see in LinkedIn
+            // search are missing entirely" is the typical symptom.
+            const allInLinks = document.querySelectorAll('a[href*="/in/"]');
+            for (const a of allInLinks) {
+                if (out.length >= max) { dropReasons.maxedOut++; break; }
+                const m = (a.getAttribute('href') || '').match(/\/in\/([^/?#]+)/);
+                if (!m) continue;
+                if (seen.has(m[1])) { dropReasons.duplicate++; continue; }
+                seen.add(m[1]);
+                // Best-effort display name from the link text or a nearby element
+                let displayName = (a.innerText || '').trim().split('\n').find(s => s.trim()) || '';
+                if (!displayName || displayName.length < 2) {
+                    // Walk up to a parent that might have richer text
+                    const parent = a.closest('div, li, article, section');
+                    if (parent) {
+                        const txt = (parent.innerText || '').trim().split('\n').map(s => s.trim()).filter(Boolean);
+                        displayName = txt.find(t => t.length > 2 && !/^view\s+/i.test(t)) || m[1];
+                    } else {
+                        displayName = m[1];
+                    }
+                }
+                out.push({
+                    handle: m[1],
+                    url: `https://www.linkedin.com/in/${m[1]}`,
+                    displayName: displayName.slice(0, 80),
+                    bio: '',
+                    verified: false,
+                    platform: 'LinkedIn',
+                    discoveredVia: 'search'
+                });
+                dropReasons.bareLinkAdded++;
+            }
+
+            // Diagnostic so the user can read WHY count is what it is.
+            return {
+                candidates: out,
+                diagnostic: {
+                    cardsFound: cards.length,
+                    rawLinksFound: allInLinks.length,
+                    captured: out.length,
+                    dropReasons,
+                }
+            };
         }
+
+        // Read posts off the LinkedIn profile activity strip.
+        // We need: post timestamps (to compute recency + which posts are "mature"),
+        // and per-post reaction+comment counts (to compute mature-post median engagement).
+        // LinkedIn renders timestamps as "2d", "1w", "3mo" — we parse those into days.
         function scrapeLinkedInProfile() {
             const nameEl = document.querySelector('h1');
             const bioEl = document.querySelector('.text-body-medium, [data-section="summary"]');
+            const handle = (location.pathname.match(/\/in\/([^/?#]+)/) || [])[1] || '';
+
+            // Verified badge (Premium / official-account)
+            const verified = !!document.querySelector(
+                '[aria-label*="verified" i], [data-test-icon="verified-small"], svg[data-test-icon="verified-small"]'
+            );
+
+            // Follower count — appears as "1,234 followers" near the top of the profile
+            let followers = 0;
+            const bodyText = document.body?.innerText || '';
+            const followerMatch = bodyText.match(/([\d,.]+)\s*([KMB]?)\s*followers/i);
+            if (followerMatch) {
+                let n = parseFloat(followerMatch[1].replace(/,/g, ''));
+                const unit = (followerMatch[2] || '').toUpperCase();
+                if (unit === 'K') n *= 1e3;
+                else if (unit === 'M') n *= 1e6;
+                else if (unit === 'B') n *= 1e9;
+                if (isFinite(n)) followers = Math.round(n);
+            }
+
+            // ── POST SIGNALS ──
+            // Activity strip lives at .pv-recent-activity-section, or the standalone
+            // /recent-activity/ feed embedded in the profile. We look for individual
+            // update containers and pull (timestamp, reactions, comments) from each.
+            const postSelectors = [
+                'div.feed-shared-update-v2',
+                'div.occludable-update',
+                '.profile-creator-shared-feed-update__container',
+                'article.feed-shared-update-v2'
+            ];
+            let postNodes = [];
+            for (const sel of postSelectors) {
+                postNodes = document.querySelectorAll(sel);
+                if (postNodes.length > 0) break;
+            }
+
+            // Parse LinkedIn relative time → days. Returns null when unparseable.
+            const parseRelTime = (txt) => {
+                if (!txt) return null;
+                // Common forms: "2d", "3 d", "1w", "2 weeks", "3mo", "1y", "now", "5h", "30m"
+                const t = txt.trim().toLowerCase();
+                if (/^(now|just now)/.test(t)) return 0;
+                const m = t.match(/(\d+)\s*(s|sec|second|m|min|minute|h|hr|hour|d|day|w|wk|week|mo|month|y|yr|year)s?\b/);
+                if (!m) return null;
+                const n = parseInt(m[1], 10);
+                const unit = m[2];
+                if (/^s|sec|second/.test(unit)) return n / 86400;
+                if (/^m$|^min|^minute/.test(unit)) return n / 1440;
+                if (/^h|^hr|^hour/.test(unit)) return n / 24;
+                if (/^d|^day/.test(unit)) return n;
+                if (/^w|^wk|^week/.test(unit)) return n * 7;
+                if (/^mo|^month/.test(unit)) return n * 30;
+                if (/^y|^yr|^year/.test(unit)) return n * 365;
+                return null;
+            };
+
+            // Parse "1,234", "3.4K", "12 reactions" → number
+            const parseCount = (txt) => {
+                if (!txt) return 0;
+                const m = txt.match(/([\d,.]+)\s*([KMB]?)/i);
+                if (!m) return 0;
+                let n = parseFloat(m[1].replace(/,/g, ''));
+                if (!isFinite(n)) return 0;
+                const unit = (m[2] || '').toUpperCase();
+                if (unit === 'K') n *= 1e3;
+                else if (unit === 'M') n *= 1e6;
+                else if (unit === 'B') n *= 1e9;
+                return Math.round(n);
+            };
+
+            const posts = [];
+            for (const node of postNodes) {
+                if (posts.length >= 10) break;
+
+                // Timestamp candidates: <time> tags, .feed-shared-actor__sub-description,
+                // and any small grey text near the post header.
+                const timeCandidates = [
+                    node.querySelector('time')?.innerText,
+                    node.querySelector('.feed-shared-actor__sub-description')?.innerText,
+                    node.querySelector('.update-components-actor__sub-description')?.innerText,
+                    node.querySelector('[class*="sub-description"]')?.innerText,
+                ].filter(Boolean);
+                let ageDays = null;
+                for (const t of timeCandidates) {
+                    ageDays = parseRelTime(t);
+                    if (ageDays !== null) break;
+                }
+
+                // Reactions count — "social-details-social-counts__reactions-count"
+                const reactionsTxt = node.querySelector(
+                    '.social-details-social-counts__reactions-count, [data-test-id="social-counts-reactions"], .social-details-social-counts__count-value'
+                )?.innerText;
+                const reactions = parseCount(reactionsTxt);
+
+                // Comments count — has the word "comment(s)"
+                const allCountEls = node.querySelectorAll('.social-details-social-counts li, [aria-label*="comment" i]');
+                let comments = 0;
+                for (const el of allCountEls) {
+                    const txt = (el.innerText || '').toLowerCase();
+                    if (txt.includes('comment')) {
+                        comments = parseCount(txt);
+                        break;
+                    }
+                }
+
+                if (ageDays !== null) {
+                    posts.push({ ageDays, reactions, comments, engagement: reactions + comments });
+                }
+            }
+
+            // Derived post metrics
+            const RECENT_DAYS = 7;
+            const MATURE_DAYS = 3;
+            const recentPostCount = posts.filter(p => p.ageDays <= RECENT_DAYS).length;
+            const maturePosts = posts.filter(p => p.ageDays >= MATURE_DAYS);
+            let maturePostMedianEngagement = null;
+            if (maturePosts.length > 0) {
+                const sorted = maturePosts.map(p => p.engagement).sort((a, b) => a - b);
+                const mid = Math.floor(sorted.length / 2);
+                maturePostMedianEngagement = sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+            }
+            const daysSinceLastPost = posts.length > 0 ? Math.min(...posts.map(p => p.ageDays)) : null;
+            const lastActive = daysSinceLastPost !== null
+                ? new Date(Date.now() - daysSinceLastPost * 86400000).toISOString()
+                : null;
+
+            // Crude engagement rate: median mature engagement / followers * 100
+            let engagementRate = 0;
+            if (maturePostMedianEngagement !== null && followers > 0) {
+                engagementRate = +((maturePostMedianEngagement / followers) * 100).toFixed(2);
+                if (engagementRate > 100) engagementRate = 100;
+            }
+
             return {
                 profile: {
-                    handle: (location.pathname.match(/\/in\/([^/?#]+)/) || [])[1] || '',
+                    handle,
                     displayName: (nameEl?.innerText || '').trim().slice(0, 80),
                     bio: (bioEl?.innerText || '').trim().slice(0, 500),
-                    followers: 0,
-                    verified: false,
+                    followers,
+                    verified,
+                    engagementRate,
+                    postsAnalyzed: posts.length,
+                    recentPostCount,
+                    maturePostMedianEngagement,
+                    daysSinceLastPost,
+                    lastActive,
                     platform: 'LinkedIn'
                 }
             };
         }
+        // Reddit search now extracts BOTH subreddits (/r/<name>) and users
+        // (/u/<name>). On a community-search page the page is full of
+        // subreddit links. We extract those and treat each subreddit as a
+        // first-class account (most of our users want to engage with
+        // communities, not individuals, on Reddit).
+        //
+        // Metrics enrichment: scraping subscriber count from the rendered
+        // page is fragile (Reddit changes class names constantly). Instead
+        // we fetch `/r/<sub>/about.json` from the page — same-origin so
+        // cookies attach, no extra auth, and the JSON returns
+        // `subscribers`, `accounts_active`, `public_description`,
+        // `created_utc`, `over18`, `community_icon`, `title`. That's all
+        // the metrics we need, served by Reddit itself.
         function scrapeRedditSearch(max) {
-            const seen = new Set();
+            const seenSr = new Set();
+            const seenUser = new Set();
             const out = [];
-            const links = document.querySelectorAll('a[href*="/user/"], a[href*="/u/"]');
-            for (const a of links) {
+
+            // ── Subreddits ────────────────────────────────────────
+            // Anchor: any /r/<name> link, EXCLUDING /r/<name>/comments/...
+            // because those are post links, not the subreddit itself.
+            const srLinks = document.querySelectorAll('a[href*="/r/"]');
+            for (const a of srLinks) {
+                if (out.length >= max) break;
+                const href = a.getAttribute('href') || '';
+                const m = href.match(/^\/?r\/([A-Za-z0-9_]+)(?:\/?$|\/(?!comments|wiki|new|hot|top|rising))/);
+                if (!m) {
+                    // Fall back to a looser match — even /r/<sub>/comments/...
+                    // tells us the subreddit exists, so we still want to add it.
+                    const loose = href.match(/\/r\/([A-Za-z0-9_]+)/);
+                    if (!loose) continue;
+                    if (seenSr.has(loose[1].toLowerCase())) continue;
+                    seenSr.add(loose[1].toLowerCase());
+                    out.push({
+                        handle: `r/${loose[1]}`,
+                        accountType: 'subreddit',
+                        url: `https://www.reddit.com/r/${loose[1]}/`,
+                        displayName: `r/${loose[1]}`,
+                        bio: '',
+                        verified: false,
+                        platform: 'Reddit',
+                        discoveredVia: 'search'
+                    });
+                    continue;
+                }
+                if (seenSr.has(m[1].toLowerCase())) continue;
+                seenSr.add(m[1].toLowerCase());
+                // Try to pull a description from the same card so users
+                // see context even before we enrich with about.json.
+                const card = a.closest('div, article, li') || a;
+                const cardText = (card.innerText || '').trim();
+                const lines = cardText.split('\n').map(s => s.trim()).filter(Boolean);
+                // First non-handle line that isn't a count is usually the description
+                const bioGuess = lines.find(l =>
+                    !/^r\/\w+$/i.test(l) &&
+                    !/^\d[\d,.kKmM]*\s*(member|subscriber|online)/i.test(l) &&
+                    l.length > 10
+                ) || '';
+                out.push({
+                    handle: `r/${m[1]}`,
+                    accountType: 'subreddit',
+                    url: `https://www.reddit.com/r/${m[1]}/`,
+                    displayName: `r/${m[1]}`,
+                    bio: bioGuess.slice(0, 300),
+                    verified: false,
+                    platform: 'Reddit',
+                    discoveredVia: 'search'
+                });
+            }
+
+            // ── Users (kept for backwards compat) ─────────────────
+            const userLinks = document.querySelectorAll('a[href*="/user/"], a[href*="/u/"]');
+            for (const a of userLinks) {
                 if (out.length >= max) break;
                 const m = (a.getAttribute('href') || '').match(/\/(?:user|u)\/([^/?#]+)/);
-                if (!m || seen.has(m[1])) continue;
-                seen.add(m[1]);
-                out.push({ handle: m[1], url: `https://www.reddit.com/user/${m[1]}`, displayName: (a.innerText || '').trim().slice(0, 80) || m[1], bio: '', verified: false, platform: 'Reddit', discoveredVia: 'search' });
+                if (!m || seenUser.has(m[1].toLowerCase())) continue;
+                seenUser.add(m[1].toLowerCase());
+                out.push({
+                    handle: m[1],
+                    accountType: 'user',
+                    url: `https://www.reddit.com/user/${m[1]}/`,
+                    displayName: (a.innerText || '').trim().slice(0, 80) || m[1],
+                    bio: '',
+                    verified: false,
+                    platform: 'Reddit',
+                    discoveredVia: 'search'
+                });
             }
+
             return { candidates: out };
         }
+
+        // Synchronous Reddit profile scrape — used as a fallback when the
+        // background hasn't been able to enrich with about.json. The real
+        // metrics come from the background's fetch of `/r/<sub>/about.json`,
+        // see `enrichRedditCandidate` below. Keeping this sync avoids the
+        // async-in-executeScript problem documented in sendToAgent.
         function scrapeRedditProfile() {
-            const handle = (location.pathname.match(/\/(?:user|u)\/([^/?#]+)/) || [])[1] || '';
-            const bioEl = document.querySelector('[data-testid="profile-description"], .ProfileSidebar__description');
-            return {
-                profile: { handle, displayName: handle, bio: (bioEl?.innerText || '').trim().slice(0, 500), followers: 0, verified: false, platform: 'Reddit' }
-            };
+            const path = location.pathname;
+            const srMatch = path.match(/^\/r\/([A-Za-z0-9_]+)/);
+            const userMatch = path.match(/^\/(?:user|u)\/([^/?#]+)/);
+            if (srMatch) {
+                return {
+                    profile: {
+                        handle: `r/${srMatch[1]}`,
+                        accountType: 'subreddit',
+                        displayName: `r/${srMatch[1]}`,
+                        bio: '',
+                        followers: 0,
+                        verified: false,
+                        platform: 'Reddit'
+                    }
+                };
+            }
+            if (userMatch) {
+                const handle = userMatch[1];
+                const bioEl = document.querySelector('[data-testid="profile-description"], .ProfileSidebar__description');
+                return {
+                    profile: {
+                        handle,
+                        accountType: 'user',
+                        displayName: handle,
+                        bio: (bioEl?.innerText || '').trim().slice(0, 500),
+                        followers: 0,
+                        verified: false,
+                        platform: 'Reddit'
+                    }
+                };
+            }
+            return { error: 'Not on a recognized Reddit profile page' };
         }
 
         // ──── DISPATCH ──────────────────────────────────────────
@@ -665,12 +1049,19 @@ function buildLinkedInSearchUrl(filters, query, tab = 'people') {
     return `https://www.linkedin.com/search/results/${path}/?${params.toString()}`;
 }
 
-// Reddit: search both users and posts. tab = 'user' | 'link' (posts) | 'comment'
-function buildRedditSearchUrl(filters, query, tab = 'link') {
+// Reddit search URLs by tab:
+//   'sr'      → search communities (subreddits). This is what we publish to
+//               the accounts list as first-class entities.
+//   'user'    → search users (less useful for our use case but we include it
+//               so power users can still find creators)
+//   'link'    → search posts. Used to surface active subreddits indirectly,
+//               since a post result lets us discover the subreddit it lives in.
+function buildRedditSearchUrl(filters, query, tab = 'sr') {
     const params = new URLSearchParams();
     params.set('q', query);
-    if (tab === 'user') params.set('type', 'user');
-    else params.set('type', 'link');
+    if (tab === 'sr')        params.set('type', 'sr');
+    else if (tab === 'user') params.set('type', 'user');
+    else                     params.set('type', 'link');
     params.set('sort', 'relevance');
     return `https://www.reddit.com/search/?${params.toString()}`;
 }
@@ -722,6 +1113,303 @@ function planQueries(filters, mode, deepeningRound = 0) {
 // ============================================================
 // SCORING
 // ============================================================
+// ── LINKEDIN SCORING ──
+// LinkedIn uses a richer rubric than X/Reddit because we read post-level
+// data (recency + mature-post engagement). Two entry points:
+//   scoreLinkedInFromCard()  → preliminary score from search-card data alone.
+//                              Runs at search time so accounts appear immediately.
+//   scoreLinkedInVerified()  → full score after profile visit. Replaces the
+//                              preliminary score in place.
+// Weights (out of 100):
+//   authority 25, niche 30, recency 15, mature-engagement 25, verified 5.
+// If post data is missing post-verify (locked profile, DOM drift), the
+// recency + engagement subscores fall back to a neutral midpoint so a
+// scrape failure doesn't unfairly tank an account.
+function _nicheMatch(haystackText, filters) {
+    const haystack = (haystackText || '').toLowerCase();
+    let kwHits = 0, totalKw = 0;
+    (filters.keywords || []).forEach(kw => {
+        if (typeof kw !== 'string' || !kw.trim()) return;
+        totalKw++;
+        if (haystack.includes(kw.trim().toLowerCase())) kwHits++;
+    });
+    (filters.hashtags || []).forEach(tag => {
+        if (typeof tag !== 'string' || !tag.trim()) return;
+        totalKw++;
+        if (haystack.includes(tag.trim().toLowerCase().replace('#', ''))) kwHits++;
+    });
+    const match = totalKw > 0 ? Math.round((kwHits / totalKw) * 100) : 50;
+    return { match, kwHits, totalKw };
+}
+
+function _authorityFromFollowers(f) {
+    if (!f || f <= 0) return 0;
+    return Math.min(100, Math.log10(f + 1) * 18);
+}
+
+function scoreLinkedInFromCard(card, filters) {
+    const f = typeof card.followerHint === 'number' ? card.followerHint : 0;
+    const authority = f === 0 ? 25 : _authorityFromFollowers(f); // neutral when unknown
+    const { match: nicheMatch, kwHits, totalKw } = _nicheMatch(
+        [card.bio, card.displayName, card.handle].filter(Boolean).join(' '),
+        filters
+    );
+    // No post data yet → neutral midpoints for recency + engagement
+    const recencyScore = 50;
+    const engagementScore = 50;
+    const verifiedBonus = card.verified ? 5 : 0;
+
+    const finalScore = Math.round(
+        authority * 0.25 +
+        nicheMatch * 0.30 +
+        recencyScore * 0.15 +
+        engagementScore * 0.25 +
+        verifiedBonus
+    );
+
+    const matchedSignals = [];
+    if (kwHits > 0) matchedSignals.push(`${kwHits}/${totalKw} keywords matched`);
+    if (card.verified) matchedSignals.push('Verified');
+    if (f > 0) {
+        const fmt = f >= 1e6 ? (f / 1e6).toFixed(1) + 'M' : f >= 1e3 ? (f / 1e3).toFixed(1) + 'K' : `${f}`;
+        matchedSignals.push(`${fmt} followers`);
+    }
+    matchedSignals.push('Preliminary — visiting profile');
+
+    return {
+        followers: f,
+        authorityScore: Math.round(authority),
+        nicheMatch,
+        finalScore,
+        matchedSignals,
+        tier: finalScore >= 85 ? 'S' : finalScore >= 70 ? 'A' : finalScore >= 50 ? 'B' : 'C'
+    };
+}
+
+// ── REDDIT SCORING ──
+// For subreddits, our metric stack is:
+//   subscribers       → community size (like followers)
+//   accounts_active   → people currently online (immediate engagement signal)
+//   ageDays           → maturity / trust signal
+//   public_description→ niche-match keyword target
+// Weights:
+//   authority (size)   25
+//   niche match        35  (heavier than LinkedIn — subreddit description IS the signal)
+//   activity ratio     25  (accounts_active / subscribers)
+//   age maturity       10
+//   verified bonus      5
+function scoreRedditSubreddit(profile, filters) {
+    const subs = profile.followers || 0;
+    const active = profile.maturePostMedianEngagement || 0; // accounts_active reused for this slot
+
+    // Authority: log scale on subscribers.
+    const authority = subs === 0 ? 0 : Math.min(100, Math.log10(subs + 1) * 18);
+
+    // Niche match — bio + display name.
+    const { match: nicheMatch, kwHits, totalKw } = _nicheMatch(
+        [profile.bio, profile.displayName, profile.handle].filter(Boolean).join(' '),
+        filters
+    );
+
+    // Activity ratio: % of subscribers online right now. 0.5%+ is excellent
+    // for a large sub. We boost smaller subs by scaling log-style.
+    let activityScore = 0;
+    if (subs > 0 && active >= 0) {
+        const ratio = active / subs;       // e.g. 0.005 = 0.5% online
+        const pct = ratio * 100;
+        // 0% → 0, 2%+ → 100, log-style for the curve in between
+        activityScore = Math.min(100, Math.log10(pct * 50 + 1) * 50);
+    }
+
+    // Age maturity: bias toward subs that have been around. 0d → 0, 365d+ → 100.
+    let ageScore = 50;
+    if (typeof profile.ageDays === 'number') {
+        ageScore = profile.ageDays >= 365 ? 100 : Math.round((profile.ageDays / 365) * 100);
+    }
+
+    const verifiedBonus = 0; // subreddits don't carry verification
+
+    const finalScore = Math.round(
+        authority * 0.25 +
+        nicheMatch * 0.35 +
+        activityScore * 0.25 +
+        ageScore * 0.10 +
+        verifiedBonus * 0.05
+    );
+
+    const matchedSignals = [];
+    if (kwHits > 0) matchedSignals.push(`${kwHits}/${totalKw} keywords matched`);
+    if (subs > 0) {
+        const fmt = subs >= 1e6 ? `${(subs/1e6).toFixed(1)}M` : subs >= 1e3 ? `${(subs/1e3).toFixed(1)}K` : `${subs}`;
+        matchedSignals.push(`${fmt} subscribers`);
+    }
+    if (active > 0) matchedSignals.push(`${active} online now`);
+    if (typeof profile.ageDays === 'number' && profile.ageDays >= 365) {
+        matchedSignals.push(`Established (${Math.round(profile.ageDays / 365)}y)`);
+    }
+
+    return {
+        authorityScore: Math.round(authority),
+        nicheMatch,
+        finalScore,
+        matchedSignals,
+        recentPostCount: null,
+        maturePostMedianEngagement: active || null,
+        daysSinceLastPost: null,
+        tier: finalScore >= 85 ? 'S' : finalScore >= 70 ? 'A' : finalScore >= 50 ? 'B' : 'C',
+        verificationStatus: 'verified'
+    };
+}
+
+// Fetch /r/<sub>/about.json from the background. This is a public endpoint,
+// works without auth, and is the safest way to get clean subreddit metrics
+// without any DOM scraping or bot-detection exposure. The background SW
+// is allowed cross-origin fetches without site cookies — fine for us since
+// about.json is public.
+async function enrichSubredditMetrics(handle) {
+    // handle is "r/SaaS" — strip the "r/" prefix for the URL
+    const name = handle.replace(/^r\//i, '').trim();
+    if (!name) return null;
+    try {
+        const res = await fetch(`https://www.reddit.com/r/${encodeURIComponent(name)}/about.json`, {
+            headers: { 'Accept': 'application/json', 'User-Agent': 'AnswerlyAccountFinder/1.0' }
+        });
+        if (!res.ok) {
+            console.warn(DISC_TAG, `[reddit.enrich] r/${name} returned ${res.status}`);
+            return null;
+        }
+        const json = await res.json();
+        const d = json?.data || {};
+        const createdMs = d.created_utc ? d.created_utc * 1000 : null;
+        const ageDays = createdMs ? Math.floor((Date.now() - createdMs) / 86400000) : null;
+        return {
+            displayName: d.display_name_prefixed || handle,
+            bio: (d.public_description || d.description || '').slice(0, 500),
+            followers: d.subscribers || 0,
+            // For UI parity with LinkedIn — accounts_active fills the
+            // "median engagement" slot for subreddits (number online right now).
+            maturePostMedianEngagement: typeof d.accounts_active === 'number' ? d.accounts_active : null,
+            engagementRate: d.subscribers > 0 && d.accounts_active >= 0
+                ? +((d.accounts_active / d.subscribers) * 100).toFixed(2)
+                : 0,
+            ageDays,
+            avatar: d.community_icon?.split('?')[0] || d.icon_img?.split('?')[0] || '',
+            isOver18: !!d.over18,
+            verified: false
+        };
+    } catch (e) {
+        console.warn(DISC_TAG, `[reddit.enrich] r/${name} failed: ${e.message}`);
+        return null;
+    }
+}
+
+function scoreLinkedInVerified(profile, filters, candidate) {
+    const f = profile.followers || 0;
+    const authority = _authorityFromFollowers(f);
+
+    const haystack = [
+        profile.bio, profile.about, profile.displayName,
+        candidate?.bio, candidate?.samplePost
+    ].filter(Boolean).join(' ');
+    const { match: nicheMatch, kwHits, totalKw } = _nicheMatch(haystack, filters);
+
+    // Recency: 100 if posted in last 24h, scaled linearly down to 0 at 14d.
+    // Neutral 50 if no post data at all (could be a private/locked profile).
+    let recencyScore;
+    if (typeof profile.daysSinceLastPost !== 'number' || profile.daysSinceLastPost === null) {
+        recencyScore = 50;
+    } else if (profile.daysSinceLastPost <= 1) {
+        recencyScore = 100;
+    } else if (profile.daysSinceLastPost >= 14) {
+        recencyScore = 0;
+    } else {
+        recencyScore = Math.round(100 - ((profile.daysSinceLastPost - 1) / 13) * 100);
+    }
+
+    // Mature-post engagement: median (reactions+comments) on posts ≥3d old.
+    // Log-scaled so the gap from 10→100 matters as much as 100→1000.
+    let engagementScore;
+    if (profile.maturePostMedianEngagement === null || profile.maturePostMedianEngagement === undefined) {
+        engagementScore = 50; // neutral midpoint when no mature posts to read
+    } else if (profile.maturePostMedianEngagement <= 0) {
+        engagementScore = 0;
+    } else {
+        // log10(1)=0 → log10(1000)=3. Map 0..3 onto 0..100.
+        engagementScore = Math.min(100, Math.round(Math.log10(profile.maturePostMedianEngagement + 1) * (100 / 3)));
+    }
+
+    const verifiedBonus = profile.verified ? 5 : 0;
+
+    const finalScore = Math.round(
+        authority * 0.25 +
+        nicheMatch * 0.30 +
+        recencyScore * 0.15 +
+        engagementScore * 0.25 +
+        verifiedBonus
+    );
+
+    const matchedSignals = [];
+    if (kwHits > 0) matchedSignals.push(`${kwHits}/${totalKw} keywords matched`);
+    if (profile.verified) matchedSignals.push('Verified');
+    if (f > 10000) matchedSignals.push(`${f >= 1e6 ? (f / 1e6).toFixed(1) + 'M' : (f / 1e3).toFixed(1) + 'K'} followers`);
+    if (typeof profile.daysSinceLastPost === 'number') {
+        if (profile.daysSinceLastPost < 1) matchedSignals.push('Posted today');
+        else if (profile.daysSinceLastPost < 3) matchedSignals.push(`Active ${Math.round(profile.daysSinceLastPost)}d ago`);
+        else if (profile.daysSinceLastPost < 14) matchedSignals.push(`Last post ${Math.round(profile.daysSinceLastPost)}d ago`);
+        else matchedSignals.push(`Dormant (${Math.round(profile.daysSinceLastPost)}d)`);
+    }
+    if (typeof profile.maturePostMedianEngagement === 'number' && profile.maturePostMedianEngagement > 0) {
+        matchedSignals.push(`~${profile.maturePostMedianEngagement} median engagement`);
+    }
+
+    const incomplete = (
+        (profile.daysSinceLastPost === null || profile.daysSinceLastPost === undefined) &&
+        (profile.maturePostMedianEngagement === null || profile.maturePostMedianEngagement === undefined)
+    );
+
+    return {
+        authorityScore: Math.round(authority),
+        nicheMatch,
+        finalScore,
+        matchedSignals,
+        recentPostCount: profile.recentPostCount || 0,
+        maturePostMedianEngagement: profile.maturePostMedianEngagement,
+        daysSinceLastPost: profile.daysSinceLastPost,
+        tier: finalScore >= 85 ? 'S' : finalScore >= 70 ? 'A' : finalScore >= 50 ? 'B' : 'C',
+        verificationStatus: incomplete ? 'incomplete' : 'verified'
+    };
+}
+
+// Filter check that does NOT gate inclusion — returns the list of reasons
+// the account fails to match the user's filters. Used for LinkedIn so the
+// user sees every found account along with why it's a weaker match.
+function describeFilterMismatch(profile, filters) {
+    const reasons = [];
+    if (filters.minFollowers && profile.followers > 0 && profile.followers < filters.minFollowers) {
+        reasons.push(`only ${profile.followers} followers (need ${filters.minFollowers}+)`);
+    }
+    if (filters.maxFollowers && profile.followers > 0 && profile.followers > filters.maxFollowers) {
+        reasons.push(`${profile.followers} followers (over ${filters.maxFollowers} cap)`);
+    }
+    if (filters.verifiedOnly && !profile.verified) {
+        reasons.push('not verified');
+    }
+    if (filters.minEngagementRate && (profile.engagementRate || 0) < filters.minEngagementRate) {
+        reasons.push(`${(profile.engagementRate || 0).toFixed(1)}% engagement (need ${filters.minEngagementRate}%+)`);
+    }
+    if (profile.followers > 0) {
+        const tierMap = {
+            nano: [0, 5000], micro: [5000, 50000], mid: [50000, 250000],
+            macro: [250000, 1000000], mega: [1000000, Infinity], all: [0, Infinity]
+        };
+        const [lo, hi] = tierMap[filters.authorityLevel] || tierMap.all;
+        if (profile.followers < lo || profile.followers > hi) {
+            reasons.push(`outside ${filters.authorityLevel} tier`);
+        }
+    }
+    return reasons;
+}
+
 function classifyTier(account) {
     const score = account.finalScore;
     if (score >= 85) return 'S';
@@ -923,7 +1611,7 @@ async function executePlatform(platform, queries, tabId) {
         : new Set();
 
     const seenHandles = new Set();
-    const allCandidates = [];
+    let allCandidates = [];
     const deepMode = activeMission.mode === 'deep';
     let queryIndex = 0; // counts queries within this platform — for first-query speedup
 
@@ -931,7 +1619,10 @@ async function executePlatform(platform, queries, tabId) {
     // Posts tab discovers active authors writing about the topic (much higher signal than People search)
     const tabsToSearch = platform === 'X' ? ['live', 'user']
         : platform === 'LinkedIn' ? ['content', 'people']
-        : ['link', 'user'];
+        // Reddit: surface communities (subreddits) FIRST — that's what we
+        // publish as accounts. Then look at posts so we can extract more
+        // subreddits from active discussions.
+        : ['sr', 'link'];
 
     for (const query of queries) {
         if (missionAborted) break;
@@ -1001,9 +1692,15 @@ async function executePlatform(platform, queries, tabId) {
 
             // Calibrated to human behavior: a real user scrolls 20-40 results before moving on.
             // Going higher is bot-like and triggers rate limits.
-            const maxPerQuery = activeMission.mode === 'volume' ? 50
+            // LinkedIn gets a higher cap — users complained "accounts I see are
+            // missing entirely" because the page returns 50+ cards in a single
+            // search. The bot-detection risk is per-action, not per-DOM-read.
+            const baseMax = activeMission.mode === 'volume' ? 50
                 : activeMission.mode === 'deep' ? 35
                 : 25;
+            const maxPerQuery = platform === 'LinkedIn'
+                ? Math.round(baseMax * 2.4)  // 60 / 84 / 120
+                : baseMax;
             const isPostsTab = (searchTab === 'live' || searchTab === 'content' || searchTab === 'link');
             const result = await sendToAgent(tabId, {
                 type: isPostsTab ? 'DISCOVERY_SCRAPE_POSTS' : 'DISCOVERY_SCRAPE_SEARCH',
@@ -1077,10 +1774,12 @@ async function executePlatform(platform, queries, tabId) {
 
             candidates.forEach(c => seenHandles.add(c.handle));
 
+            const candidatesCountBeforeTrackedFilter = candidates.length;
             const fresh = candidates.filter(c => {
                 const cleanUrl = c.url.split('?')[0].replace(/\/$/, '');
                 return !trackedUrls.has(cleanUrl);
             });
+            const droppedByTrackedFilter = candidatesCountBeforeTrackedFilter - fresh.length;
 
             // Surface the actual list so the user sees who was discovered
             if (fresh.length > 0) {
@@ -1090,6 +1789,24 @@ async function executePlatform(platform, queries, tabId) {
             } else {
                 logMission('success', `[${tabLabel}] Found ${candidates.length} candidates (${fresh.length} fresh)`, platform);
             }
+
+            // ── LinkedIn diagnostic ──
+            // When users say "accounts I see are missing entirely", surfacing
+            // the raw-vs-captured breakdown tells them exactly what happened:
+            // how many cards LinkedIn rendered, how many bare /in/ links we
+            // saw, how many were already tracked, etc.
+            if (platform === 'LinkedIn' && result?.diagnostic) {
+                const d = result.diagnostic;
+                const dropParts = [];
+                if (d.dropReasons?.maxedOut) dropParts.push(`${d.dropReasons.maxedOut} skipped (cap of ${maxPerQuery})`);
+                if (d.dropReasons?.duplicate) dropParts.push(`${d.dropReasons.duplicate} duplicates`);
+                if (d.dropReasons?.noLink) dropParts.push(`${d.dropReasons.noLink} cards w/o profile link`);
+                if (droppedByTrackedFilter) dropParts.push(`${droppedByTrackedFilter} already tracked`);
+                logMission('info',
+                    `[diag] LinkedIn: ${d.cardsFound} card${d.cardsFound !== 1 ? 's' : ''} + ${d.rawLinksFound} raw /in/ link${d.rawLinksFound !== 1 ? 's' : ''} → ${d.captured} captured${dropParts.length ? ' · ' + dropParts.join(', ') : ''}`,
+                    platform
+                );
+            }
             await patchProgress({
                 candidatesScanned: activeMission.progress.candidatesScanned + candidates.length,
                 queriesCompleted: activeMission.progress.queriesCompleted + 1
@@ -1097,12 +1814,115 @@ async function executePlatform(platform, queries, tabId) {
 
             allCandidates.push(...fresh);
 
-            // ─── COLLECT, DON'T PUBLISH YET ───
+            // ─── LINKEDIN: PUBLISH PRELIMINARY RESULTS NOW ───
+            // For LinkedIn, every discovered candidate appears in the account
+            // section immediately with a card-level score. Verification will
+            // upgrade each entry in place once we visit the profile. This
+            // lets the user pick accounts to track without waiting for the
+            // (rate-limited, slow) full verification pass to finish.
+            if (platform === 'LinkedIn' && fresh.length > 0) {
+                for (const c of fresh) {
+                    // Skip if we already published this handle in an earlier query
+                    if (activeMission.results.some(r => r.platform === 'LinkedIn' && r.handle === c.handle)) continue;
+                    const scoring = scoreLinkedInFromCard(c, activeMission.filters);
+                    const account = {
+                        id: `LinkedIn_${c.handle}_${Date.now()}`,
+                        platform: 'LinkedIn',
+                        handle: c.handle,
+                        url: c.url,
+                        displayName: c.displayName || c.handle,
+                        bio: c.bio || '',
+                        followers: scoring.followers || 0,
+                        verified: !!c.verified,
+                        authorityScore: scoring.authorityScore,
+                        nicheMatch: scoring.nicheMatch,
+                        finalScore: scoring.finalScore,
+                        matchedSignals: scoring.matchedSignals,
+                        tier: scoring.tier,
+                        discoveredAt: nowIso(),
+                        trackingStatus: 'untracked',
+                        enriched: false,
+                        verificationStatus: 'preliminary'
+                    };
+                    activeMission.results.push(account);
+                }
+                activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
+                await persistMission();
+                logMission('info', `Published ${fresh.length} LinkedIn candidates with preliminary scores — will refine after profile visits`, platform);
+            }
+
+            // ─── REDDIT: PUBLISH SUBREDDITS NOW (with about.json enrichment) ───
+            // For Reddit, we don't go through the verification (profile-visit)
+            // phase at all for subreddits — about.json gives us everything in
+            // one fetch. Users in the search results still go through the
+            // normal verification flow (they're rare in our queries anyway).
+            if (platform === 'Reddit' && fresh.length > 0) {
+                const subs = fresh.filter(c => c.accountType === 'subreddit');
+                if (subs.length > 0) {
+                    logMission('info', `Enriching ${subs.length} subreddit${subs.length > 1 ? 's' : ''} via about.json…`, platform);
+                    // Enrich in small parallel batches to respect Reddit's rate limit (60/min anon).
+                    const BATCH = 5;
+                    for (let i = 0; i < subs.length; i += BATCH) {
+                        const batch = subs.slice(i, i + BATCH);
+                        const enriched = await Promise.all(batch.map(c => enrichSubredditMetrics(c.handle)));
+                        for (let j = 0; j < batch.length; j++) {
+                            const c = batch[j];
+                            const meta = enriched[j];
+                            // Already-published handle? skip (mission may have run twice)
+                            if (activeMission.results.some(r => r.platform === 'Reddit' && r.handle.toLowerCase() === c.handle.toLowerCase())) continue;
+
+                            // Build profile object — merge enriched data with the
+                            // search-card fallback so we always have something to publish.
+                            const profile = {
+                                handle: c.handle,
+                                accountType: 'subreddit',
+                                displayName: meta?.displayName || c.displayName,
+                                bio: meta?.bio || c.bio || '',
+                                followers: meta?.followers ?? 0,
+                                verified: false,
+                                avatar: meta?.avatar || '',
+                                engagementRate: meta?.engagementRate ?? 0,
+                                maturePostMedianEngagement: meta?.maturePostMedianEngagement ?? null,
+                                ageDays: meta?.ageDays ?? null,
+                                isOver18: meta?.isOver18 ?? false,
+                                platform: 'Reddit'
+                            };
+                            const scoring = scoreRedditSubreddit(profile, activeMission.filters);
+                            const account = {
+                                id: `Reddit_${c.handle}_${Date.now()}`,
+                                platform: 'Reddit',
+                                ...profile,
+                                ...scoring,
+                                discoveredAt: nowIso(),
+                                trackingStatus: 'untracked',
+                                enriched: !!meta,
+                                // If about.json succeeded we're verified; if not, mark incomplete
+                                // so the user knows the metrics couldn't be fetched.
+                                verificationStatus: meta ? 'verified' : 'incomplete',
+                                url: c.url
+                            };
+                            activeMission.results.push(account);
+                            await patchProgress({ matched: (activeMission.progress.matched || 0) + 1 });
+                        }
+                        // Tiny inter-batch pause so we don't burst-fire fetches
+                        await dsleep(800);
+                    }
+                    activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
+                    await persistMission();
+                    logMission('success', `Published ${subs.length} subreddit${subs.length > 1 ? 's' : ''} with full metrics`, platform);
+                }
+                // Reddit users still flow through normal verification queue below
+                // (they're scraped from search but enriched by visiting the profile).
+            }
+
+            // ─── COLLECT FOR VERIFICATION ───
             // Candidates here are just usernames + bio snippets from search cards.
             // We collect them in allCandidates and visit each profile in the
             // verification phase below to read their REAL KPIs (follower count,
-            // engagement, verified status). Only profiles that match the
-            // user's filters get published to activeMission.results.
+            // engagement, verified status). For X/Reddit, only profiles that
+            // match the user's filters get published to activeMission.results.
+            // For LinkedIn, results were already published above and verification
+            // upgrades them in place.
             queryIndex++;
 
             // Inter-search pause: first query is short (~10s) so the user sees
@@ -1120,7 +1940,31 @@ async function executePlatform(platform, queries, tabId) {
     // check against the user's filters. Only profiles that pass are published
     // to activeMission.results. This is the core value of the extension.
     if (allCandidates.length === 0) {
+        // Reddit can legitimately end here with zero (subreddit-only flow
+        // already published everything via about.json). For other platforms,
+        // an empty list is the broken-scrape symptom.
+        if (platform === 'Reddit') {
+            logMission('info', `${platform} search complete — subreddits published directly via about.json`, platform);
+            return [];
+        }
         logMission('error', `Found 0 usernames on ${platform}. Nothing to verify. Most likely: not logged in, narrow keywords, or DOM changed.`, platform);
+        return [];
+    }
+
+    // Reddit subreddits were already enriched + published via about.json
+    // during search — they don't need a profile-visit. Strip them out so we
+    // don't waste a profile visit on them.
+    if (platform === 'Reddit') {
+        const before = allCandidates.length;
+        allCandidates = allCandidates.filter(c => c.accountType !== 'subreddit');
+        if (allCandidates.length < before) {
+            logMission('info', `Skipping profile-visit for ${before - allCandidates.length} subreddit${before - allCandidates.length > 1 ? 's' : ''} — already enriched`, platform);
+        }
+    }
+    if (allCandidates.length === 0) {
+        // Reddit-subreddit-only run is the normal case for community search;
+        // nothing more to do. Don't treat this as an error.
+        logMission('info', `Verification queue empty for ${platform} — search published everything directly`, platform);
         return [];
     }
 
@@ -1139,7 +1983,10 @@ async function executePlatform(platform, queries, tabId) {
     };
     const [tierLo, tierHi] = tierMap[filters.authorityLevel] || tierMap.all;
 
-    const preFiltered = allCandidates.filter(c => {
+    // LinkedIn: skip pre-filter entirely — every candidate appears in the UI
+    // with a preliminary score, and the user decides which to track. We still
+    // visit every profile to upgrade the score, just in best-match order.
+    const preFiltered = platform === 'LinkedIn' ? allCandidates.slice() : allCandidates.filter(c => {
         // Verified-only gate (we already know this from search)
         if (filters.verifiedOnly && !c.verified) return false;
         // If we have a follower hint AND it's clearly outside the range, drop it
@@ -1249,6 +2096,61 @@ async function executePlatform(platform, queries, tabId) {
             if (result?.error) {
                 logMission('warn', `Skip @${candidate.handle}: ${result.error}`, platform);
                 await patchProgress({ rejected: activeMission.progress.rejected + 1 });
+            } else if (platform === 'LinkedIn') {
+                // ─── LINKEDIN: UPGRADE THE PRELIMINARY ENTRY IN PLACE ───
+                // Verification never *removes* an account — it just replaces the
+                // card-level score with one based on real KPIs + post signals.
+                // Filter mismatches are surfaced as informational chips, not gates.
+                const profile = result.profile;
+                const merged = { ...candidate, ...profile };
+                const scoring = scoreLinkedInVerified(merged, activeMission.filters, candidate);
+                const mismatchReasons = describeFilterMismatch(merged, activeMission.filters);
+
+                const existingIdx = activeMission.results.findIndex(
+                    r => r.platform === 'LinkedIn' && r.handle === candidate.handle
+                );
+                const upgraded = {
+                    // Start from existing entry (preserves id, discoveredAt, trackingStatus)
+                    ...(existingIdx >= 0 ? activeMission.results[existingIdx] : {
+                        id: `LinkedIn_${candidate.handle}_${Date.now()}`,
+                        discoveredAt: nowIso(),
+                        trackingStatus: 'untracked'
+                    }),
+                    platform: 'LinkedIn',
+                    handle: candidate.handle,
+                    url: candidate.url,
+                    displayName: merged.displayName || candidate.displayName || candidate.handle,
+                    bio: merged.bio || candidate.bio || '',
+                    followers: merged.followers || 0,
+                    verified: !!merged.verified,
+                    engagementRate: merged.engagementRate || 0,
+                    authorityScore: scoring.authorityScore,
+                    nicheMatch: scoring.nicheMatch,
+                    finalScore: scoring.finalScore,
+                    matchedSignals: scoring.matchedSignals,
+                    tier: scoring.tier,
+                    recentPostCount: scoring.recentPostCount,
+                    maturePostMedianEngagement: scoring.maturePostMedianEngagement,
+                    daysSinceLastPost: scoring.daysSinceLastPost,
+                    lastActive: merged.lastActive,
+                    filterMismatchReasons: mismatchReasons,
+                    verificationStatus: scoring.verificationStatus,
+                    enriched: true
+                };
+                if (existingIdx >= 0) {
+                    activeMission.results[existingIdx] = upgraded;
+                } else {
+                    activeMission.results.push(upgraded);
+                }
+                enriched.push(upgraded);
+                activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
+                await patchProgress({ matched: activeMission.progress.matched + 1 });
+                await persistMission();
+                const fmt = merged.followers >= 1000
+                    ? merged.followers >= 1e6 ? `${(merged.followers/1e6).toFixed(1)}M` : `${(merged.followers/1e3).toFixed(1)}K`
+                    : `${merged.followers || 0}`;
+                const mismatch = mismatchReasons.length ? ` [${mismatchReasons.join(', ')}]` : '';
+                logMission('success', `↻ ${scoring.tier}-tier @${candidate.handle} — ${fmt} followers (score ${scoring.finalScore})${mismatch}`, platform);
             } else {
                 const profile = result.profile;
                 const merged = { ...candidate, ...profile };
@@ -1276,7 +2178,8 @@ async function executePlatform(platform, queries, tabId) {
                         ...scoring,
                         discoveredAt: nowIso(),
                         trackingStatus: 'untracked',
-                        enriched: true
+                        enriched: true,
+                        verificationStatus: 'verified'
                     };
                     enriched.push(account);
                     activeMission.results.push(account);
@@ -1726,6 +2629,53 @@ async function verifyOneCandidate(platform, candidate, tabId) {
         if (result?.error) {
             logMission('warn', `Skip @${candidate.handle}: ${result.error}`, platform);
             await patchProgress({ rejected: activeMission.progress.rejected + 1 });
+        } else if (platform === 'LinkedIn') {
+            // LinkedIn upgrade-in-place (mirrors executePlatform path)
+            const profile = result.profile;
+            const merged = { ...candidate, ...profile };
+            const scoring = scoreLinkedInVerified(merged, activeMission.filters, candidate);
+            const mismatchReasons = describeFilterMismatch(merged, activeMission.filters);
+
+            const existingIdx = activeMission.results.findIndex(
+                r => r.platform === 'LinkedIn' && r.handle === candidate.handle
+            );
+            const upgraded = {
+                ...(existingIdx >= 0 ? activeMission.results[existingIdx] : {
+                    id: `LinkedIn_${candidate.handle}_${Date.now()}`,
+                    discoveredAt: nowIso(),
+                    trackingStatus: 'untracked'
+                }),
+                platform: 'LinkedIn',
+                handle: candidate.handle,
+                url: candidate.url,
+                displayName: merged.displayName || candidate.displayName || candidate.handle,
+                bio: merged.bio || candidate.bio || '',
+                followers: merged.followers || 0,
+                verified: !!merged.verified,
+                engagementRate: merged.engagementRate || 0,
+                authorityScore: scoring.authorityScore,
+                nicheMatch: scoring.nicheMatch,
+                finalScore: scoring.finalScore,
+                matchedSignals: scoring.matchedSignals,
+                tier: scoring.tier,
+                recentPostCount: scoring.recentPostCount,
+                maturePostMedianEngagement: scoring.maturePostMedianEngagement,
+                daysSinceLastPost: scoring.daysSinceLastPost,
+                lastActive: merged.lastActive,
+                filterMismatchReasons: mismatchReasons,
+                verificationStatus: scoring.verificationStatus,
+                enriched: true
+            };
+            if (existingIdx >= 0) activeMission.results[existingIdx] = upgraded;
+            else activeMission.results.push(upgraded);
+            activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
+            await patchProgress({ matched: activeMission.progress.matched + 1 });
+            await persistMission();
+            const fmt = merged.followers >= 1000
+                ? merged.followers >= 1e6 ? `${(merged.followers/1e6).toFixed(1)}M` : `${(merged.followers/1e3).toFixed(1)}K`
+                : `${merged.followers || 0}`;
+            const mismatch = mismatchReasons.length ? ` [${mismatchReasons.join(', ')}]` : '';
+            logMission('success', `↻ ${scoring.tier}-tier @${candidate.handle} — ${fmt} followers (score ${scoring.finalScore})${mismatch}`, platform);
         } else {
             const profile = result.profile;
             const merged = { ...candidate, ...profile };
@@ -1742,7 +2692,8 @@ async function verifyOneCandidate(platform, candidate, tabId) {
                 const account = {
                     id: `${platform}_${candidate.handle}_${Date.now()}`,
                     ...merged, ...scoring,
-                    discoveredAt: nowIso(), trackingStatus: 'untracked', enriched: true
+                    discoveredAt: nowIso(), trackingStatus: 'untracked', enriched: true,
+                    verificationStatus: 'verified'
                 };
                 activeMission.results.push(account);
                 activeMission.results.sort((a, b) => b.finalScore - a.finalScore);
