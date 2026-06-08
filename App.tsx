@@ -1,67 +1,173 @@
 import React, { useState, useEffect } from 'react';
-import { AppMode, StrategyPlan } from './types';
-import { generateLaunchStrategy } from './services/geminiService';
+import { AppMode } from './types';
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
+import { useAuth } from './contexts/AuthContext';
 import { ProjectSetup, ProjectSummaryCard } from './components/ProjectSetup';
-import { StrategyView } from './components/StrategyView';
-import { DistributionView } from './components/DistributionView';
-import { ReconView } from './components/ReconView';
-import { PersonaView } from './components/PersonaView';
+import { AutoCommentProcessor } from './components/AutoCommentProcessor';
 import { UnifiedCommandCenter } from './components/UnifiedCommandCenter';
 import { ContentEngineView } from './components/ContentEngineView';
+import { ContentParametersView } from './components/ContentParametersView';
 import { AccountFinderView } from './components/AccountFinderView';
+import { FeedWatcherView } from './components/FeedWatcherView';
 import { DashboardView } from './components/DashboardView';
 import {
-  Rocket, Target, Zap, Globe, Radar, Menu, Home, ShieldCheck,
-  Users, Sparkles, Trash2, Crosshair, Loader2
+  Zap, Menu, Home, ShieldCheck,
+  Sparkles, Trash2, Plus, Crosshair, Settings2, Rss,
+  LogOut, Loader2
 } from 'lucide-react';
+
+// Unified section titles — one simple header for every section.
+const SECTION_META: Record<string, { title: string; subtitle: string }> = {
+  [AppMode.ANSWERLY_RADAR]:       { title: 'Posts Tracker',       subtitle: 'New posts from the accounts you follow' },
+  [AppMode.ACCOUNT_FINDER]:       { title: 'Account Finder',      subtitle: 'Find and track creators in your niche' },
+  [AppMode.FEED_WATCHER]:         { title: 'Feed Watcher',        subtitle: 'Mine your home feed for opportunities, automatically' },
+  [AppMode.CONTENT_ENGINE]:       { title: 'Content Engine',      subtitle: 'Generate posts that convert' },
+  [AppMode.CONTENT_PARAMETERS]:   { title: 'Voice Studio',        subtitle: 'Tune your voice once. Every post inherits it.' },
+};
+
+// Single frosted-glass title bar shared by all sections.
+const SectionGlassHeader: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => (
+  <div className="glass-header px-6 py-4 mb-6 flex items-center gap-3">
+    <div className="bg-gray-900/90 text-white p-2 rounded-xl flex-shrink-0">
+      <Zap size={18} />
+    </div>
+    <div className="min-w-0">
+      <h1 className="font-display text-2xl font-bold text-gray-900 tracking-tight leading-none truncate">{title}</h1>
+      <p className="text-xs text-gray-500 mt-1 truncate">{subtitle}</p>
+    </div>
+  </div>
+);
 
 function AppInner() {
   const { project, isComplete, clearProject } = useProject();
+  const auth = useAuth();
   const [mode, setMode] = useState<AppMode | 'DASHBOARD'>('DASHBOARD');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [editingProject, setEditingProject] = useState(false);
+  const [newProject, setNewProject] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  // Strategy state — driven entirely by project context
-  const [plan, setPlan] = useState<StrategyPlan | null>(() => {
-    const saved = localStorage.getItem('strategy_plan_v2');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [loadingStrategy, setLoadingStrategy] = useState(false);
-
+  // Hand the extension a copy of the Gemini API key once the bridge is ready,
+  // so the Feed Watcher (and any other SW-side AI feature) can call Gemini
+  // directly from the service worker — even when this tab is closed.
   useEffect(() => {
-    if (plan) localStorage.setItem('strategy_plan_v2', JSON.stringify(plan));
-    else localStorage.removeItem('strategy_plan_v2');
-  }, [plan]);
+    const pushKey = () => {
+      try {
+        const key = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+        if (!key) return;
+        window.dispatchEvent(new CustomEvent('answerly_set_gemini_key', { detail: { key } }));
+      } catch {}
+    };
+    pushKey();
+    window.addEventListener('EXTENSION_BRIDGE_READY', pushKey);
+    return () => window.removeEventListener('EXTENSION_BRIDGE_READY', pushKey);
+  }, []);
 
-  // Auto-clear stale strategy plan when project changes
+  // Hand the extension the user's active voice profile so the Feed Watcher can
+  // DRAFT engagement replies in their voice from the service worker (queue-only
+  // — nothing posts without approval). Re-pushed whenever the saved voice
+  // profile changes (storage event) or the bridge re-announces itself.
   useEffect(() => {
-    if (project) {
-      const saved = localStorage.getItem('strategy_plan_v2');
-      if (saved) {
+    const pushVoice = () => {
+      try {
+        let voiceMix: any = null, rhythm: any = null, perspective: any = null, planCtx: any = null;
         try {
-          const parsed = JSON.parse(saved);
-          if (parsed.productName && parsed.productName !== project.productName) {
-            setPlan(null);
-          }
+          const raw = localStorage.getItem('content_voice_profile_v2');
+          if (raw) { const v = JSON.parse(raw); voiceMix = v?.voiceMix || null; rhythm = v?.rhythm || v?.voiceMix?.rhythm || null; }
         } catch {}
-      }
-    }
-  }, [project?.productName]);
+        try {
+          const rawP = localStorage.getItem('content_perspective_v1');
+          if (rawP) perspective = JSON.parse(rawP);
+        } catch {}
+        try {
+          const rawPlan = localStorage.getItem('strategy_plan_v2');
+          if (rawPlan) planCtx = JSON.parse(rawPlan);
+        } catch {}
+        // Comment spec (tone / goal / length / standing instruction) is set in
+        // Voice Studio under its own key. The Feed Watcher SW drafter honors it,
+        // so it MUST be threaded into the pushed profile — otherwise the chosen
+        // tone (e.g. "funny") is silently dropped for auto-drafted comments.
+        let commentSpec: any = null;
+        try {
+          const rawCs = localStorage.getItem('comment_spec_v1');
+          if (rawCs) commentSpec = JSON.parse(rawCs);
+        } catch {}
+        const profile = {
+          voiceMix,
+          rhythm: rhythm || (voiceMix && voiceMix.rhythm) || null,
+          perspective,
+          commentSpec,
+          product: (project as any)?.productName || planCtx?.productName || '',
+          audience: (project as any)?.targetAudience || planCtx?.targetAudience || ''
+        };
+        window.dispatchEvent(new CustomEvent('answerly_set_voice_profile', { detail: { profile } }));
+      } catch {}
+    };
+    pushVoice();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'content_voice_profile_v2' || e.key === 'content_perspective_v1' || e.key === 'comment_spec_v1') pushVoice();
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('EXTENSION_BRIDGE_READY', pushVoice);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('EXTENSION_BRIDGE_READY', pushVoice);
+    };
+  }, [project]);
 
-  const handleGenerateStrategy = async () => {
-    if (!project) return;
-    setLoadingStrategy(true);
+  // Wipe the project + all local state. Kept separate from window.confirm,
+  // which silently returns false in sandboxed/embedded webviews (that was why
+  // the Delete button appeared to do nothing).
+  const performDeleteProject = () => {
+    try { localStorage.clear(); } catch {}
+    try { sessionStorage.clear(); } catch {}
+    clearProject();
+    setConfirmingDelete(false);
+
+    // IMPORTANT: chrome.storage.local.clear() is async. Previously we reloaded
+    // immediately after calling it, so the reload often won the race and the
+    // extension's data (tracked accounts, answerly_history → old posts in the
+    // Posts Tracker) survived. Wait for the clear to finish, THEN reload.
+    const done = () => window.location.reload();
     try {
-      const generatedPlan = await generateLaunchStrategy(project.productName, project.pitch, project.targetAudience);
-      setPlan(generatedPlan);
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ action: 'STOP_RECON_MISSION' });
+      }
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.clear(() => done());
+        // Safety net in case the callback never fires.
+        setTimeout(done, 1500);
+      } else {
+        done();
+      }
     } catch (e) {
-      console.error(e);
-      alert("Failed to generate strategy. Please check console.");
-    } finally {
-      setLoadingStrategy(false);
+      console.warn('Extension clear failed', e);
+      done();
     }
   };
+
+  // ── AUTH GATE ──
+  // The marketing site at /landing-growth.html is the gateway. If we're not
+  // signed in we redirect there and the visitor uses the modal CTA to log in.
+  // The initial getSession() call can be slow on a cold cache, so we show a
+  // small spinner instead of flashing the dashboard frame.
+  if (auth.loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-base-200">
+        <div className="flex items-center gap-2 text-gray-500"><Loader2 size={16} className="animate-spin" /> <span className="text-sm">Checking session…</span></div>
+      </div>
+    );
+  }
+  if (!auth.session) {
+    if (typeof window !== 'undefined') {
+      window.location.replace('/landing-growth.html');
+    }
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-base-200">
+        <div className="text-sm text-gray-500">Redirecting to sign in…</div>
+      </div>
+    );
+  }
 
   // ── First-time setup gate ──
   if (!isComplete) {
@@ -77,28 +183,21 @@ function AppInner() {
       title: 'Mission Control',
       items: [
         { id: 'DASHBOARD', label: 'Dashboard', icon: <Home size={18} /> },
-        { id: AppMode.ANSWERLY_RADAR, label: 'Unified Radar', icon: <ShieldCheck size={18} /> },
+        { id: AppMode.ANSWERLY_RADAR, label: 'Posts Tracker', icon: <ShieldCheck size={18} /> },
       ]
     },
     {
       title: 'Growth Ops',
       items: [
         { id: AppMode.ACCOUNT_FINDER, label: 'Account Finder', icon: <Crosshair size={18} /> },
-      ]
-    },
-    {
-      title: 'Founder Suite',
-      items: [
-        { id: AppMode.STRATEGY, label: 'Launch Strategy', icon: <Target size={18} /> },
-        { id: AppMode.RECON, label: 'Competitor Analysis', icon: <Radar size={18} /> },
-        { id: AppMode.PERSONA, label: 'Buyer Persona', icon: <Users size={18} /> },
-        { id: AppMode.DISTRIBUTION, label: 'Distribution', icon: <Globe size={18} /> },
+        { id: AppMode.FEED_WATCHER,   label: 'Feed Watcher',   icon: <Rss size={18} /> },
       ]
     },
     {
       title: 'Execution',
       items: [
         { id: AppMode.CONTENT_ENGINE, label: 'Content Engine', icon: <Sparkles size={18} /> },
+        { id: AppMode.CONTENT_PARAMETERS, label: 'Voice Studio', icon: <Settings2 size={18} /> },
       ]
     }
   ];
@@ -110,52 +209,11 @@ function AppInner() {
     );
 
     switch (mode) {
-      case AppMode.DISTRIBUTION:    return <>{projectHeader}<DistributionView /></>;
-      case AppMode.RECON:           return <>{projectHeader}<ReconView /></>;
-      case AppMode.PERSONA:         return <>{projectHeader}<PersonaView appName={project!.productName} appDesc={project!.pitch} category={project!.targetAudience} /></>;
       case AppMode.ANSWERLY_RADAR:  return <UnifiedCommandCenter appDesc={project!.pitch} />;
-      case AppMode.CONTENT_ENGINE:  return <>{projectHeader}<ContentEngineView /></>;
+      case AppMode.CONTENT_ENGINE:  return <>{projectHeader}<ContentEngineView onOpenParameters={() => setMode(AppMode.CONTENT_PARAMETERS)} /></>;
+      case AppMode.CONTENT_PARAMETERS: return <>{projectHeader}<ContentParametersView /></>;
       case AppMode.ACCOUNT_FINDER:  return <AccountFinderView />;
-      case AppMode.STRATEGY:
-        return (
-          <>
-            {projectHeader}
-            {plan ? (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center bg-base-100 p-4 rounded-xl shadow-sm">
-                  <div>
-                    <h3 className="font-bold text-lg">{plan.productName}</h3>
-                    <p className="text-xs opacity-70">Active Strategy</p>
-                  </div>
-                  <button onClick={() => setPlan(null)} className="btn btn-sm btn-outline">
-                    Reset Plan
-                  </button>
-                </div>
-                <StrategyView plan={plan} />
-              </div>
-            ) : (
-              <div className="hero min-h-[40vh] bg-base-100 rounded-3xl shadow-sm">
-                <div className="hero-content text-center max-w-xl">
-                  <div className="w-full">
-                    <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center">
-                      <Target className="text-primary" size={28} />
-                    </div>
-                    <h1 className="text-3xl font-display font-bold mb-2">Generate Launch Strategy</h1>
-                    <p className="opacity-70 mb-6">
-                      A battle-tested roadmap built from your project data — no more forms.
-                    </p>
-                    <button onClick={handleGenerateStrategy}
-                      disabled={loadingStrategy}
-                      className="btn btn-primary px-8 py-3 text-base text-white shadow-lg">
-                      {loadingStrategy ? <Loader2 size={18} className="animate-spin" /> : <Rocket size={18} />}
-                      {loadingStrategy ? 'Building roadmap...' : 'Generate Roadmap'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        );
+      case AppMode.FEED_WATCHER:    return <>{projectHeader}<FeedWatcherView /></>;
 
       case 'DASHBOARD':
       default:
@@ -167,8 +225,8 @@ function AppInner() {
     <div className="drawer lg:drawer-open">
       <input id="my-drawer-2" type="checkbox" className="drawer-toggle" checked={isSidebarOpen} onChange={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-      <div className="drawer-content flex flex-col bg-base-200 min-h-screen">
-        <div className="w-full navbar bg-base-100 lg:hidden shadow-sm">
+      <div className="drawer-content flex flex-col bg-transparent min-h-screen">
+        <div className="w-full navbar glass-morphism lg:hidden shadow-sm">
           <div className="flex-none">
             <label htmlFor="my-drawer-2" className="btn btn-square btn-ghost">
               <Menu />
@@ -178,13 +236,16 @@ function AppInner() {
         </div>
 
         <main className="flex-1 p-4 lg:p-10 overflow-x-hidden">
+          {SECTION_META[mode] && (
+            <SectionGlassHeader title={SECTION_META[mode].title} subtitle={SECTION_META[mode].subtitle} />
+          )}
           {renderContent()}
         </main>
       </div>
 
       <div className="drawer-side z-50 shadow-xl lg:shadow-none">
         <label htmlFor="my-drawer-2" aria-label="close sidebar" className="drawer-overlay"></label>
-        <ul className="menu p-4 w-80 min-h-full bg-base-100 text-base-content flex flex-col justify-between border-r border-base-200">
+        <ul className="menu p-4 w-80 min-h-full glass-sidebar text-base-content flex flex-col justify-between">
           <div>
             <div className="px-4 py-4 mb-3 flex items-center gap-2">
               <div className="bg-primary/10 p-2 rounded-lg">
@@ -207,9 +268,13 @@ function AppInner() {
                   <li key={item.id} className="mb-0.5">
                     <button
                       onClick={() => { setMode(item.id as any); if(window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                      className={`flex items-center gap-3 py-2.5 font-bold rounded-xl transition-all ${mode === item.id ? 'active bg-gray-900 text-white shadow-lg shadow-gray-200' : 'hover:bg-base-200 text-slate-500'}`}>
-                      <span className={mode === item.id ? 'text-primary' : 'text-slate-400'}>{item.icon}</span>
-                      <span className="text-sm">{item.label}</span>
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-out
+                        ${mode === item.id
+                          ? 'bg-gray-900 text-white'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}>
+                      <span className={mode === item.id ? 'text-white' : 'text-gray-400'}>{item.icon}</span>
+                      <span>{item.label}</span>
                     </button>
                   </li>
                 ))}
@@ -217,28 +282,46 @@ function AppInner() {
             ))}
           </div>
 
-          <div className="mt-8 space-y-4">
+          <div className="mt-8 space-y-1">
             <button
-              onClick={() => {
-                if (window.confirm("FATAL RESET: This will permanently DELETE the project, all campaigns, prospects, leads, and extension data. You will start with a 100% clean session. Proceed?")) {
-                  if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-                    chrome.runtime.sendMessage({ action: 'STOP_RECON_MISSION' });
-                    if (chrome.storage?.local) chrome.storage.local.clear();
-                  }
-                  localStorage.clear();
-                  sessionStorage.clear();
-                  window.location.reload();
-                }
-              }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl transition-all font-black uppercase tracking-widest text-[10px] border border-transparent hover:border-red-100">
-              <Trash2 size={16} />
-              <span>Nuke Session</span>
+              onClick={() => setNewProject(true)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg text-sm font-medium transition-all duration-200 ease-out">
+              <Plus size={15} />
+              <span>New project</span>
             </button>
 
-            <div className="divider my-4"></div>
-            <div className="px-4 text-[9px] opacity-40 font-black uppercase tracking-[0.2em] text-center">
-              System: Stable<br/>
-              v1.1.0.UNIFIED
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-all duration-200 ease-out">
+              <Trash2 size={15} />
+              <span>Delete project</span>
+            </button>
+
+            {/* Account block — signed-in email + sign-out, separated from
+                project actions so destroying the project never reads like
+                destroying the account. */}
+            <div className="pt-4 mt-2 border-t border-gray-100">
+              {auth.user?.email && (
+                <div className="px-3 mb-2">
+                  <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-0.5">Signed in as</div>
+                  <div className="text-[11px] text-gray-700 font-medium truncate" title={auth.user.email}>{auth.user.email}</div>
+                </div>
+              )}
+              <button
+                onClick={async () => {
+                  await auth.signOut();
+                  // Belt-and-braces: the onAuthStateChange listener will fire
+                  // and the gate above will redirect, but doing it explicitly
+                  // here avoids one render flash of the (now empty) sidebar.
+                  window.location.replace('/landing-growth.html');
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg text-sm font-medium transition-all duration-200 ease-out">
+                <LogOut size={15} />
+                <span>Sign out</span>
+              </button>
+              <div className="pt-3 px-3 text-[10px] text-gray-400">
+                v1.1
+              </div>
             </div>
           </div>
         </ul>
@@ -248,6 +331,40 @@ function AppInner() {
       {editingProject && (
         <ProjectSetup mode="edit" onClose={() => setEditingProject(false)} />
       )}
+
+      {/* New Project Modal */}
+      {newProject && (
+        <ProjectSetup mode="new" onClose={() => setNewProject(false)} />
+      )}
+
+      {/* Delete Project confirmation */}
+      {confirmingDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+             onClick={() => setConfirmingDelete(false)}>
+          <div className="glass-panel rounded-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="bg-rose-100 text-rose-600 p-2 rounded-xl"><Trash2 size={18} /></div>
+              <h2 className="text-lg font-bold text-gray-900">Delete this project?</h2>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed mb-5">
+              This erases the project and all its data — personas, strategy, leads, tracked posts and content settings.
+              This can't be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmingDelete(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={performDeleteProject}
+                className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors flex items-center gap-2">
+                <Trash2 size={14} /> Delete project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -256,6 +373,11 @@ export default function App() {
   return (
     <ProjectProvider>
       <AppInner />
+      {/* Headless side-effect — polls the extension for pending auto-comment
+          jobs, generates comments via Gemini, submits them back for posting.
+          Mounting it at the root means auto-comment is active whenever the
+          dashboard tab is open, on any view. */}
+      <AutoCommentProcessor />
     </ProjectProvider>
   );
 }
