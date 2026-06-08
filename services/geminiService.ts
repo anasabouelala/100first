@@ -1,20 +1,198 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
 import * as cheerio from 'cheerio';
 import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, GeneratedContent, ChannelAnalysis, CompetitorData, CompetitorDeepDive, OutreachResponse, MarketOpportunity, ReplyDraft, IndustryBenchmark, SearchDork } from "../types";
 
-const _apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
-const ai = new GoogleGenAI({ apiKey: _apiKey || 'MISSING_KEY_ADD_TO_.env' });
+// ─── DeepSeek-backed AI client (Gemini-compatible adapter) ──────────
+// The codebase was originally written against @google/genai. We swapped the
+// backing model out for DeepSeek (OpenAI-compatible chat completions) without
+// rewriting every call site — this adapter exposes the same surface
+// (`ai.models.generateContent`, `Type.*`, `Schema`) and translates each call
+// into a DeepSeek chat completion under the hood.
+//
+// Trade-offs of the swap:
+//   • `tools: [{ googleSearch: {} }]` — no DeepSeek equivalent, silently
+//      dropped. `response.candidates[0].groundingMetadata` is always empty,
+//      so URL-grounding code paths fall back gracefully (they already had
+//      defensive `if (chunks) {}` guards).
+//   • Image input (`inlineData`) — DeepSeek's chat model is text-only here.
+//      We strip the image and send only the text part with a console warning.
+//   • Gemini's `Type` enum / `Schema` shape — re-implemented locally with the
+//      same uppercase names so existing schema literals compile unchanged.
 
-export const isGeminiConfigured = (): boolean => !!_apiKey && _apiKey !== 'MISSING_KEY_ADD_TO_.env';
+const DEEPSEEK_API_KEY = '***REMOVED***';
+const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
+
+// Default model. Per spec — kept as a single source of truth so swapping the
+// model id (e.g. to `deepseek-chat`) is a one-line change.
+export const MODEL_FLASH = 'deepseek-v4-flash';
+
+// ── Gemini-compatible Type enum / Schema type ──────────────────────
+// These exist purely so the existing `Type.OBJECT` / `Type.STRING` literals
+// keep compiling. They are converted to JSON Schema strings before hitting
+// the DeepSeek API.
+export const Type = {
+  OBJECT: 'OBJECT',
+  STRING: 'STRING',
+  NUMBER: 'NUMBER',
+  INTEGER: 'INTEGER',
+  BOOLEAN: 'BOOLEAN',
+  ARRAY: 'ARRAY'
+} as const;
+
+export type Schema = {
+  type: string;
+  description?: string;
+  enum?: string[];
+  properties?: Record<string, Schema>;
+  items?: Schema;
+  required?: string[];
+};
+
+// Recursively convert a Gemini-style Schema into a JSON Schema the DeepSeek
+// API understands (lowercase types, OpenAI-style `additionalProperties`).
+function geminiSchemaToJsonSchema(s: Schema | undefined): any {
+  if (!s) return undefined;
+  const typeMap: Record<string, string> = {
+    OBJECT: 'object', STRING: 'string', NUMBER: 'number',
+    INTEGER: 'integer', BOOLEAN: 'boolean', ARRAY: 'array'
+  };
+  const out: any = { type: typeMap[s.type] || s.type?.toLowerCase?.() || s.type };
+  if (s.description) out.description = s.description;
+  if (s.enum) out.enum = s.enum;
+  if (s.items) out.items = geminiSchemaToJsonSchema(s.items);
+  if (s.properties) {
+    out.properties = {};
+    Object.entries(s.properties).forEach(([k, v]) => {
+      out.properties[k] = geminiSchemaToJsonSchema(v);
+    });
+  }
+  if (s.required) out.required = s.required;
+  return out;
+}
+
+// Flatten the `contents` field, which can be a string, a `{ parts: [...] }`
+// object, or an array of either. Image parts are stripped (DeepSeek chat is
+// text-only here); a warning is logged so the caller can see what happened.
+function flattenContents(contents: any): string {
+  if (!contents) return '';
+  if (typeof contents === 'string') return contents;
+  const parts: string[] = [];
+  const visit = (item: any) => {
+    if (!item) return;
+    if (typeof item === 'string') { parts.push(item); return; }
+    if (Array.isArray(item)) { item.forEach(visit); return; }
+    if (item.parts) { visit(item.parts); return; }
+    if (item.text) { parts.push(item.text); return; }
+    if (item.inlineData) {
+      console.warn('[DeepSeek adapter] Dropping inline image — DeepSeek chat is text-only.');
+      return;
+    }
+  };
+  visit(contents);
+  return parts.join('\n\n');
+}
+
+interface GeminiCallShape {
+  model?: string;
+  contents: any;
+  config?: {
+    responseMimeType?: string;
+    responseSchema?: Schema;
+    systemInstruction?: string;
+    temperature?: number;
+    maxOutputTokens?: number;
+    tools?: any[];
+  };
+}
+
+interface GeminiResponseShape {
+  text: string;
+  candidates: Array<{ groundingMetadata?: { groundingChunks?: any[] } }>;
+}
+
+async function deepseekGenerateContent(req: GeminiCallShape): Promise<GeminiResponseShape> {
+  const cfg = req.config || {};
+  const userText = flattenContents(req.contents);
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+  if (cfg.systemInstruction) messages.push({ role: 'system', content: cfg.systemInstruction });
+  messages.push({ role: 'user', content: userText });
+
+  if (cfg.tools?.length) {
+    // googleSearch / other Gemini-only tools have no DeepSeek equivalent;
+    // grounded callers already guard on missing groundingChunks.
+    console.warn('[DeepSeek adapter] Dropping `tools` from request — not supported on DeepSeek.');
+  }
+
+  const body: any = {
+    model: req.model || MODEL_FLASH,
+    messages,
+    stream: false
+  };
+  if (typeof cfg.temperature === 'number') body.temperature = cfg.temperature;
+  if (typeof cfg.maxOutputTokens === 'number') body.max_tokens = cfg.maxOutputTokens;
+
+  // JSON mode. DeepSeek supports OpenAI's `response_format: { type: "json_object" }`.
+  // If a schema is supplied, we additionally inject it into the system prompt so
+  // the model knows the shape — DeepSeek's strict JSON-Schema mode is limited.
+  if (cfg.responseMimeType === 'application/json' || cfg.responseSchema) {
+    body.response_format = { type: 'json_object' };
+    const jsonSchema = geminiSchemaToJsonSchema(cfg.responseSchema);
+    if (jsonSchema) {
+      messages.unshift({
+        role: 'system',
+        content:
+          'You MUST reply with a single JSON value that conforms exactly to this JSON Schema. ' +
+          'No prose, no markdown fences. Schema:\n' +
+          JSON.stringify(jsonSchema)
+      });
+    } else {
+      messages.unshift({
+        role: 'system',
+        content: 'You MUST reply with a single JSON value. No prose, no markdown fences.'
+      });
+    }
+  }
+
+  const res = await fetch(DEEPSEEK_BASE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`DeepSeek API ${res.status}: ${errText || res.statusText}`);
+  }
+
+  const json = await res.json();
+  const text: string = json?.choices?.[0]?.message?.content || '';
+  return {
+    text,
+    candidates: [{ groundingMetadata: { groundingChunks: [] } }]
+  };
+}
+
+// Single shared client. External code imports `ai` and calls
+// `ai.models.generateContent(...)`. The shape mirrors @google/genai's client
+// just enough to keep every existing call site working.
+export const ai = {
+  models: {
+    generateContent: deepseekGenerateContent
+  }
+};
+
+export const isGeminiConfigured = (): boolean => !!DEEPSEEK_API_KEY;
 
 export class GeminiNotConfiguredError extends Error {
   constructor() {
-    super('Gemini API key missing. Add VITE_GEMINI_API_KEY to your .env file (get one at https://aistudio.google.com/app/apikey) and restart the dev server.');
+    super('DeepSeek API key missing from services/geminiService.ts.');
     this.name = 'GeminiNotConfiguredError';
   }
 }
 
-function assertConfigured() {
+export function assertConfigured() {
   if (!isGeminiConfigured()) throw new GeminiNotConfiguredError();
 }
 
@@ -84,7 +262,7 @@ export const generateLaunchStrategy = async (
   audience: string
 ): Promise<StrategyPlan> => {
   assertConfigured();
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
 
   // Reusable sub-schemas
   const stepSchema: Schema = {
@@ -402,7 +580,7 @@ Be specific, contrarian, and bold. Every line must be executable BY A FOUNDER WH
 export const roastLandingPage = async (
   base64Image: string
 ): Promise<RoastResult> => {
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
 
   const prompt = `
     Look at this landing page screenshot. 
@@ -458,7 +636,7 @@ export const findDistributionChannels = async (
   category: string
 ): Promise<DistributionChannel[]> => {
   assertConfigured();
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.ARRAY,
@@ -561,7 +739,7 @@ export const getIndustryBenchmarks = async (
   category: string
 ): Promise<IndustryBenchmark[]> => {
   assertConfigured();
-  const model = "gemini-3-flash-preview";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.ARRAY,
@@ -622,7 +800,7 @@ export const analyzeChannel = async (
   appDescription: string
 ): Promise<ChannelAnalysis> => {
   assertConfigured();
-  const model = "gemini-3-flash-preview";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.OBJECT,
@@ -675,34 +853,86 @@ export const analyzeChannel = async (
     required: ["summary", "rules", "audienceVibe", "successfulPostTypes", "moderationStrictness", "verdict", "saasKpis", "algorithmSecrets", "contentHooks"]
   };
 
+  // Detect the actual platform from the channel name/url so the KPIs we ask for
+  // are scoped to THIS channel — not a generic "Avg CPC on LinkedIn" example
+  // that the model would copy-paste regardless of channel. This is why
+  // r/leadgeneration used to show LinkedIn Ads CPC.
+  const lc = `${channelName} ${channelUrl}`.toLowerCase();
+  const platform =
+    /reddit\.com|^r\/| r\//.test(lc) ? 'Reddit' :
+    /linkedin\.com|linkedin/.test(lc) ? 'LinkedIn' :
+    /(x\.com|twitter\.com|twitter)/.test(lc) ? 'X (Twitter)' :
+    /producthunt|product hunt/.test(lc) ? 'Product Hunt' :
+    /hacker ?news|news\.ycombinator/.test(lc) ? 'Hacker News' :
+    /youtube\.com/.test(lc) ? 'YouTube' :
+    /tiktok\.com/.test(lc) ? 'TikTok' :
+    /instagram\.com/.test(lc) ? 'Instagram' :
+    /discord/.test(lc) ? 'Discord' :
+    /slack/.test(lc) ? 'Slack' :
+    'Web / Other';
+  const exampleKpis: Record<string, string> = {
+    'Reddit':      `"Median upvotes per top post", "Subscriber growth / mo", "Sticky post CTR", "Self-promo allowed (Y/N)"`,
+    'LinkedIn':    `"Avg LinkedIn Ads CPC", "Organic post reach (median)", "Comment-to-impression ratio", "Connection acceptance rate"`,
+    'X (Twitter)': `"Median impressions per post", "Reply-to-impression ratio", "Follow rate from a viral post", "Hashtag dilution rate"`,
+    'Product Hunt': `"Median upvotes for #1 of day", "Maker comment response time", "Hunter network effect", "Notify-button conversion"`,
+    'Hacker News':  `"Show HN front-page rate", "Avg points to front-page", "Comment-to-upvote ratio", "Negative tone penalty"`,
+    'YouTube':      `"Avg CTR for the niche", "Subscriber/view ratio", "Median watch-time %", "Mid-roll ad RPM"`,
+    'TikTok':       `"Median impressions per post", "Follow-conversion %", "Watch-time benchmark", "Hashtag virality"`,
+    'Instagram':    `"Reach-to-follower %", "Reels vs feed engagement", "Story completion rate", "Saves-per-post benchmark"`,
+    'Discord':      `"Active-member %", "Self-promo channel rules", "Conversion from ambient lurkers", "Mod tolerance for tools"`,
+    'Slack':        `"Member-to-active ratio", "Self-promo channel rules", "DM response rate", "Mod tolerance for tools"`
+  };
+  const exampleLine = exampleKpis[platform] || `"Engagement rate", "Audience size", "Conversion benchmark", "Self-promo tolerance"`;
+
   const prompt = `
     Conduct a "Growth Engineer" level deep dive into: ${channelName} (${channelUrl}).
     App to launch: ${appDescription}
 
+    The channel is on the **${platform}** platform. ALL benchmarks and tactics in your answer MUST be scoped to ${platform} only — do not return KPIs from other platforms.
+
     I want HARD DATA and GROWTH HACKING SECRETS.
-    
-    1. **SaaS KPIs**: Estimate *Platform Specific* benchmarks. (e.g. "Avg CPC on LinkedIn", "Reddit Organic Viral Rate"). DO NOT use specific competitor names. Use market averages.
-    2. **Algorithm Secrets**: How do we hack visibility here? 
-    3. **Content Hooks**: Give me 3 headline structures that go viral here.
-    
-    Use Google Search to find current benchmarks (2024/2025).
+
+    1. **SaaS KPIs**: Estimate ${platform}-specific benchmarks. Example labels for ${platform}: ${exampleLine}. DO NOT use specific competitor names. Use market averages.
+    2. **Algorithm Secrets**: How do we hack visibility on ${platform} specifically?
+    3. **Content Hooks**: Give me 3 headline / post structures that go viral on ${platform}.
+
+    Use Google Search to find current ${platform} benchmarks (2024/2025).
+
+    Return ONLY a JSON object (no markdown fences, no prose) with these fields:
+    ${JSON.stringify({
+      summary: "string", rules: ["string"], audienceVibe: "string", successfulPostTypes: ["string"],
+      moderationStrictness: "Low|Medium|High|Brutal", verdict: "string",
+      saasKpis: [{ label: "string", value: "string", trend: "Up|Down|Stable", context: "string" }],
+      algorithmSecrets: [{ trigger: "string", tactic: "string", impact: "string" }],
+      contentHooks: ["string"]
+    }, null, 2)}
   `;
 
   try {
+    // Gemini rejects combining googleSearch with responseSchema/JSON mode.
+    // We keep the search tool (we need real benchmarks) and parse the JSON
+    // defensively from the response text.
     const response = await ai.models.generateContent({
       model,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: schema,
-        systemInstruction: "You are a specialized Growth Engineer. You provide market averages and platform benchmarks. You do NOT discuss specific competitors in this analysis."
+        systemInstruction: `You are a specialized Growth Engineer focused on the ${platform} platform. You provide ${platform}-specific market averages and benchmarks. Never mix KPIs from other platforms. You do NOT discuss specific competitors in this analysis.`
       }
     });
 
-    const text = response.text;
+    let text = (response.text || '').trim();
     if (!text) throw new Error("No analysis generated");
-    return JSON.parse(text) as ChannelAnalysis;
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    const first = text.indexOf('{');
+    const last = text.lastIndexOf('}');
+    if (first >= 0 && last > first) text = text.slice(first, last + 1);
+    try {
+      return JSON.parse(text) as ChannelAnalysis;
+    } catch (parseErr) {
+      console.error("Channel analysis parse error. Raw:", text);
+      throw new Error("Model returned non-JSON output");
+    }
   } catch (error) {
     console.error("Analysis Gen Error:", error);
     throw error;
@@ -716,7 +946,7 @@ export const generateChannelContent = async (
   description: string
 ): Promise<GeneratedContent> => {
   assertConfigured();
-  const model = "gemini-3-flash-preview";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.OBJECT,
@@ -766,7 +996,7 @@ export const generateChannelContent = async (
 export const findCompetitors = async (
   appDescription: string
 ): Promise<CompetitorData[]> => {
-  const model = "gemini-3-flash-preview";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.ARRAY,
@@ -819,7 +1049,7 @@ export const analyzeCompetitorStrategy = async (
   competitorName: string,
   competitorUrl: string
 ): Promise<CompetitorDeepDive> => {
-  const model = "gemini-3-flash-preview";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.OBJECT,
@@ -915,20 +1145,47 @@ export const analyzeCompetitorStrategy = async (
   `;
 
   try {
+    // IMPORTANT: Gemini rejects the combination of googleSearch + responseSchema
+    // (the panel was opening blank because the call threw and the catch in the
+    // view swallowed it). We keep the tool (we want real, searched data) and
+    // ask the model to emit raw JSON; we parse defensively below.
     const response = await ai.models.generateContent({
       model,
-      contents: prompt,
+      contents: prompt + `\n\nReturn ONLY a JSON object (no markdown fences, no prose) with these fields and shapes:\n${JSON.stringify({
+        summary: "string",
+        trafficSources: [{ name: "string", kpi: "string", sentiment: "Positive|Neutral|Negative", link: "string?" }],
+        first100UsersStrategy: [{ timeframe: "string", action: "string", result: "string", details: "string?" }],
+        communityBehaviors: [{ platform: "string", persona: "string", actionFrequency: "string", engagementMetrics: "string", tone: "string", keyTactic: "string" }],
+        videoMentions: [{ title: "string", channelName: "string", views: "string", url: "string?", type: "Review|Interview|Tutorial" }],
+        founderQuote: "string?",
+        techStack: ["string"],
+        pricingModel: "string?",
+        marketingHooks: ["string"],
+        weakness: "string"
+      }, null, 2)}`,
       config: {
         tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: schema,
         systemInstruction: "You are a forensic marketing analyst. You provide concrete, actionable intelligence. You verify all claims and links using Google Search. Do not fabricate urls."
       }
     });
 
-    const text = response.text;
+    let text = (response.text || '').trim();
     if (!text) throw new Error("No deep dive analysis generated");
-    return JSON.parse(text) as CompetitorDeepDive;
+    // Strip ```json fences and any leading prose before the JSON object.
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace > 0 || lastBrace < text.length - 1) {
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        text = text.slice(firstBrace, lastBrace + 1);
+      }
+    }
+    try {
+      return JSON.parse(text) as CompetitorDeepDive;
+    } catch (parseErr) {
+      console.error("Deep Dive Error: could not parse model JSON. Raw text:", text);
+      throw new Error("Model returned non-JSON output");
+    }
   } catch (error) {
     console.error("Deep Dive Error:", error);
     throw error;
@@ -940,7 +1197,7 @@ export const generateColdOutreach = async (
   prospectInfo: string,
   appDescription: string
 ): Promise<OutreachResponse> => {
-  const model = "gemini-3-flash-preview";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.OBJECT,
@@ -1005,7 +1262,7 @@ export const findChannelOpportunities = async (
   appDescription: string
 ): Promise<MarketOpportunity[]> => {
   assertConfigured();
-  const model = "gemini-3-flash-preview";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.ARRAY,
@@ -1112,7 +1369,7 @@ export const generateOpportunityReply = async (
   rules: string[]
 ): Promise<ReplyDraft> => {
   assertConfigured();
-  const model = "gemini-3-flash-preview";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.OBJECT,
@@ -1133,9 +1390,10 @@ export const generateOpportunityReply = async (
     My App: "${appDescription}"
     Channel Rules: ${rules.join('\n')}
 
-    Write a specific, high-value reply that adds value to the conversation.
-    - Do NOT be spammy.
-    - If appropriate, subtly mention the app as a solution, but prioritize being helpful.
+    Write a specific, high-value reply that adds to the conversation and reads like a genuine human peer.
+    - Add real value first: a concrete insight, a relevant experience, or a sharp, respectful question.
+    - Mentioning the app should be natural, not forced. If the thread is genuinely about a problem the app solves and naming it would actually help the reader, you may bring it up briefly and conversationally — never as an ad. If it doesn't fit naturally, just write a normal helpful reply with no mention of the app.
+    - Don't be spammy or copy-paste promotional. Avoid hard CTAs unless they'd feel completely natural from a real person.
     - Match the tone of the platform.
   `;
 
@@ -1162,7 +1420,7 @@ export const generateLeadDorks = async (
   targetAudience: string,
   platform: string
 ): Promise<SearchDork[]> => {
-  const model = "gemini-3-flash-preview";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.ARRAY,
@@ -1210,7 +1468,7 @@ export const generateLeadDorks = async (
 }
 // Restored Answerly & ICP Recon Functions
 export const generateICPReconQueries = async (campaign: ICPReconCampaign): Promise<ICPTrackingKeyword[]> => {
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
   const schema: Schema = {
     type: Type.ARRAY,
     items: {
@@ -1314,11 +1572,15 @@ Return a JSON array of 50 objects.
 
 export interface VoiceMix {
   authority: number;        // 0=humble student → 100=unquestionable expert
-  energy: number;           // 0=zen → 100=manic
-  vulnerability: number;    // 0=guarded → 100=bare soul
-  provocation: number;      // 0=consensus → 100=controversial
-  specificity: number;      // 0=vague poetry → 100=concrete numbers
-  intimacy: number;         // 0=corporate → 100=DM to a friend
+  energy: number;           // 0=zen → 100=electric
+  vulnerability: number;    // 0=guarded → 100=bare soul   (legacy, kept for backward compat)
+  provocation: number;      // 0=agreeable → 100=sharp
+  specificity: number;      // 0=poetic → 100=forensic
+  intimacy: number;         // 0=corporate → 100=DM to a friend  (legacy)
+  // New axes — visible in the panel polygon (matches the screenshot mock).
+  humor: number;            // 0=serious → 100=witty
+  warmth: number;           // 0=clinical → 100=hearth
+  optimism: number;         // 0=realist → 100=evangelist
   rhythm: 'staccato' | 'punchy' | 'flowing' | 'contemplative';
 }
 
@@ -1509,7 +1771,7 @@ export const suggestVoiceProfile = async (context: {
   styleInspiration?: string;
 }): Promise<VoiceProfileSuggestion> => {
   assertConfigured();
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
 
   const schema: Schema = {
     type: Type.OBJECT,
@@ -1523,9 +1785,12 @@ export const suggestVoiceProfile = async (context: {
           provocation: { type: Type.NUMBER },
           specificity: { type: Type.NUMBER },
           intimacy: { type: Type.NUMBER },
+          humor: { type: Type.NUMBER },
+          warmth: { type: Type.NUMBER },
+          optimism: { type: Type.NUMBER },
           rhythm: { type: Type.STRING, enum: ['staccato', 'punchy', 'flowing', 'contemplative'] }
         },
-        required: ['authority', 'energy', 'vulnerability', 'provocation', 'specificity', 'intimacy', 'rhythm']
+        required: ['authority', 'energy', 'vulnerability', 'provocation', 'specificity', 'intimacy', 'humor', 'warmth', 'optimism', 'rhythm']
       },
       hook: {
         type: Type.OBJECT,
@@ -1574,6 +1839,7 @@ Choose voice mix values (0-100 for each dimension), the best hook architecture, 
 THINK ABOUT:
 - Topic vulnerability vs hard data → adjust vulnerability/specificity
 - Audience expertise → adjust authority/in-group signaling
+- Tone fit: humor (serious 0 ↔ witty 100), warmth (clinical 0 ↔ hearth 100), optimism (gritty realist 0 ↔ evangelist 100). Match these to how the SAMPLE actually reads, not how you'd like it to read.
 - Format constraints (X tweet = high energy/staccato; LinkedIn long-form = contemplative)
 - The writer's contrarian view → enable bait-and-switch and forbidden specificity if strong
 - If they have receipts → enable concession move + status currency
@@ -1592,7 +1858,7 @@ Return JSON only.`;
 
 export const generateContentEnginePost = async (params: ContentEngineParams): Promise<ContentEngineDraft[]> => {
   assertConfigured();
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
 
   const variants = Math.max(1, Math.min(5, params.variants || 1));
   const platforms = params.targetPlatforms.length ? params.targetPlatforms : ['X'];
@@ -1701,7 +1967,7 @@ Return JSON only.`;
 };
 
 export const getPlatformInsights = async (platform: string): Promise<PlatformInsight> => {
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
   const schema: Schema = {
     type: Type.OBJECT,
     properties: {
@@ -1720,8 +1986,25 @@ export const getPlatformInsights = async (platform: string): Promise<PlatformIns
   return JSON.parse(response.text) as PlatformInsight;
 };
 
-export const generateSmartEngagementComment = async (postText: string, appDesc: string, title: string): Promise<SmartComment> => {
-  const model = "gemini-flash-latest";
+export const generateSmartEngagementComment = async (
+  postText: string,
+  appDesc: string,
+  title: string,
+  params?: {
+    tone?: string;
+    goal?: string;
+    platform?: string;
+    customInstruction?: string;
+    maxLength?: number;          // hard character budget from the Voice Studio comment spec
+    mode?: string;               // 'comment' | 'quote' | 'visibility'
+    // Optional voice profile — when supplied, the prompt also threads in the
+    // user's saved voice characteristics so generated comments match their
+    // saved-profile dial settings (matches what Voice Studio outputs).
+    voiceMix?: Partial<VoiceMix>;
+    perspective?: PerspectiveInjector;
+  }
+): Promise<SmartComment> => {
+  const model = MODEL_FLASH;
   const schema: Schema = {
     type: Type.OBJECT,
     properties: {
@@ -1739,11 +2022,142 @@ export const generateSmartEngagementComment = async (postText: string, appDesc: 
     },
     required: ["options"]
   };
+  const tone = (params?.tone || 'casual').toLowerCase();
+  const goal = (params?.goal || 'build_relationship').replace(/_/g, ' ');
+  const extra = params?.customInstruction ? ` Extra guidance: ${params.customInstruction}.` : '';
+  // ── TONE DIRECTIVE ──────────────────────────────────────────────────
+  // The user picks this explicitly in the engine parameters; it is NOT a
+  // soft hint. Translate it into a concrete, strongly-worded directive and
+  // surface it at the TOP of the prompt — otherwise a single "Tone: funny"
+  // line buried at the end gets steamrolled by the voice-dial block below
+  // (e.g. a low humor dial emitting "earnest and straight-faced" directly
+  // contradicts "funny"). This is the user's #1 reported bug: they chose
+  // "funny" and got comments that weren't funny.
+  const toneDirectiveMap: Record<string, string> = {
+    funny: 'TONE — FUNNY (non-negotiable): Be genuinely, noticeably funny. Use real wit — a clever observation, dry punchline, playful exaggeration, an unexpected analogy, or self-aware humor — anchored to a SPECIFIC detail in their post. A reader should actually smile or laugh. A flat, earnest, or merely "nice" reply has FAILED this requirement. Do not announce that you are joking; just be funny. Avoid corny puns and forced jokes — land it like a sharp, witty person would.',
+    casual: 'TONE — CASUAL: Write like you are texting a smart friend. Relaxed and conversational, contractions, plain words, zero corporate stiffness. Warm and easy, never formal or salesy.',
+    formal: 'TONE — FORMAL: Polished, professional, and precise. Complete sentences, no slang, no emojis. Measured and credible — the way a respected expert writes in a professional setting.',
+  };
+  const toneDirective = toneDirectiveMap[tone]
+    || `TONE — ${tone.toUpperCase()}: Write the reply unmistakably in a ${tone} tone; it must be obvious from the very first sentence.`;
+  // When the user explicitly asked for "funny", a conflicting LOW humor dial
+  // from their saved voice profile would sabotage it. The explicit tone wins:
+  // we force the humor dial high so the voice block reinforces (not fights)
+  // the tone choice.
+  const toneForcesHumor = tone === 'funny';
+  // Caller may thread these in from the Voice Studio comment spec (spread onto
+  // params). They're not in the static type, so read them defensively.
+  const maxLen = typeof (params as any)?.maxLength === 'number' ? (params as any).maxLength : null;
+  const mode = String((params as any)?.mode || 'comment').toLowerCase();
+  // Length budget = platform ceiling, tightened by the user's configured cap.
+  const p = String(params?.platform || '').toLowerCase();
+  const isX = p.includes('x') || p.includes('twitter');
+  const platformCeil = isX ? 280 : p.includes('linkedin') ? 400 : p.includes('reddit') ? 600 : 400;
+  const budget = maxLen ? Math.min(maxLen, platformCeil) : platformCeil;
+  const platformGuide =
+    isX
+      ? `This is X (Twitter): keep the reply tight and punchy, under ${budget} characters, no hashtags.`
+    : p.includes('linkedin')
+      ? `This is LinkedIn: a professional, value-adding reply (under ${budget} characters), no hashtags.`
+    : p.includes('reddit')
+      ? `This is Reddit: a helpful, authentic, conversational reply (under ${budget} characters); never salesy or it will be downvoted.`
+      : `Keep the reply concise and conversational (under ${budget} characters).`;
+  const modeGuide = mode === 'quote'
+    ? '\nThis is a QUOTE post: you are resharing their post WITH your own take on top. Lead with a sharp, standalone opinion that frames why their post matters — it must stand on its own and make the reader want to read the quoted post.'
+    : '';
+  // Date anchor — gemini-flash's training data is stale, so left unchecked it
+  // drops "in 2024" / "as of 2025" / "this year" references that read as
+  // out-of-date to anyone reading the reply now. Anchor today's date and ban
+  // dated claims unless they appear in the post itself.
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  // ── VOICE BLOCK ─────────────────────────────────────────────────────
+  // Translate the Voice Studio dials into CONCRETE writing directives (the same
+  // dial→directive engine the Content Engine uses) so replies sound like the
+  // user's configured voice instead of generic "nice reply" filler. Only built
+  // when a voice profile is supplied; default callers keep the lighter prompt.
+  let voiceBlock = '';
+  if (params?.voiceMix || params?.perspective) {
+    const vm: any = params.voiceMix || {};
+    const dir: string[] = [];
+    const add = (key: string, low: string, high: string) => {
+      if (typeof vm[key] === 'number') {
+        const label = key.charAt(0).toUpperCase() + key.slice(1);
+        dir.push('- ' + sliderToDirective(label, vm[key], low, high));
+      }
+    };
+    add('authority',     'a humble, curious peer',        'an unquestionable expert');
+    add('energy',        'calm and measured',             'electric and urgent');
+    add('provocation',   'agreeable and safe',            'sharp, contrarian, willing to disagree');
+    add('specificity',   'big-picture and abstract',      'forensic — concrete details, names, numbers');
+    // If the user explicitly chose the "funny" tone, never let a low humor dial
+    // contradict it — force the dial directive to the witty/playful extreme so
+    // the voice block reinforces the tone instead of cancelling it out.
+    if (toneForcesHumor) {
+      dir.push('- ' + sliderToDirective('Humor', 100, 'earnest and straight-faced', 'witty and playful'));
+    } else {
+      add('humor',       'earnest and straight-faced',    'witty and playful');
+    }
+    add('warmth',        'clinical and detached',         'warm and personal');
+    add('optimism',      'a grounded realist',            'an energising evangelist');
+    add('vulnerability', 'guarded',                       'openly self-revealing');
+    add('intimacy',      'a professional register',       'talking to a close friend');
+    const rhythmDesc: Record<string, string> = {
+      staccato: 'Short, punchy sentences. Fragments are fine.',
+      punchy: 'Tight sentences with forward momentum.',
+      flowing: 'Smooth, connected, easy-reading sentences.',
+      contemplative: 'Slower, reflective phrasing.'
+    };
+    if (vm.rhythm && rhythmDesc[vm.rhythm]) dir.push(`- Rhythm: ${rhythmDesc[vm.rhythm]}`);
+
+    const pp: any = params.perspective || {};
+    const perspLines = [
+      pp.uniqueAngle && `Write from this lived vantage point: ${pp.uniqueAngle}.`,
+      pp.contrarian && `You believe most people get this wrong: ${pp.contrarian}. Let that conviction show when it's relevant.`,
+      pp.receipts && `Credibility you can draw on — weave in a concrete detail ONLY if it fits naturally, never dump the whole list: ${pp.receipts}.`,
+      pp.forbiddenTakes && `NEVER say or imply: ${pp.forbiddenTakes}.`
+    ].filter(Boolean);
+
+    voiceBlock =
+      `\nWRITE IN THIS EXACT VOICE — it must be unmistakable in every sentence:\n${dir.join('\n')}` +
+      (perspLines.length ? `\n\nPERSPECTIVE / POINT OF VIEW:\n- ${perspLines.join('\n- ')}` : '') +
+      `\n\nThe reply must read like THIS specific person — not a generic, interchangeable commenter. Match these dials faithfully; they are the whole point.`;
+  }
+
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Generate 3 smart, non-spammy engagement comments for lead @${title}. Their post: "${postText}". My product: "${appDesc}". Under 200 chars each, conversational.`,
-      config: { responseMimeType: "application/json", responseSchema: schema }
+      contents: `Write 3 genuine, human engagement replies to @${title}'s post.
+
+Their post: "${postText}"
+
+${toneDirective}
+
+${platformGuide}${modeGuide}
+
+The 3 options must be GENUINELY DIFFERENT takes — not three rewordings of the same point. Give each a distinct angle, e.g.:
+  • Option 1 — a specific INSIGHT or build on a point they made.
+  • Option 2 — a concrete EXPERIENCE / example, or a sharp QUESTION that moves the thread forward.
+  • Option 3 — a respectful COUNTERPOINT or a non-obvious angle most commenters would miss.
+Each must quote or clearly reference a SPECIFIC detail from THIS post (a phrase, claim, or number they used) so it could only be posted under this exact post — never a template that fits any post. Lead with the substance, not a warm-up.
+
+Write like a real, sharp person joining the conversation — add real value. Be natural and conversational. Hard bans: generic praise ("Great post!", "So true!", "This is gold", "Couldn't agree more"), empty agreement, restating their post back to them, hashtags, and emojis (unless the voice clearly uses them). Do NOT invent facts, fake statistics, or experiences you weren't given — stay truthful; if you cite a number or result, it must come from the perspective/receipts below or not appear at all.
+
+Today's date is ${today}. CRITICAL: do NOT reference specific years, dates, "this year", "recently", "the latest", current events, trends, tools, version numbers, or "as of 20XX" claims UNLESS those exact details appear in their post — your knowledge is not current and any year/recency claim you add from memory will be outdated and wrong (e.g. citing 2024 or 2025 as "now"). Keep the reply timeless: react to what they actually wrote, not to dated facts you think you know.
+
+On mentioning the writer's product: let it be natural, not forced.
+- If the post is about a problem this product genuinely solves and bringing it up would actually help the reader, you may mention it briefly and conversationally — the way a helpful peer would, never as an ad.
+- If it doesn't fit naturally, just write a normal, valuable reply and don't mention any product at all. Most replies should be plain, helpful comments with no pitch.
+- Never sound salesy or copy-paste promotional. No hard call-to-action unless it would feel completely natural coming from a real person.
+
+Who's replying (their background/product, for context): ${appDesc}.
+Relationship goal: ${goal}.${extra}
+${voiceBlock}
+
+REMINDER — the ${tone.toUpperCase()} tone defined at the top is the single most important constraint and applies to ALL 3 options. Re-read it and make sure every option clearly satisfies it before returning.
+
+For each option, "why" explains in one short phrase why this reply lands AND which angle it takes. Return JSON matching the schema.`,
+      config: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.95 }
     });
     return JSON.parse(response.text) as SmartComment;
   } catch {
@@ -1752,7 +2166,7 @@ export const generateSmartEngagementComment = async (postText: string, appDesc: 
 };
 
 export const evaluateHNOpportunities = async (items: any[]): Promise<ForumOpportunity[]> => {
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
   const response = await ai.models.generateContent({
     model,
     contents: `Evaluate these Hacker News items for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
@@ -1762,7 +2176,7 @@ export const evaluateHNOpportunities = async (items: any[]): Promise<ForumOpport
 };
 
 export const evaluatePHOpportunities = async (items: any[]): Promise<ForumOpportunity[]> => {
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
   const response = await ai.models.generateContent({
     model,
     contents: `Evaluate these Product Hunt items for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
@@ -1772,7 +2186,7 @@ export const evaluatePHOpportunities = async (items: any[]): Promise<ForumOpport
 };
 
 export const evaluateRedditOpportunities = async (items: any[]): Promise<ForumOpportunity[]> => {
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
   const response = await ai.models.generateContent({
     model,
     contents: `Evaluate these Reddit posts for SaaS founder relevance, return JSON array: ${JSON.stringify(items.slice(0, 10))}`,
@@ -1783,7 +2197,7 @@ export const evaluateRedditOpportunities = async (items: any[]): Promise<ForumOp
 
 export const generateBuyerPersonas = async (appName: string, appDesc: string, category: string): Promise<BuyerPersonaAnalysis> => {
   assertConfigured();
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
 
   // Reusable sub-schemas
   const radarSchema: Schema = {
@@ -2006,7 +2420,7 @@ export const chatAsPersona = async (
   productContext: { appName: string; appDesc: string }
 ): Promise<string> => {
   assertConfigured();
-  const model = "gemini-flash-latest";
+  const model = MODEL_FLASH;
 
   const radar = persona.personalityRadar
     ? `\nPersonality (0-100):
@@ -2064,9 +2478,6 @@ export const parseReconBrief = async (brief: string): Promise<{
   platforms: string[];
 }> => {
   try {
-    // V5: Upgraded to latest flash for faster synthesis
-    const modelName = "gemini-3-flash";
-
     const schema: Schema = {
       type: Type.OBJECT,
       properties: {
@@ -2079,27 +2490,24 @@ export const parseReconBrief = async (brief: string): Promise<{
       required: ["name", "roles", "painPoints", "negativeKeywords", "platforms"]
     };
 
-    const generativeModel = ai.getGenerativeModel({ model: modelName });
-    const response = await generativeModel.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [{
-          text: `Act as a High-Precision ICP Recon DNA Parser. 
-                    Given the following user brief, extract a structured campaign identity.
-                    
-                    ### CRITICAL: THE BUYER vs SELLER POLARITY
-                    Identify "SELLERS" (specialists, agencies, consultants, experts) and add them to negativeKeywords.
-                    
-                    Brief: "${brief}"`
-        }]
-      }],
-      generationConfig: {
+    // @google/genai uses ai.models.generateContent (not legacy
+    // ai.getGenerativeModel which threw "is not a function" here).
+    const response = await ai.models.generateContent({
+      model: MODEL_FLASH,
+      contents: `Act as a High-Precision ICP Recon DNA Parser.
+Given the following user brief, extract a structured campaign identity.
+
+### CRITICAL: THE BUYER vs SELLER POLARITY
+Identify "SELLERS" (specialists, agencies, consultants, experts) and add them to negativeKeywords.
+
+Brief: "${brief}"`,
+      config: {
         responseMimeType: "application/json",
         responseSchema: schema
       }
     });
 
-    const result = JSON.parse(response.response.text());
+    const result = JSON.parse((response.text || '').trim() || '{}');
     return {
       name: result.name || brief.substring(0, 20),
       roles: (result.roles || []).filter((r: string) => r.length > 2),
@@ -2125,27 +2533,23 @@ export const parseReconBrief = async (brief: string): Promise<{
 
 export const filterProfilesWithAI = async (prospects: any[], campaign: any): Promise<{ validProfiles: any[] }> => {
   try {
-    const modelName = "gemini-3-flash";
-    const generativeModel = ai.getGenerativeModel({ model: modelName });
-    const response = await generativeModel.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [{
-          text: `You are a lead qualification AI. Given these prospects and campaign context, score each prospect's relevance.
+    assertConfigured();
+    const prompt = `You are a lead qualification AI. Given these prospects and campaign context, score each prospect's relevance.
 
 Campaign: ${JSON.stringify({ name: campaign?.name, roles: campaign?.roles, painPoints: campaign?.painPoints })}
 
 Prospects (handle, bio, url):
-${prospects.slice(0, 30).map((p: any, i: number) => `${i+1}. @${p.handle || 'unknown'} | ${(p.bio || '').substring(0, 100)} | ${p.url || ''}`).join('\n')}
+${prospects.slice(0, 30).map((p: any, i: number) => `${i + 1}. @${p.handle || 'unknown'} | ${(p.bio || '').substring(0, 100)} | ${p.url || ''}`).join('\n')}
 
-Return JSON: { "validProfiles": [{ "handle": string, "url": string, "isTarget": boolean, "relevanceScore": number (0-100), "reasoning": string }] }`
-        }]
-      }],
-      generationConfig: { responseMimeType: "application/json" }
+Return JSON: { "validProfiles": [{ "handle": string, "url": string, "isTarget": boolean, "relevanceScore": number (0-100), "reasoning": string }] }`;
+    const response = await ai.models.generateContent({
+      model: MODEL_FLASH,
+      contents: prompt,
+      config: { responseMimeType: 'application/json' }
     });
-    return JSON.parse(response.response.text());
+    return JSON.parse(response.text || '{"validProfiles":[]}');
   } catch (e) {
-    console.error("[Gemini] filterProfilesWithAI failed:", e);
+    console.error('[Gemini] filterProfilesWithAI failed:', e);
     return {
       validProfiles: prospects.map((p: any) => ({
         handle: p.handle,
@@ -2158,3 +2562,217 @@ Return JSON: { "validProfiles": [{ "handle": string, "url": string, "isTarget": 
   }
 };
 
+// =====================================================================
+// FEED WATCHER — score a batch of feed posts against the user's prompt.
+// =====================================================================
+// Used by the Account Finder → Feed Watcher loop. The extension buffers raw
+// scraped posts from the user's home feeds (X / LinkedIn / Reddit); this
+// function takes a chunk + the user's free-text "what I'm looking for" prompt
+// and returns a 0–100 relevancy score with a one-sentence reason for each.
+// Returned `uuid` mirrors the input so the caller can reconcile by id.
+export interface FeedRelevancyResult {
+  uuid: string;
+  score: number;       // 0..100
+  reason: string;      // one short sentence
+}
+
+export const scoreFeedPostRelevancy = async (
+  prompt: string,
+  posts: Array<{ uuid: string; platform: string; text: string; author?: { displayName?: string; handle?: string; bylineSubtitle?: string } }>
+): Promise<FeedRelevancyResult[]> => {
+  if (!posts || posts.length === 0) return [];
+  assertConfigured();
+  const model = MODEL_FLASH;
+
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      results: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            uuid: { type: Type.STRING },
+            score: { type: Type.NUMBER },
+            reason: { type: Type.STRING }
+          },
+          required: ["uuid", "score", "reason"]
+        }
+      }
+    },
+    required: ["results"]
+  };
+
+  // Pack a compact payload (text capped) — keeps token cost predictable for
+  // batches up to ~25 posts per call.
+  const payload = posts.slice(0, 25).map(p => ({
+    uuid: p.uuid,
+    platform: p.platform,
+    author: [p.author?.displayName, p.author?.handle && '@' + p.author.handle, p.author?.bylineSubtitle]
+      .filter(Boolean).join(' · ').slice(0, 200),
+    text: (p.text || '').slice(0, 800)
+  }));
+
+  const instructions = `You are an opportunity-spotter. The user is watching their social feeds for posts that match THIS BRIEF:
+
+"${(prompt || '').trim() || '(no brief given — score everything 0)'}"
+
+For each post below, return:
+- score: 0..100 reflecting how well it matches the brief (0 = irrelevant noise, 100 = perfect match the user MUST see).
+- reason: ONE short sentence explaining the score.
+
+Return the EXACT same uuids you received. Do not invent posts. Be strict — only > 60 should mean a genuine opportunity.
+
+POSTS:
+${JSON.stringify(payload)}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: instructions,
+      config: { responseMimeType: "application/json", responseSchema: schema }
+    });
+    const parsed = JSON.parse(response.text);
+    const results: FeedRelevancyResult[] = Array.isArray(parsed?.results) ? parsed.results : [];
+    // Defensive: clamp scores; backfill any missing uuids at score 0 so the
+    // caller can mark them processed and avoid an infinite re-score loop.
+    const byUuid = new Map(results.map(r => [r.uuid, r]));
+    return posts.map(p => {
+      const r = byUuid.get(p.uuid);
+      if (!r) return { uuid: p.uuid, score: 0, reason: 'No AI response for this post' };
+      const score = Math.max(0, Math.min(100, Math.round(Number(r.score) || 0)));
+      return { uuid: p.uuid, score, reason: String(r.reason || '').slice(0, 280) };
+    });
+  } catch (e) {
+    // On API failure, return all zeros with a reason so we don't promote noise.
+    return posts.map(p => ({ uuid: p.uuid, score: 0, reason: `Scorer failed: ${(e as Error)?.message?.slice(0, 120) || 'unknown error'}` }));
+  }
+};
+
+// =====================================================================
+// AI ACCOUNT FINDER
+// =====================================================================
+// Replaces the old in-browser extension search. Asks the model to suggest
+// real accounts to follow on the chosen platform given the user's niche
+// + engagement parameters. Output is shaped to fit DiscoveredAccount so
+// the existing ResultsPanel renders it without changes.
+
+export interface AIFinderParams {
+  platform: 'X' | 'LinkedIn' | 'Reddit';
+  niche: string;                 // free-text: "AI agents for SaaS founders"
+  keywords?: string[];           // chip list
+  audienceSize?: 'any' | 'small' | 'medium' | 'large';
+  engagementBar?: 'any' | 'some' | 'real' | 'viral';
+  country?: string;              // free-text country / region. Omit for worldwide.
+  productName?: string;
+  productPitch?: string;
+  targetAudience?: string;
+  limit?: number;                // soft cap on returned accounts (default 15)
+}
+
+export interface AISuggestedAccount {
+  handle: string;                // bare handle, no @ prefix
+  displayName: string;
+  url: string;                   // canonical profile / subreddit URL
+  bio: string;
+  followers: number;             // best-guess from public data
+  verified: boolean;
+  engagementRate?: number;       // 0..100 approximate
+  matchedSignals: string[];      // why this account fits
+  topTopics: string[];
+  whyHighEngagement: string;     // single-sentence rationale
+}
+
+export const findAccountsWithAI = async (params: AIFinderParams): Promise<AISuggestedAccount[]> => {
+  assertConfigured();
+  const model = MODEL_FLASH;
+
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      accounts: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            handle: { type: Type.STRING, description: "Bare handle — no @, no URL. For Reddit, use the subreddit name (no r/)." },
+            displayName: { type: Type.STRING },
+            url: { type: Type.STRING, description: "Canonical profile URL. X: https://x.com/<handle>. LinkedIn: https://linkedin.com/in/<slug>. Reddit: https://reddit.com/r/<name>/." },
+            bio: { type: Type.STRING, description: "One-sentence bio summarizing who they are." },
+            followers: { type: Type.INTEGER, description: "Best-guess follower count (or member count for subreddits). Round numbers OK." },
+            verified: { type: Type.BOOLEAN },
+            engagementRate: { type: Type.NUMBER, description: "Approximate engagement rate as percent 0..100." },
+            matchedSignals: { type: Type.ARRAY, items: { type: Type.STRING }, description: "2-4 reasons this account matches the user's niche." },
+            topTopics: { type: Type.ARRAY, items: { type: Type.STRING }, description: "2-5 recurring topics they post about." },
+            whyHighEngagement: { type: Type.STRING, description: "One short sentence on why this account drives engagement." }
+          },
+          required: ["handle", "displayName", "url", "bio", "followers", "verified", "matchedSignals", "topTopics", "whyHighEngagement"]
+        }
+      }
+    },
+    required: ["accounts"]
+  };
+
+  const sizeHint = {
+    any: 'any size',
+    small: 'small accounts under ~50k followers — approachable, high reply rate',
+    medium: 'mid-size accounts ~50k–1M followers — solid reach, still engageable',
+    large: 'large accounts over 1M followers — massive reach but harder to engage'
+  }[params.audienceSize || 'any'];
+
+  const engagementHint = {
+    any: 'engagement is not a hard filter',
+    some: 'posts must get at least modest engagement (~10+ likes / reactions / upvotes per post)',
+    real: 'posts must show real signal (~50+ likes / reactions / upvotes per post)',
+    viral: 'only accounts whose posts regularly go viral (~500+ engagement)'
+  }[params.engagementBar || 'real'];
+
+  const limit = Math.min(Math.max(params.limit || 15, 5), 30);
+
+  const countryClause = params.country
+    ? `\n- Only suggest accounts primarily based in ${params.country}, or whose audience is concentrated there. Filter out creators based outside this region.`
+    : '';
+
+  const prompt = `You are an expert social-graph researcher. Suggest ${limit} real accounts on ${params.platform} that the user should FOLLOW to engage with high-engagement content in their niche.
+
+USER NICHE: ${params.niche || '(unspecified)'}
+KEYWORDS: ${(params.keywords || []).join(', ') || '(none)'}
+AUDIENCE SIZE PREFERENCE: ${sizeHint}
+ENGAGEMENT BAR: ${engagementHint}
+${params.country ? `COUNTRY / REGION: accounts must be based in ${params.country}` : ''}
+${params.productName ? `USER'S PRODUCT: ${params.productName} — ${params.productPitch || ''}` : ''}
+${params.targetAudience ? `USER'S TARGET AUDIENCE: ${params.targetAudience}` : ''}
+
+Rules:
+- Only suggest accounts that ACTUALLY EXIST. No invented handles.
+- Prioritize accounts where engagement-per-post is HIGH for their follower size.
+- For ${params.platform === 'Reddit' ? 'Reddit, suggest active subreddits — not individual users' : 'individual creators'}.
+- Diversify: don’t just suggest the 5 most famous names — include mid-tier creators whose audience is dense and active.
+- Each \`whyHighEngagement\` must be specific (e.g. "posts contrarian takes on B2B SaaS pricing — replies average 80+").${countryClause}
+- Return ONLY the JSON object.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+        temperature: 0.7,
+        systemInstruction: "You are a social-graph researcher. You suggest only real, verifiable accounts. You never invent handles."
+      }
+    });
+    const parsed = JSON.parse(response.text || '{}');
+    const list: AISuggestedAccount[] = Array.isArray(parsed?.accounts) ? parsed.accounts : [];
+    return list.map(a => ({
+      ...a,
+      followers: Math.max(0, Math.round(Number(a.followers) || 0)),
+      engagementRate: typeof a.engagementRate === 'number' ? Math.max(0, Math.min(100, a.engagementRate)) : undefined,
+      matchedSignals: Array.isArray(a.matchedSignals) ? a.matchedSignals : [],
+      topTopics: Array.isArray(a.topTopics) ? a.topTopics : []
+    }));
+  } catch (e) {
+    console.error("AI account finder error:", e);
+    throw e;
+  }
+};

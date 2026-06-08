@@ -12,8 +12,10 @@ import {
   DiscoveryPlatform, DiscoveryMode, AuthorityLevel, DiscoveryFilters,
   DiscoveredAccount, MissionLog, StealthState, MissionProgress,
   DiscoveryMission, MissionStatus, AccountTier,
-  DiscoveryCampaign
+  DiscoveryCampaign, EngagementFloor, PostRecencyDays
 } from '../types';
+import { useProject } from '../contexts/ProjectContext';
+import { findAccountsWithAI, AISuggestedAccount, isGeminiConfigured } from '../services/geminiService';
 
 const STORAGE_KEY_MISSION = 'discovery_mission_active';
 const STORAGE_KEY_FILTERS = 'discovery_filters_draft';
@@ -26,18 +28,33 @@ const PLATFORMS: { id: DiscoveryPlatform; label: string; icon: React.ReactNode; 
 ];
 
 const AUTHORITY_TIERS: { id: AuthorityLevel; label: string; range: string; description: string }[] = [
-  { id: 'nano', label: 'Small', range: '< 5K', description: 'Loyal followers, easy to reach' },
-  { id: 'micro', label: 'Growing', range: '5K – 50K', description: 'Active, trusted in their space' },
-  { id: 'mid', label: 'Mid-size', range: '50K – 250K', description: 'Strong reach, still approachable' },
-  { id: 'macro', label: 'Large', range: '250K – 1M', description: 'Wide audience, well-known' },
-  { id: 'mega', label: 'Top', range: '1M+', description: 'Massive reach, hard to engage' },
-  { id: 'all', label: 'Any size', range: 'No limit', description: 'Show every account' }
+  { id: 'all',  label: 'Any size',  range: 'No limit',  description: 'Show every account' },
+  { id: 'nano', label: 'Small',     range: '< 50K',     description: 'Loyal followers, easy to reach' },
+  { id: 'mid',  label: 'Medium',    range: '50K – 1M',  description: 'Solid reach, still approachable' },
+  { id: 'mega', label: 'Large',     range: '> 1M',      description: 'Massive reach, hard to engage' }
+];
+
+// Engagement preset → human-readable per-platform translation. The actual
+// numeric thresholds live in the engine (ENGAGEMENT_THRESHOLDS); these
+// strings exist only so the user can SEE what each preset means.
+const ENGAGEMENT_PRESETS: { id: EngagementFloor; label: string; tagline: string; helper: string }[] = [
+  { id: 'any',   label: 'Any post',       tagline: 'No engagement filter',  helper: 'Surface every author who mentioned your keywords. Maximum breadth, lowest signal.' },
+  { id: 'some',  label: 'Some traction',  tagline: '~10+ likes per post',    helper: 'Filters out total dead posts. Use when your niche is small.' },
+  { id: 'real',  label: 'Real signal',    tagline: '~50+ likes per post',    helper: 'Recommended. Authors whose content is actually engaged with.' },
+  { id: 'viral', label: 'Viral only',     tagline: '~500+ likes per post',   helper: 'Only top creators. Use sparingly — most niches don’t have many.' }
+];
+
+const RECENCY_PRESETS: { id: PostRecencyDays; label: string }[] = [
+  { id: 7,    label: 'Last 7 days' },
+  { id: 30,   label: 'Last 30 days' },
+  { id: 90,   label: 'Last 90 days' },
+  { id: null, label: 'Any time' }
 ];
 
 const MODE_CONFIG: Record<DiscoveryMode, { label: string; description: string; icon: React.ReactNode; budget: string; color: string }> = {
-  surgical: { label: 'Quick', description: 'Few accounts, careful and thorough', icon: <Crosshair size={20} />, budget: '~10-20 accounts', color: 'emerald' },
-  volume: { label: 'Wide', description: 'More accounts, faster scan', icon: <Radar size={20} />, budget: '~50-100 accounts', color: 'blue' },
-  deep: { label: 'Deep', description: 'All platforms, full profile details', icon: <Brain size={20} />, budget: '~25-50 accounts', color: 'purple' }
+  surgical: { label: 'Quick',  description: 'Pure feed scrape, engagement floor only', icon: <Crosshair size={20} />, budget: '~10-20 accounts', color: 'emerald' },
+  volume:   { label: 'Wide',   description: 'More queries + deeper scroll',             icon: <Radar size={20} />,     budget: '~50-100 accounts', color: 'blue' },
+  deep:     { label: 'Deep',   description: 'Seed expand: click into top posts, scrape reactors/repliers', icon: <Brain size={20} />, budget: '~25-50 high-confidence', color: 'purple' }
 };
 
 const DEFAULT_FILTERS: DiscoveryFilters = {
@@ -45,242 +62,243 @@ const DEFAULT_FILTERS: DiscoveryFilters = {
   keywords: [],
   hashtags: [],
   excludeKeywords: [],
-  authorityLevel: 'micro',
+  // Engagement bar — these are the new headline filters.
+  engagementFloor: 'real',
+  postRecencyDays: 30,
+  // Audience refinement (demoted) — default to "any" so engagement leads.
+  authorityLevel: 'all',
+  seeds: {},
+  // Feed watcher moved to its own top-level section; intentionally not seeded here.
   verifiedOnly: false,
-  excludeAlreadyTracked: true,
-  postingFrequency: 'any'
+  excludeAlreadyTracked: true
 };
 
+// Adapter for missions/filters persisted under the pre-engagement-rework
+// shape. Fills in new fields with sane defaults so old localStorage payloads
+// keep loading. Drops postingFrequency which no longer has UI.
+function migrateFilters(raw: any): DiscoveryFilters {
+  const merged: DiscoveryFilters = { ...DEFAULT_FILTERS, ...(raw || {}) };
+  if (!merged.seeds || typeof merged.seeds !== 'object') merged.seeds = {};
+  if (typeof merged.engagementFloor !== 'string') merged.engagementFloor = DEFAULT_FILTERS.engagementFloor;
+  if (merged.postRecencyDays === undefined) merged.postRecencyDays = DEFAULT_FILTERS.postRecencyDays;
+  // Old default was 'micro'; if user kept it, treat as 'all' (engagement leads now).
+  if (!AUTHORITY_TIERS.some(t => t.id === merged.authorityLevel)) {
+    merged.authorityLevel = 'all';
+  }
+  // Feed watcher field is owned by FeedWatcherView now — left untouched here.
+  return merged;
+}
+
+// =====================================================================
+// AI-POWERED ACCOUNT FINDER
+// =====================================================================
+// The old extension-driven mission/console search has been retired in favour
+// of an AI account finder: user picks platform + niche + engagement
+// parameters; we ask the model for accounts to follow and stream them into
+// the existing results panel. Tracking, manual-add and the polling settings
+// all still work — only the discovery step changed.
+
+type AudienceSize = 'any' | 'small' | 'medium' | 'large';
+
+const AUDIENCE_PRESETS: { id: AudienceSize; label: string; helper: string }[] = [
+  { id: 'any',    label: 'Any size',  helper: 'No follower-count filter' },
+  { id: 'small',  label: 'Small',     helper: 'Under ~50K — high reply rate' },
+  { id: 'medium', label: 'Medium',    helper: '~50K–1M — solid reach' },
+  { id: 'large',  label: 'Large',     helper: 'Over 1M — broad influence' }
+];
+
+const AI_ENGAGEMENT_PRESETS: { id: 'any' | 'some' | 'real' | 'viral'; label: string; helper: string }[] = [
+  { id: 'any',   label: 'Any',         helper: 'No engagement filter' },
+  { id: 'some',  label: 'Some',        helper: '~10+ per post' },
+  { id: 'real',  label: 'Real signal', helper: '~50+ per post' },
+  { id: 'viral', label: 'Viral',       helper: '~500+ per post' }
+];
+
+// Curated country list for the geo filter. "Worldwide" disables the filter.
+// Kept short on purpose — users with a more specific market can type into the
+// free-text field that follows. Order: anglosphere first, then EU, then APAC.
+const COUNTRY_OPTIONS: { id: string; label: string }[] = [
+  { id: 'any',          label: 'Worldwide' },
+  { id: 'United States', label: 'United States' },
+  { id: 'United Kingdom', label: 'United Kingdom' },
+  { id: 'Canada',       label: 'Canada' },
+  { id: 'Australia',    label: 'Australia' },
+  { id: 'Ireland',      label: 'Ireland' },
+  { id: 'Germany',      label: 'Germany' },
+  { id: 'France',       label: 'France' },
+  { id: 'Netherlands',  label: 'Netherlands' },
+  { id: 'Spain',        label: 'Spain' },
+  { id: 'Italy',        label: 'Italy' },
+  { id: 'Sweden',       label: 'Sweden' },
+  { id: 'Switzerland',  label: 'Switzerland' },
+  { id: 'Brazil',       label: 'Brazil' },
+  { id: 'Mexico',       label: 'Mexico' },
+  { id: 'India',        label: 'India' },
+  { id: 'Singapore',    label: 'Singapore' },
+  { id: 'UAE',          label: 'United Arab Emirates' },
+  { id: 'Japan',        label: 'Japan' },
+  { id: 'custom',       label: 'Other — type below' }
+];
+
+// Influence is a composite signal of real audience pull. It combines how much
+// engagement each post actually gets (heaviest weight), how well the account
+// matches the user's niche, and a smaller authority/reach component. Higher =
+// more impact on you when they engage with your content.
+function computeInfluence(a: DiscoveredAccount): number {
+  // Engagement rate is a percent. 4% maps to 100 (anything above is rare/excellent).
+  const erComponent = Math.min(100, Math.max(0, (a.engagementRate ?? 0) * 25));
+  const niche = Math.max(0, Math.min(100, a.nicheMatch || 0));
+  const authority = Math.max(0, Math.min(100, a.authorityScore || 0));
+  return Math.max(0, Math.min(100, Math.round(erComponent * 0.5 + niche * 0.3 + authority * 0.2)));
+}
+
+function influenceLabel(score: number): { label: string; tone: string } {
+  if (score >= 80) return { label: 'Heavyweight', tone: 'text-rose-600' };
+  if (score >= 60) return { label: 'Strong',      tone: 'text-orange-600' };
+  if (score >= 40) return { label: 'Solid',       tone: 'text-amber-600' };
+  return { label: 'Light', tone: 'text-gray-500' };
+}
+
+// Tier from final score 0..100.
+function scoreToTier(score: number): AccountTier {
+  if (score >= 85) return 'S';
+  if (score >= 70) return 'A';
+  if (score >= 55) return 'B';
+  return 'C';
+}
+
+function aiToDiscovered(a: AISuggestedAccount, platform: DiscoveryPlatform): DiscoveredAccount {
+  const followerScore = Math.min(100, Math.round(Math.log10(Math.max(1, a.followers || 1)) * 20));
+  const engagementScore = Math.round((a.engagementRate || 2) * 8);
+  const finalScore = Math.max(40, Math.min(99, Math.round(followerScore * 0.45 + engagementScore * 0.55 + 20)));
+  return {
+    id: `ai_${platform}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    platform,
+    handle: a.handle,
+    url: a.url,
+    displayName: a.displayName || a.handle,
+    bio: a.bio,
+    followers: a.followers || 0,
+    verified: !!a.verified,
+    avgEngagement: a.engagementRate ? Math.round((a.followers || 0) * (a.engagementRate / 100)) : undefined,
+    engagementRate: a.engagementRate,
+    authorityScore: followerScore,
+    nicheMatch: Math.round((engagementScore + 70) / 2),
+    finalScore,
+    matchedSignals: a.matchedSignals && a.matchedSignals.length ? a.matchedSignals : [a.whyHighEngagement].filter(Boolean),
+    topTopics: a.topTopics,
+    tier: scoreToTier(finalScore),
+    discoveredAt: new Date().toISOString(),
+    trackingStatus: 'untracked',
+    discoveredVia: 'search',
+    verificationStatus: 'card-only'
+  };
+}
+
 export const AccountFinderView: React.FC = () => {
-  // --- State ---
-  const [filters, setFilters] = useState<DiscoveryFilters>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_FILTERS);
-      return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : DEFAULT_FILTERS;
-    } catch { return DEFAULT_FILTERS; }
+  const { project } = useProject();
+
+  // --- AI finder config ---
+  const [platform, setPlatform] = useState<DiscoveryPlatform>('X');
+  const [niche, setNiche] = useState<string>(() => {
+    try { return localStorage.getItem('aifinder_niche') || ''; } catch { return ''; }
   });
-  const [mode, setMode] = useState<DiscoveryMode>('surgical');
-  const [mission, setMission] = useState<DiscoveryMission | null>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_MISSION);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+  const [keywords, setKeywords] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('aifinder_keywords') || '[]'); } catch { return []; }
   });
+  const [keywordDraft, setKeywordDraft] = useState('');
+  const [audienceSize, setAudienceSize] = useState<AudienceSize>('any');
+  const [engagementBar, setEngagementBar] = useState<'any' | 'some' | 'real' | 'viral'>('real');
+  const [country, setCountry] = useState<string>(() => {
+    try { return localStorage.getItem('aifinder_country') || 'any'; } catch { return 'any'; }
+  });
+  const [countryCustom, setCountryCustom] = useState<string>(() => {
+    try { return localStorage.getItem('aifinder_country_custom') || ''; } catch { return ''; }
+  });
+  const [resultLimit, setResultLimit] = useState<number>(15);
+
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   const [archivedResults, setArchivedResults] = useState<DiscoveredAccount[]>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_RESULTS);
       return raw ? JSON.parse(raw) : [];
     } catch { return []; }
   });
-  const [extensionConnected, setExtensionConnected] = useState(false);
-  const [engineDiagnostic, setEngineDiagnostic] = useState<{ checking: boolean; result?: { ok: boolean; engineLoaded?: boolean; version?: string; error?: string } }>({ checking: false });
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [activeKeywordInput, setActiveKeywordInput] = useState('');
-  const [activeHashtagInput, setActiveHashtagInput] = useState('');
-  const [activeExcludeInput, setActiveExcludeInput] = useState('');
   const [resultFilter, setResultFilter] = useState<'all' | AccountTier | 'untracked'>('all');
-  const [resultSort, setResultSort] = useState<'score' | 'followers' | 'engagement' | 'recent' | 'lastpost'>('score');
+  const [resultSort, setResultSort] = useState<'score' | 'influence' | 'engagement' | 'recent' | 'lastpost'>('score');
   const [selectedAccount, setSelectedAccount] = useState<DiscoveredAccount | null>(null);
-  const logsEndRef = useRef<HTMLDivElement>(null);
 
   // --- Persistence ---
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_FILTERS, JSON.stringify(filters));
-  }, [filters]);
-
+    try { localStorage.setItem('aifinder_niche', niche); } catch {}
+  }, [niche]);
   useEffect(() => {
-    if (mission) localStorage.setItem(STORAGE_KEY_MISSION, JSON.stringify(mission));
-    else localStorage.removeItem(STORAGE_KEY_MISSION);
-  }, [mission]);
-
+    try { localStorage.setItem('aifinder_keywords', JSON.stringify(keywords)); } catch {}
+  }, [keywords]);
+  useEffect(() => {
+    try { localStorage.setItem('aifinder_country', country); } catch {}
+  }, [country]);
+  useEffect(() => {
+    try { localStorage.setItem('aifinder_country_custom', countryCustom); } catch {}
+  }, [countryCustom]);
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_RESULTS, JSON.stringify(archivedResults));
   }, [archivedResults]);
 
-  const runEngineDiagnostic = () => {
-    setEngineDiagnostic({ checking: true });
-
-    if (!extensionConnected) {
-      setEngineDiagnostic({
-        checking: false,
-        result: {
-          ok: false,
-          error: 'BRIDGE NOT LOADED. 1) Go to chrome://extensions → reload Answerly. 2) Come back here and press F5. 3) Make sure Site Access is "On all sites".'
-        }
-      });
-      return;
-    }
-
-    const handler = (e: any) => {
-      window.removeEventListener('discovery_engine_pong', handler);
-      setEngineDiagnostic({ checking: false, result: e.detail });
-    };
-    window.addEventListener('discovery_engine_pong', handler);
-    window.dispatchEvent(new CustomEvent('discovery_engine_ping'));
-    setTimeout(() => {
-      window.removeEventListener('discovery_engine_pong', handler);
-      setEngineDiagnostic(prev => prev.checking ? { checking: false, result: { ok: false, error: 'Bridge loaded but no response from background. Check chrome://extensions for service worker errors.' } } : prev);
-    }, 5000);
-  };
-
-  // --- Extension bridge (handshake protocol) ---
-  useEffect(() => {
-    // Listen for bridge announcing itself via handshake
-    const handleBridgeReady = (e: any) => {
-      console.log('[AccountFinder] Bridge handshake received:', e.detail);
-      setExtensionConnected(true);
-    };
-    window.addEventListener('EXTENSION_BRIDGE_READY', handleBridgeReady);
-
-    // Also ping to trigger a late handshake if bridge loaded before React
-    window.dispatchEvent(new CustomEvent('answerly_ping'));
-
-    const handlePong = () => setExtensionConnected(true);
-    const handleMissionUpdate = (e: any) => {
-      if (e.detail) setMission(e.detail);
-    };
-    const handleMissionComplete = (e: any) => {
-      if (e.detail) {
-        const completed: DiscoveryMission = e.detail;
-        setMission(completed);
-        if (completed.results?.length) {
-          setArchivedResults(prev => {
-            const existing = new Set(prev.map(a => a.url));
-            const fresh = completed.results.filter(a => !existing.has(a.url));
-            return [...fresh, ...prev].slice(0, 500);
-          });
-        }
-      }
-    };
-    window.addEventListener('answerly_pong', handlePong);
-    window.addEventListener('discovery_mission_update', handleMissionUpdate);
-    window.addEventListener('discovery_mission_complete', handleMissionComplete);
-    const ping = setInterval(() => window.dispatchEvent(new CustomEvent('answerly_ping')), 10000);
-    window.dispatchEvent(new CustomEvent('answerly_ping'));
-    return () => {
-      window.removeEventListener('EXTENSION_BRIDGE_READY', handleBridgeReady);
-      window.removeEventListener('answerly_pong', handlePong);
-      window.removeEventListener('discovery_mission_update', handleMissionUpdate);
-      window.removeEventListener('discovery_mission_complete', handleMissionComplete);
-      clearInterval(ping);
-    };
-  }, []);
-
-  // --- Auto-scroll logs ---
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [mission?.logs?.length]);
-
   // --- Helpers ---
-  const togglePlatform = (p: DiscoveryPlatform) => {
-    setFilters(f => ({ ...f, platforms: [p] }));
-  };
-
-  const addToArray = (key: 'keywords' | 'hashtags' | 'excludeKeywords', value: string, clear: () => void) => {
-    const v = value.trim();
+  const addKeyword = () => {
+    const v = keywordDraft.trim();
     if (!v) return;
-    setFilters(f => ({ ...f, [key]: [...new Set([...f[key], v])] }));
-    clear();
+    setKeywords(k => Array.from(new Set([...k, v])));
+    setKeywordDraft('');
   };
+  const removeKeyword = (v: string) => setKeywords(k => k.filter(x => x !== v));
 
-  const removeFromArray = (key: 'keywords' | 'hashtags' | 'excludeKeywords', value: string) => {
-    setFilters(f => ({ ...f, [key]: f[key].filter(v => v !== value) }));
-  };
-
-  const launchMission = () => {
-    if (!filters.platforms.length || !filters.keywords.length) {
-      alert('Add at least one platform and one keyword.');
+  const runAIFinder = async () => {
+    setSearchError(null);
+    if (!niche.trim() && keywords.length === 0) {
+      setSearchError('Add a niche description or at least one keyword to search for.');
       return;
     }
-    const newMission: DiscoveryMission = {
-      id: 'mission_' + Date.now(),
-      name: filters.keywords.slice(0, 3).join(' + '),
-      status: 'preparing',
-      mode,
-      filters,
-      startedAt: new Date().toISOString(),
-      progress: {
-        phase: 'Initializing stealth engine...',
-        candidatesScanned: 0,
-        profilesAnalyzed: 0,
-        matched: 0,
-        rejected: 0,
-        totalQueriesPlanned: filters.platforms.length * (mode === 'volume' ? 8 : mode === 'deep' ? 5 : 3),
-        queriesCompleted: 0
-      },
-      stealth: {
-        actionsThisMinute: 0,
-        actionsThisSession: 0,
-        rateLimit: mode === 'volume' ? 12 : mode === 'deep' ? 8 : 10,
-        detected: false,
-        nextActionInMs: 0,
-        sessionStartedAt: Date.now(),
-        humanizedBehaviorScore: 100,
-        patternsDetected: []
-      },
-      logs: [{
-        timestamp: new Date().toISOString(),
-        level: 'info',
-        message: `${mode.toUpperCase()} search started. Safety mode on.`
-      }],
-      results: []
-    };
-    setMission(newMission);
-    window.dispatchEvent(new CustomEvent('discovery_mission_start', { detail: newMission }));
-
-    // Safety: if extension never responds, mark as failed after 20s
-    const missionId = newMission.id;
-    setTimeout(() => {
-      setMission(current => {
-        if (!current || current.id !== missionId) return current;
-        if (current.status === 'preparing' && current.logs.length <= 1) {
-          return {
-            ...current,
-            status: 'failed',
-            completedAt: new Date().toISOString(),
-            logs: [...current.logs, {
-              timestamp: new Date().toISOString(),
-              level: 'error' as const,
-              message: 'Extension did not respond within 20s. Is the Answerly extension installed and enabled in Chrome?'
-            }]
-          };
-        }
-        return current;
+    if (!isGeminiConfigured()) {
+      setSearchError('AI client is not configured. Check services/geminiService.ts.');
+      return;
+    }
+    setSearching(true);
+    try {
+      const resolvedCountry =
+        country === 'any'    ? undefined :
+        country === 'custom' ? (countryCustom.trim() || undefined) :
+                                country;
+      const suggestions = await findAccountsWithAI({
+        platform,
+        niche: niche.trim(),
+        keywords,
+        audienceSize,
+        engagementBar,
+        country: resolvedCountry,
+        productName: (project as any)?.productName,
+        productPitch: (project as any)?.pitch,
+        targetAudience: (project as any)?.targetAudience,
+        limit: resultLimit
       });
-    }, 20000);
-  };
-
-  const pauseMission = () => {
-    if (!mission) return;
-    const updated = { ...mission, status: 'paused' as MissionStatus };
-    setMission(updated);
-    window.dispatchEvent(new CustomEvent('discovery_mission_pause', { detail: updated }));
-  };
-
-  const resumeMission = () => {
-    if (!mission) return;
-    const updated = { ...mission, status: 'scanning' as MissionStatus };
-    setMission(updated);
-    window.dispatchEvent(new CustomEvent('discovery_mission_resume', { detail: updated }));
-  };
-
-  const abortMission = () => {
-    if (!mission) return;
-    if (!window.confirm('Abort mission? Progress and results so far will be saved.')) return;
-    const aborted = { ...mission, status: 'aborted' as MissionStatus, completedAt: new Date().toISOString() };
-    setMission(aborted);
-    if (mission.results.length) {
+      const mapped = suggestions.map(s => aiToDiscovered(s, platform));
       setArchivedResults(prev => {
         const existing = new Set(prev.map(a => a.url));
-        const fresh = mission.results.filter(a => !existing.has(a.url));
+        const fresh = mapped.filter(a => !existing.has(a.url));
         return [...fresh, ...prev].slice(0, 500);
       });
+      if (mapped.length === 0) {
+        setSearchError('The AI returned no matches. Try broadening your niche or relaxing the engagement bar.');
+      }
+    } catch (e: any) {
+      console.error('[AccountFinder] AI search failed:', e);
+      setSearchError(e?.message || 'AI search failed. Check the console for details.');
+    } finally {
+      setSearching(false);
     }
-    window.dispatchEvent(new CustomEvent('discovery_mission_abort', { detail: aborted }));
-  };
-
-  const dismissCompletedMission = () => {
-    setMission(null);
   };
 
   const trackAccount = (account: DiscoveredAccount) => {
@@ -306,31 +324,197 @@ export const AccountFinderView: React.FC = () => {
   };
 
   const dismissAccount = (account: DiscoveredAccount) => {
-    updateAccountStatus(account.id, 'dismissed');
+    // Skip = DELETE the account from the results entirely (not a soft "dismissed"
+    // state). First strip it from the synced config so a skipped account never
+    // lingers in tracking, then drop it from both the archived results and the
+    // current mission's results so it disappears from the list immediately.
+    try {
+      const existing = JSON.parse(localStorage.getItem('answerly_creator_configs') || '[]');
+      const updated = existing.filter((c: any) => c.url !== account.url);
+      if (updated.length !== existing.length) {
+        localStorage.setItem('answerly_creator_configs', JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('answerly_sync', { detail: updated }));
+      }
+    } catch (e) {
+      console.error('Dismiss cleanup failed', e);
+    }
+    removeAccount(account.id);
+  };
+
+  // Remove an account from every result list so it vanishes from the UI.
+  const removeAccount = (id: string) => {
+    setArchivedResults(prev => prev.filter(a => a.id !== id));
+  };
+
+  // Actually STOP tracking: remove from the synced creator-config list and
+  // push the change to the extension so the engine stops polling this account.
+  const untrackAccount = (account: DiscoveredAccount) => {
+    try {
+      const existing = JSON.parse(localStorage.getItem('answerly_creator_configs') || '[]');
+      const updated = existing.filter((c: any) => c.url !== account.url);
+      localStorage.setItem('answerly_creator_configs', JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('answerly_sync', { detail: updated }));
+    } catch (e) {
+      console.error('Untrack failed', e);
+    }
+    updateAccountStatus(account.id, 'untracked');
   };
 
   const updateAccountStatus = (id: string, status: 'tracking' | 'dismissed' | 'untracked') => {
     setArchivedResults(prev => prev.map(a => a.id === id ? { ...a, trackingStatus: status } : a));
-    if (mission) {
-      setMission({
-        ...mission,
-        results: mission.results.map(a => a.id === id ? { ...a, trackingStatus: status } : a)
-      });
-    }
   };
 
   const trackBatch = (accounts: DiscoveredAccount[]) => {
     accounts.forEach(a => trackAccount(a));
   };
 
+  // Parse a handle / URL / r/name into a normalized account and track it.
+  // Lets users watch accounts the discovery search didn't surface.
+  const addManualAccount = (platform: DiscoveryPlatform, input: string): { ok: boolean; error?: string } => {
+    const cleaned = input.trim();
+    if (!cleaned) return { ok: false, error: 'Enter a handle or URL' };
+
+    let handle = '';
+    let url = '';
+    try {
+      if (platform === 'X') {
+        const m = cleaned.match(/(?:x\.com|twitter\.com)\/(@?)([A-Za-z0-9_]{1,15})/i)
+              ||  cleaned.match(/^@?([A-Za-z0-9_]{1,15})$/);
+        handle = (m && (m[2] || m[1])) || '';
+        if (!handle) return { ok: false, error: 'Invalid X handle' };
+        url = `https://x.com/${handle}`;
+      } else if (platform === 'LinkedIn') {
+        const m = cleaned.match(/linkedin\.com\/in\/([^/?#\s]+)/i)
+              ||  cleaned.match(/^([A-Za-z0-9-]{3,})$/);
+        handle = (m && m[1]) || '';
+        if (!handle) return { ok: false, error: 'Use the full /in/ URL or the slug' };
+        url = `https://www.linkedin.com/in/${handle}/`;
+      } else if (platform === 'Reddit') {
+        // Reddit tracking targets subreddits, so accept r/name or full URL
+        const m = cleaned.match(/reddit\.com\/r\/([^/?#\s]+)/i)
+              ||  cleaned.match(/^r\/([^/\s]+)$/i)
+              ||  cleaned.match(/^([A-Za-z0-9_]{3,})$/);
+        const name = (m && m[1]) || '';
+        if (!name) return { ok: false, error: 'Use r/name or the subreddit URL' };
+        handle = `r/${name}`;
+        url = `https://www.reddit.com/r/${name}/`;
+      } else {
+        return { ok: false, error: 'Unsupported platform' };
+      }
+    } catch {
+      return { ok: false, error: 'Could not parse input' };
+    }
+
+    // Avoid duplicates — if the URL already exists, just (re-)track it.
+    const existing = allResults.find(a => a.url === url);
+    if (existing) {
+      trackAccount(existing);
+      return { ok: true };
+    }
+
+    const now = new Date().toISOString();
+    const account: DiscoveredAccount = {
+      id: `manual_${platform}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      platform,
+      handle,
+      url,
+      displayName: handle,
+      bio: '',
+      followers: 0,
+      verified: false,
+      authorityScore: 50,
+      nicheMatch: 50,
+      finalScore: 50,
+      matchedSignals: ['Manually added'],
+      tier: 'B' as AccountTier,
+      discoveredAt: now,
+      trackingStatus: 'untracked'
+    };
+    setArchivedResults(prev => [account, ...prev]);
+    trackAccount(account);
+    // Kick off async enrichment so the card fills in real follower count,
+    // verification and display name instead of the manual-add placeholders.
+    try {
+      window.dispatchEvent(new CustomEvent('answerly_enrich_account', {
+        detail: { platform, url, requestId: account.id }
+      }));
+    } catch {}
+    return { ok: true };
+  };
+
+  // Apply enrichment results coming back from the extension (manual adds + refresh).
+  useEffect(() => {
+    const onEnriched = (e: any) => {
+      const { url, ok, data, error } = e.detail || {};
+      if (!url) return;
+      if (!ok) {
+        console.warn('[Enrich]', url, 'failed:', error);
+        return;
+      }
+      if (data && data.__loginWall) {
+        console.warn('[Enrich]', url, '→ login wall. Log in to that platform in this browser, then click Refresh on the row.');
+        return;
+      }
+      if (!data) return;
+      const patch: Partial<DiscoveredAccount> = {};
+      if (typeof data.followers === 'number' && data.followers > 0) patch.followers = data.followers;
+      if (typeof data.following === 'number' && data.following > 0) patch.following = data.following;
+      if (typeof data.verified === 'boolean') patch.verified = data.verified;
+      if (data.displayName) patch.displayName = data.displayName;
+      if (data.bio) patch.bio = data.bio;
+      if (data.avatar) patch.avatar = data.avatar;
+      if (Object.keys(patch).length === 0) return;
+      setArchivedResults(prev => prev.map(a => a.url === url ? { ...a, ...patch } : a));
+    };
+    window.addEventListener('answerly_enrich_result', onEnriched);
+    return () => window.removeEventListener('answerly_enrich_result', onEnriched);
+  }, []);
+
+  // Re-trigger enrichment for an existing tracked account (used by the Refresh
+  // button on each row when followers stays at 0).
+  const refreshAccountData = (account: DiscoveredAccount) => {
+    try {
+      window.dispatchEvent(new CustomEvent('answerly_enrich_account', {
+        detail: { platform: account.platform, url: account.url, requestId: account.id }
+      }));
+    } catch (e) { console.error('Refresh failed', e); }
+  };
+
+  // Per-account auto-reply state (read from the synced tracked configs) so the
+  // results table can show + toggle it inline, per account.
+  const [trackedConfigs, setTrackedConfigs] = useState<any[]>([]);
+  useEffect(() => {
+    const load = () => {
+      try { setTrackedConfigs(JSON.parse(localStorage.getItem('answerly_creator_configs') || '[]')); }
+      catch { setTrackedConfigs([]); }
+    };
+    load();
+    window.addEventListener('answerly_sync', load);
+    const id = setInterval(load, 3000);
+    return () => { window.removeEventListener('answerly_sync', load); clearInterval(id); };
+  }, []);
+  const autoReplyByUrl = useMemo(() => {
+    const m = new Map<string, boolean>();
+    trackedConfigs.forEach((c: any) => m.set(c.url, !!c.autoComment));
+    return m;
+  }, [trackedConfigs]);
+  const toggleAutoReply = (account: DiscoveredAccount, enabled: boolean) => {
+    try {
+      const list = JSON.parse(localStorage.getItem('answerly_creator_configs') || '[]');
+      const updated = list.map((c: any) => c.url === account.url ? { ...c, autoComment: enabled } : c);
+      localStorage.setItem('answerly_creator_configs', JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('answerly_sync', { detail: updated }));
+      window.dispatchEvent(new CustomEvent('tracking_toggle_auto_comment', { detail: { url: account.url, enabled } }));
+      setTrackedConfigs(updated);
+    } catch (e) { console.error('Toggle auto-reply failed', e); }
+  };
+
   // --- Derived ---
   const allResults = useMemo(() => {
-    const live = mission?.results || [];
-    const archive = archivedResults;
     const map = new Map<string, DiscoveredAccount>();
-    [...archive, ...live].forEach(a => map.set(a.id, a));
+    archivedResults.forEach(a => map.set(a.id, a));
     return Array.from(map.values());
-  }, [mission?.results, archivedResults]);
+  }, [archivedResults]);
 
   const filteredResults = useMemo(() => {
     let r = allResults.slice();
@@ -338,7 +522,7 @@ export const AccountFinderView: React.FC = () => {
     else if (resultFilter !== 'all') r = r.filter(a => a.tier === resultFilter);
     r.sort((a, b) => {
       if (resultSort === 'score') return b.finalScore - a.finalScore;
-      if (resultSort === 'followers') return b.followers - a.followers;
+      if (resultSort === 'influence') return computeInfluence(b) - computeInfluence(a);
       if (resultSort === 'engagement') return (b.engagementRate || 0) - (a.engagementRate || 0);
       if (resultSort === 'lastpost') {
         // Smaller daysSinceLastPost = more recent. Unknown sinks to the bottom.
@@ -351,92 +535,191 @@ export const AccountFinderView: React.FC = () => {
     return r;
   }, [allResults, resultFilter, resultSort]);
 
-  const isMissionActive = mission && ['preparing', 'scanning', 'paused', 'cooldown'].includes(mission.status);
-
   // ============================================================
   // RENDER
   // ============================================================
   return (
     <div className="space-y-6 animate-fade-in pb-12">
-      {/* HEADER */}
-      <Header extensionConnected={extensionConnected} mission={mission} />
+      {/* Section title is provided by the unified glass header in App shell. */}
 
-      {/* DIAGNOSTIC PANEL */}
-      <div className="bg-white p-4 rounded-2xl border border-gray-200 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 text-xs">
-          <Sparkles size={14} className="text-gray-500" />
-          <span className="font-bold uppercase tracking-widest text-gray-700">Check extension</span>
+      {/* AI FINDER CONFIG */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <Card title="Where to search" subtitle="Pick one platform" icon={<Globe size={18} />}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {PLATFORMS.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setPlatform(p.id)}
+                  className={`group relative p-5 rounded-2xl border-2 transition-all text-left overflow-hidden ${
+                    platform === p.id
+                      ? 'border-gray-900 bg-gradient-to-br ' + p.bgGradient + ' text-white shadow-lg'
+                      : 'border-gray-200 bg-white hover:border-gray-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={platform === p.id ? 'text-white' : p.color}>{p.icon}</div>
+                    {platform === p.id && <Check size={16} className="text-white" />}
+                  </div>
+                  <div className={`font-bold text-sm ${platform === p.id ? 'text-white' : 'text-gray-900'}`}>{p.label}</div>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          <Card title="What's your niche?" subtitle="The AI uses this to pick accounts" icon={<Brain size={18} />}>
+            <textarea
+              value={niche}
+              onChange={(e) => setNiche(e.target.value)}
+              placeholder="e.g. AI agents for SaaS founders, build-in-public solopreneurs in dev tools, growth marketers focused on B2B SaaS pricing…"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400 transition-colors min-h-[90px] resize-y"
+            />
+            <div className="mt-4">
+              <ChipsInput
+                label="Keywords (optional)"
+                placeholder="e.g. agents, no-code, indie hacker"
+                value={keywordDraft}
+                onChange={setKeywordDraft}
+                chips={keywords}
+                onAdd={(v: string) => { setKeywords(k => Array.from(new Set([...k, v.trim()].filter(Boolean)))); setKeywordDraft(''); }}
+                onRemove={removeKeyword}
+                color="indigo"
+              />
+            </div>
+          </Card>
+
+          <Card title="Country" subtitle="Where should the accounts be based?" icon={<Globe size={18} />}>
+            <div className="space-y-3">
+              <select
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white text-gray-800 outline-none hover:border-gray-400 focus:border-gray-400 transition-colors"
+              >
+                {COUNTRY_OPTIONS.map(c => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+              {country === 'custom' && (
+                <input
+                  value={countryCustom}
+                  onChange={e => setCountryCustom(e.target.value)}
+                  placeholder="e.g. Norway, South Korea, Bay Area..."
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400 transition-colors"
+                />
+              )}
+              <div className="text-[10px] text-gray-500 leading-relaxed">
+                {country === 'any'
+                  ? 'No geo filter — accounts can be based anywhere.'
+                  : country === 'custom'
+                    ? 'The AI will prioritize creators based in this region.'
+                    : `Only suggest creators primarily based in ${country}.`}
+              </div>
+            </div>
+          </Card>
+
+          <Card title="Account size" subtitle="How big should the accounts be?" icon={<Users size={18} />}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {AUDIENCE_PRESETS.map(p => {
+                const active = audienceSize === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setAudienceSize(p.id)}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      active ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-400 bg-white'
+                    }`}
+                  >
+                    <div className="font-bold text-xs">{p.label}</div>
+                    <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500'}`}>{p.helper}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card title="Engagement bar" subtitle="Filter for accounts whose posts get traction" icon={<Heart size={18} />}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {AI_ENGAGEMENT_PRESETS.map(p => {
+                const active = engagementBar === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setEngagementBar(p.id)}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      active ? 'border-rose-600 bg-rose-600 text-white' : 'border-gray-200 hover:border-rose-300 bg-white'
+                    }`}
+                  >
+                    <div className="font-bold text-xs">{p.label}</div>
+                    <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500'}`}>{p.helper}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
         </div>
-        <button
-          onClick={runEngineDiagnostic}
-          disabled={engineDiagnostic.checking}
-          className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-800 disabled:opacity-50 flex items-center gap-1.5"
-        >
-          {engineDiagnostic.checking ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
-          {engineDiagnostic.checking ? 'Checking...' : 'Test now'}
-        </button>
-        {engineDiagnostic.result && (
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
-            engineDiagnostic.result.ok && engineDiagnostic.result.engineLoaded
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          }`}>
-            {engineDiagnostic.result.ok && engineDiagnostic.result.engineLoaded ? (
-              <>
-                <Check size={12} />
-                <span className="font-bold">Extension working ✓</span>
-              </>
-            ) : (
-              <>
-                <AlertTriangle size={12} />
-                <span className="font-bold">
-                  {engineDiagnostic.result.engineLoaded === false
-                    ? "Extension is on but the search engine didn't load — open chrome://extensions to see errors"
-                    : engineDiagnostic.result.error || 'Something went wrong'}
-                </span>
-              </>
-            )}
-          </div>
-        )}
+
+        {/* RIGHT: Run + tracking settings */}
+        <div className="space-y-6">
+          <Card title="Find accounts" subtitle="AI suggests real accounts to follow" icon={<Sparkles size={18} />}>
+            <div className="space-y-4">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-1.5">
+                  How many to suggest
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range" min={5} max={30} step={5}
+                    value={resultLimit}
+                    onChange={e => setResultLimit(parseInt(e.target.value))}
+                    className="flex-1 accent-gray-900"
+                  />
+                  <span className="text-sm font-bold text-gray-900 w-8 text-right tabular-nums">{resultLimit}</span>
+                </div>
+              </div>
+              <button
+                onClick={runAIFinder}
+                disabled={searching || (!niche.trim() && keywords.length === 0)}
+                className="w-full px-4 py-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                {searching ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> Searching…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} /> Find accounts
+                  </>
+                )}
+              </button>
+              {searchError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2">
+                  <AlertTriangle size={14} className="text-rose-700 mt-0.5 flex-shrink-0" />
+                  <div className="text-[11px] text-rose-800 leading-relaxed">{searchError}</div>
+                </div>
+              )}
+              {!niche.trim() && keywords.length === 0 && (
+                <div className="text-[10px] text-gray-500 leading-relaxed">
+                  Describe your niche or add a keyword first.
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <TrackingSettingsCard />
+        </div>
       </div>
 
-      {/* Mission Active → Live Console */}
-      {isMissionActive && mission && (
-        <LiveMissionConsole
-          mission={mission}
-          onPause={pauseMission}
-          onResume={resumeMission}
-          onAbort={abortMission}
-        />
-      )}
-
-      {/* Mission Completed → Summary */}
-      {mission && (mission.status === 'completed' || mission.status === 'aborted' || mission.status === 'failed') && (
-        <CompletedMissionBanner mission={mission} onDismiss={dismissCompletedMission} />
-      )}
-
-      {/* Configuration */}
-      {!isMissionActive && (
-        <ConfigurationPanel
-          filters={filters}
-          setFilters={setFilters}
-          mode={mode}
-          setMode={setMode}
-          showAdvanced={showAdvanced}
-          setShowAdvanced={setShowAdvanced}
-          activeKeywordInput={activeKeywordInput}
-          setActiveKeywordInput={setActiveKeywordInput}
-          activeHashtagInput={activeHashtagInput}
-          setActiveHashtagInput={setActiveHashtagInput}
-          activeExcludeInput={activeExcludeInput}
-          setActiveExcludeInput={setActiveExcludeInput}
-          togglePlatform={togglePlatform}
-          addToArray={addToArray}
-          removeFromArray={removeFromArray}
-          launchMission={launchMission}
-          extensionConnected={extensionConnected}
-        />
-      )}
+      {/* Manual add */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="bg-gray-900 p-1.5 rounded-lg"><Plus size={14} className="text-white" /></div>
+          <div>
+            <div className="text-sm font-bold text-gray-900">Add an account to track manually</div>
+            <div className="text-[10px] text-gray-500">Paste a handle, profile URL, or subreddit — it starts getting watched right away.</div>
+          </div>
+        </div>
+        <ManualAddForm onAdd={addManualAccount} />
+      </div>
 
       {/* Results */}
       {allResults.length > 0 && (
@@ -449,13 +732,17 @@ export const AccountFinderView: React.FC = () => {
           setResultSort={setResultSort}
           onTrack={trackAccount}
           onDismiss={dismissAccount}
+          onUntrack={untrackAccount}
           onInspect={setSelectedAccount}
           onTrackBatch={trackBatch}
+          autoReplyByUrl={autoReplyByUrl}
+          onToggleAutoReply={toggleAutoReply}
+          onRefreshAccount={refreshAccountData}
         />
       )}
 
       {/* Empty State */}
-      {!isMissionActive && allResults.length === 0 && (
+      {allResults.length === 0 && (
         <EmptyState />
       )}
 
@@ -475,6 +762,64 @@ export const AccountFinderView: React.FC = () => {
 // ============================================================
 // SUB-COMPONENTS
 // ============================================================
+
+// Manual add — accepts handle / URL / r/name for the selected platform
+const ManualAddForm: React.FC<{
+  onAdd: (platform: DiscoveryPlatform, input: string) => { ok: boolean; error?: string };
+}> = ({ onAdd }) => {
+  const [platform, setPlatform] = useState<DiscoveryPlatform>('X');
+  const [input, setInput] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const submit = () => {
+    setError('');
+    const res = onAdd(platform, input);
+    if (res.ok) {
+      setInput('');
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 1500);
+    } else {
+      setError(res.error || 'Could not add');
+    }
+  };
+
+  const placeholder = platform === 'X' ? '@handle or https://x.com/handle'
+    : platform === 'LinkedIn' ? 'https://linkedin.com/in/slug or slug'
+    : 'r/subreddit or https://reddit.com/r/subreddit';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={platform}
+          onChange={(e) => { setPlatform(e.target.value as DiscoveryPlatform); setError(''); }}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium bg-white text-gray-700 outline-none hover:border-gray-400 transition-colors"
+        >
+          <option value="X">X</option>
+          <option value="LinkedIn">LinkedIn</option>
+          <option value="Reddit">Reddit</option>
+        </select>
+        <input
+          value={input}
+          onChange={e => { setInput(e.target.value); setError(''); }}
+          onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+          placeholder={placeholder}
+          className="flex-1 min-w-[200px] px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none hover:border-gray-400 focus:border-gray-400 transition-colors"
+        />
+        <button
+          onClick={submit}
+          disabled={!input.trim()}
+          className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-lg text-xs font-medium transition-all duration-200 ease-out active:scale-[0.97]"
+        >
+          <Plus size={13} /> Add &amp; track
+        </button>
+      </div>
+      {error && <div className="text-[11px] text-rose-600 flex items-center gap-1.5"><AlertTriangle size={11} /> {error}</div>}
+      {success && <div className="text-[11px] text-emerald-700 flex items-center gap-1.5"><Check size={11} /> Added — first scan will run shortly.</div>}
+    </div>
+  );
+};
 
 const Header: React.FC<{ extensionConnected: boolean; mission: DiscoveryMission | null }> = ({ extensionConnected, mission }) => (
   <div className="bg-gray-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden shadow-2xl">
@@ -534,7 +879,9 @@ const MissionStatusBadge: React.FC<{ status: MissionStatus }> = ({ status }) => 
 const ConfigurationPanel: React.FC<any> = ({
   filters, setFilters, mode, setMode, showAdvanced, setShowAdvanced,
   activeKeywordInput, setActiveKeywordInput, activeHashtagInput, setActiveHashtagInput,
-  activeExcludeInput, setActiveExcludeInput, togglePlatform, addToArray, removeFromArray,
+  activeExcludeInput, setActiveExcludeInput,
+  seedInputs, setSeedInputs, addSeed, removeSeed,
+  togglePlatform, addToArray, removeFromArray,
   launchMission, extensionConnected
 }) => {
   return (
@@ -602,24 +949,56 @@ const ConfigurationPanel: React.FC<any> = ({
           </div>
         </Card>
 
-        {/* AUTHORITY TIER */}
-        <Card title="Audience size" subtitle="How big are their followers" icon={<TrendingUp size={18} />}>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {AUTHORITY_TIERS.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setFilters((f: DiscoveryFilters) => ({ ...f, authorityLevel: t.id }))}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  filters.authorityLevel === t.id
-                    ? 'border-gray-900 bg-gray-900 text-white'
-                    : 'border-gray-200 hover:border-gray-400 bg-white'
-                }`}
-              >
-                <div className="font-bold text-xs">{t.label}</div>
-                <div className={`text-[10px] mt-0.5 ${filters.authorityLevel === t.id ? 'text-white/70' : 'text-gray-500'}`}>{t.range}</div>
-                <div className={`text-[9px] mt-1 leading-tight ${filters.authorityLevel === t.id ? 'text-white/60' : 'text-gray-400'}`}>{t.description}</div>
-              </button>
-            ))}
+        {/* ENGAGEMENT BAR — the headline filter under the engagement-led model */}
+        <Card title="Engagement bar" subtitle="How engaged must their posts be" icon={<Heart size={18} />}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+            {ENGAGEMENT_PRESETS.map(p => {
+              const active = filters.engagementFloor === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setFilters((f: DiscoveryFilters) => ({ ...f, engagementFloor: p.id }))}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    active
+                      ? 'border-rose-600 bg-rose-600 text-white'
+                      : 'border-gray-200 hover:border-rose-300 bg-white'
+                  }`}
+                >
+                  <div className="font-bold text-xs">{p.label}</div>
+                  <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500'}`}>{p.tagline}</div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-[11px] text-gray-500 leading-relaxed mb-4">
+            {ENGAGEMENT_PRESETS.find(p => p.id === filters.engagementFloor)?.helper}
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1.5">
+              <CalendarClock size={12} /> Posts within
+            </div>
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {RECENCY_PRESETS.map(r => {
+                const active = filters.postRecencyDays === r.id;
+                return (
+                  <button
+                    key={String(r.id)}
+                    onClick={() => setFilters((f: DiscoveryFilters) => ({ ...f, postRecencyDays: r.id }))}
+                    className={`p-2 rounded-lg border text-xs font-medium transition-all ${
+                      active ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-400 bg-white'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                );
+              })}
+            </div>
+            <NumberInput
+              label="Audience engagement rate ≥ (%)"
+              value={filters.minEngagementRate}
+              onChange={(v: number | undefined) => setFilters((f: DiscoveryFilters) => ({ ...f, minEngagementRate: v }))}
+              placeholder="optional — e.g. 2"
+            />
           </div>
         </Card>
 
@@ -637,59 +1016,32 @@ const ConfigurationPanel: React.FC<any> = ({
         </button>
 
         {showAdvanced && (
-          <Card title="Fine-tune" subtitle="Narrow down your results" icon={<Filter size={18} />}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <NumberInput
-                label="Min followers" value={filters.minFollowers}
-                onChange={(v) => setFilters((f: DiscoveryFilters) => ({ ...f, minFollowers: v }))}
-                placeholder="e.g. 1000"
-              />
-              <NumberInput
-                label="Max followers" value={filters.maxFollowers}
-                onChange={(v) => setFilters((f: DiscoveryFilters) => ({ ...f, maxFollowers: v }))}
-                placeholder="e.g. 100000"
-              />
-              <NumberInput
-                label="Min likes per post (%)" value={filters.minEngagementRate}
-                onChange={(v) => setFilters((f: DiscoveryFilters) => ({ ...f, minEngagementRate: v }))}
-                placeholder="e.g. 2"
-              />
-              <TextInput
-                label="Language" value={filters.language || ''}
-                onChange={(v) => setFilters((f: DiscoveryFilters) => ({ ...f, language: v }))}
-                placeholder="en, fr, es..."
-              />
-              <TextInput
-                label="Location" value={filters.location || ''}
-                onChange={(v) => setFilters((f: DiscoveryFilters) => ({ ...f, location: v }))}
-                placeholder="Paris, EU, Remote..."
-              />
-              <TextInput
-                label="Industry" value={filters.industry || ''}
-                onChange={(v) => setFilters((f: DiscoveryFilters) => ({ ...f, industry: v }))}
-                placeholder="SaaS, Finance, Health..."
-              />
-              <SelectInput
-                label="How often they post" value={filters.postingFrequency || 'any'}
-                onChange={(v) => setFilters((f: DiscoveryFilters) => ({ ...f, postingFrequency: v as any }))}
-                options={[
-                  { value: 'any', label: 'Any' },
-                  { value: 'daily', label: 'Every day' },
-                  { value: 'weekly', label: 'Weekly or more' }
-                ]}
-              />
-            </div>
-            <div className="mt-4 space-y-3">
-              <Toggle
-                label="Only verified accounts"
-                checked={filters.verifiedOnly}
-                onChange={(v) => setFilters((f: DiscoveryFilters) => ({ ...f, verifiedOnly: v }))}
-              />
-              <Toggle
-                label="Skip accounts I already track"
-                checked={filters.excludeAlreadyTracked}
-                onChange={(v) => setFilters((f: DiscoveryFilters) => ({ ...f, excludeAlreadyTracked: v }))}
-              />
+          <Card title="Refine audience" subtitle="Optional — extra knobs. Engagement leads, these are tiebreakers." icon={<Filter size={18} />}>
+            <div className="space-y-5">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2 flex items-center gap-1.5">
+                  <Globe size={12} /> Language
+                </div>
+                <TextInput
+                  label=""
+                  value={filters.language || ''}
+                  onChange={(v: string) => setFilters((f: DiscoveryFilters) => ({ ...f, language: v }))}
+                  placeholder="en, fr, es…"
+                />
+              </div>
+
+              <div className="space-y-3 pt-1">
+                <Toggle
+                  label="Only verified accounts"
+                  checked={filters.verifiedOnly}
+                  onChange={(v: boolean) => setFilters((f: DiscoveryFilters) => ({ ...f, verifiedOnly: v }))}
+                />
+                <Toggle
+                  label="Skip accounts I already track"
+                  checked={filters.excludeAlreadyTracked}
+                  onChange={(v: boolean) => setFilters((f: DiscoveryFilters) => ({ ...f, excludeAlreadyTracked: v }))}
+                />
+              </div>
             </div>
           </Card>
         )}
@@ -724,28 +1076,6 @@ const ConfigurationPanel: React.FC<any> = ({
                 </button>
               );
             })}
-          </div>
-        </Card>
-
-        {/* SAFETY */}
-        <Card title="Safety" subtitle="What protects your account" icon={<ShieldCheck size={18} />}>
-          <div className="space-y-2">
-            <StealthLayerItem label="Realistic timing" enabled />
-            <StealthLayerItem label="Natural scrolling" enabled />
-            <StealthLayerItem label="Mouse movement" enabled />
-            <StealthLayerItem label="Action limits" enabled />
-            <StealthLayerItem label="Captcha detection" enabled />
-            <StealthLayerItem label="Random pauses" enabled />
-            <StealthLayerItem label="Daytime only" enabled />
-            <StealthLayerItem label="Session breaks" enabled />
-          </div>
-          <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <div className="flex items-center gap-2 mb-1">
-              <ShieldCheck size={14} className="text-emerald-700" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Safety score</span>
-            </div>
-            <div className="text-2xl font-display font-bold text-emerald-700">100<span className="text-sm">/100</span></div>
-            <div className="text-[10px] text-emerald-600 mt-1">Looks like a real person</div>
           </div>
         </Card>
 
@@ -963,9 +1293,13 @@ const ResultsPanel: React.FC<{
   setResultSort: any;
   onTrack: (a: DiscoveredAccount) => void;
   onDismiss: (a: DiscoveredAccount) => void;
+  onUntrack: (a: DiscoveredAccount) => void;
   onInspect: (a: DiscoveredAccount) => void;
   onTrackBatch: (accounts: DiscoveredAccount[]) => void;
-}> = ({ results, totalCount, resultFilter, setResultFilter, resultSort, setResultSort, onTrack, onDismiss, onInspect, onTrackBatch }) => {
+  autoReplyByUrl: Map<string, boolean>;
+  onToggleAutoReply: (a: DiscoveredAccount, enabled: boolean) => void;
+  onRefreshAccount: (a: DiscoveredAccount) => void;
+}> = ({ results, totalCount, resultFilter, setResultFilter, resultSort, setResultSort, onTrack, onDismiss, onUntrack, onInspect, onTrackBatch, autoReplyByUrl, onToggleAutoReply, onRefreshAccount }) => {
   const tierCounts = useMemo(() => ({
     S: results.filter(r => r.tier === 'S').length,
     A: results.filter(r => r.tier === 'A').length,
@@ -1008,7 +1342,7 @@ const ResultsPanel: React.FC<{
             className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white"
           >
             <option value="score">Sort: Best match</option>
-            <option value="followers">Sort: Followers</option>
+            <option value="influence">Sort: Influence</option>
             <option value="engagement">Sort: Engagement</option>
             <option value="lastpost">Sort: Most recently active</option>
             <option value="recent">Sort: Newest discovery</option>
@@ -1020,12 +1354,12 @@ const ResultsPanel: React.FC<{
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
         {/* Sticky column header — labels every numeric KPI and the action column. */}
         <div className="hidden md:grid sticky top-0 z-10 bg-gray-50 border-b border-gray-200 text-[9px] font-bold uppercase tracking-widest text-gray-500"
-             style={{ gridTemplateColumns: '1fr 130px 90px 90px 110px 240px', columnGap: '0px' }}>
+             style={{ gridTemplateColumns: '1fr 130px 110px 400px', columnGap: '0px' }}>
           <div className="px-4 py-2.5">Account</div>
           <div className="px-3 py-2.5 text-center">Match</div>
-          <div className="px-3 py-2.5 text-right">Followers</div>
-          <div className="px-3 py-2.5 text-right">Last post</div>
-          <div className="px-3 py-2.5 text-right">Median engage</div>
+          <div className="px-3 py-2.5 text-center" title="Influence = engagement-per-post (50%) + niche match (30%) + reach authority (20%). Higher = more impact when they engage with you.">
+            Influence
+          </div>
           <div className="px-3 py-2.5 text-center">Actions</div>
         </div>
         <ul className="divide-y divide-gray-100">
@@ -1035,7 +1369,11 @@ const ResultsPanel: React.FC<{
               account={account}
               onTrack={() => onTrack(account)}
               onDismiss={() => onDismiss(account)}
+              onUntrack={() => onUntrack(account)}
               onInspect={() => onInspect(account)}
+              autoReply={!!autoReplyByUrl.get(account.url)}
+              onToggleAutoReply={(en) => onToggleAutoReply(account, en)}
+              onRefresh={() => onRefreshAccount(account)}
             />
           ))}
         </ul>
@@ -1063,8 +1401,12 @@ const AccountRow: React.FC<{
   account: DiscoveredAccount;
   onTrack: () => void;
   onDismiss: () => void;
+  onUntrack: () => void;
   onInspect: () => void;
-}> = ({ account, onTrack, onDismiss, onInspect }) => {
+  autoReply: boolean;
+  onToggleAutoReply: (enabled: boolean) => void;
+  onRefresh: () => void;
+}> = ({ account, onTrack, onDismiss, onUntrack, onInspect, autoReply, onToggleAutoReply, onRefresh }) => {
   const tierConfig: Record<AccountTier, { gradient: string }> = {
     S: { gradient: 'from-purple-500 to-pink-500' },
     A: { gradient: 'from-indigo-500 to-blue-500' },
@@ -1105,9 +1447,9 @@ const AccountRow: React.FC<{
       {/* Tracked accent stripe on the left edge so the eye finds tracked rows at a glance */}
       {isTracked && <span className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></span>}
 
-      {/* Mobile layout: stacked. Desktop: 6-column grid that lines up with the sticky header. */}
+      {/* Mobile layout: stacked. Desktop: 4-column grid that lines up with the sticky header. */}
       <div className="md:grid md:items-center md:gap-0 flex flex-col"
-           style={{ gridTemplateColumns: '1fr 130px 90px 90px 110px 240px' }}>
+           style={{ gridTemplateColumns: '1fr 130px 110px 400px' }}>
 
         {/* ── Identity column ── */}
         <div className="px-4 py-3 flex items-center gap-3 min-w-0">
@@ -1160,30 +1502,19 @@ const AccountRow: React.FC<{
           </div>
         </div>
 
-        {/* ── Followers ── */}
-        <div className="px-3 py-2 md:py-3 flex md:block items-center justify-between md:text-right">
-          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Followers</span>
-          <span className="text-sm font-bold text-gray-900 tabular-nums">{fmt(account.followers || 0)}</span>
-        </div>
-
-        {/* ── Last post ── */}
-        <div className="px-3 py-2 md:py-3 flex md:block items-center justify-between md:text-right">
-          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Last post</span>
-          <span className="text-sm font-bold text-gray-700 tabular-nums">
-            {typeof account.daysSinceLastPost !== 'number' ? <span className="text-gray-300">—</span>
-              : account.daysSinceLastPost < 1 ? 'Today'
-              : `${Math.round(account.daysSinceLastPost)}d`}
-          </span>
-        </div>
-
-        {/* ── Median engagement ── */}
-        <div className="px-3 py-2 md:py-3 flex md:block items-center justify-between md:text-right">
-          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Median engage</span>
-          <span className="text-sm font-bold text-gray-700 tabular-nums">
-            {typeof account.maturePostMedianEngagement === 'number'
-              ? `~${account.maturePostMedianEngagement}`
-              : <span className="text-gray-300">—</span>}
-          </span>
+        {/* ── Influence ── composite signal of audience pull */}
+        <div className="px-3 py-2 md:py-3 flex md:flex-col items-center md:items-center justify-between md:justify-center gap-2 md:gap-0.5">
+          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Influence</span>
+          {(() => {
+            const inf = computeInfluence(account);
+            const meta = influenceLabel(inf);
+            return (
+              <div className="flex flex-col items-center" title={`Influence ${inf}/100 — engagement-per-post (50%) + niche match (30%) + reach authority (20%)`}>
+                <div className={`text-sm font-black tabular-nums ${meta.tone}`}>{inf}</div>
+                <div className={`text-[9px] uppercase tracking-widest font-bold ${meta.tone}`}>{meta.label}</div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── Actions ── pixel-aligned across all states.
@@ -1193,16 +1524,36 @@ const AccountRow: React.FC<{
             "Track + Skip" (untracked) or "Tracking" (tracked) — so the
             right edge of every row's Inspect/Open icons lines up
             perfectly down the column. */}
-        <div className="px-3 py-2 md:py-2.5 flex items-center justify-end gap-1.5">
-          <div className="md:w-[100px] flex items-center gap-1.5 w-full md:w-auto">
+        <div className="px-3 py-2 md:py-2.5 flex items-center justify-end gap-1.5 flex-wrap md:flex-nowrap">
+          <div className="flex items-center gap-1.5 w-full md:w-auto">
             {isTracked ? (
+              <>
               <button
-                onClick={onDismiss}
-                className="flex-1 md:w-[100px] h-8 px-2 bg-emerald-600 text-white rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-emerald-700 transition-colors"
+                onClick={() => onToggleAutoReply(!autoReply)}
+                className={`h-9 px-3.5 rounded-lg text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 border-2 transition-all whitespace-nowrap shadow-sm ${
+                  autoReply
+                    ? 'bg-violet-600 text-white border-violet-700 hover:bg-violet-700 shadow-violet-300/40'
+                    : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 hover:border-violet-400'
+                }`}
+                title={autoReply ? 'Auto-reply ON — drafts a reply for each new post (you approve before posting). Click to turn off.' : 'Auto-reply OFF — click to draft replies for this account\'s new posts'}
+              >
+                <Sparkles size={13} className="flex-shrink-0" />
+                <span>Auto-reply</span>
+                <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${autoReply ? 'bg-white/25 text-white' : 'bg-violet-200/70 text-violet-800'}`}>
+                  {autoReply ? 'ON' : 'OFF'}
+                </span>
+              </button>
+              <button
+                onClick={onUntrack}
+                className="group/untrack h-8 px-3 bg-emerald-600 text-white rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-rose-600 transition-colors whitespace-nowrap"
                 title="Stop tracking this account"
               >
-                <CheckCircle2 size={12} /> Tracking
+                <CheckCircle2 size={12} className="group-hover/untrack:hidden flex-shrink-0" />
+                <X size={12} className="hidden group-hover/untrack:inline flex-shrink-0" />
+                <span className="group-hover/untrack:hidden">Tracking</span>
+                <span className="hidden group-hover/untrack:inline">Untrack</span>
               </button>
+              </>
             ) : isDismissed ? (
               <button
                 onClick={onTrack}
@@ -1231,6 +1582,20 @@ const AccountRow: React.FC<{
               </>
             )}
           </div>
+          <button
+            onClick={onRefresh}
+            className={`w-[28px] h-8 flex-shrink-0 bg-white border rounded-lg transition-colors flex items-center justify-center ${
+              (!account.followers || account.followers === 0)
+                ? 'border-amber-300 text-amber-600 hover:bg-amber-50'
+                : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+            }`}
+            title={(!account.followers || account.followers === 0)
+              ? "Followers missing — click to re-fetch metrics (log in to the platform in this browser first if it's behind a login wall)"
+              : "Refresh metrics (followers, verified, name)"}
+            aria-label="Refresh metrics"
+          >
+            <RotateCw size={13} />
+          </button>
           <button
             onClick={onInspect}
             className="w-[28px] h-8 flex-shrink-0 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center justify-center"
@@ -1370,22 +1735,10 @@ const AccountCard: React.FC<{
             {matchStrength.fires || <span className="text-gray-300">·</span>}
           </div>
         </div>
-        {/* 2x2 grid below for numeric KPIs */}
+        {/* numeric KPIs */}
         <div className="grid grid-cols-2 gap-3">
-          <KpiCell label="Followers" value={fmt(account.followers)} />
+          <KpiCell label="Influence" value={`${computeInfluence(account)}/100`} />
           <KpiCell label="Engagement" value={`${account.engagementRate?.toFixed(1) || '—'}%`} />
-          <KpiCell
-            label="Last post"
-            value={
-              typeof account.daysSinceLastPost !== 'number' ? '—'
-              : account.daysSinceLastPost < 1 ? 'Today'
-              : `${Math.round(account.daysSinceLastPost)}d ago`
-            }
-          />
-          <KpiCell
-            label="Median engagement"
-            value={typeof account.maturePostMedianEngagement === 'number' ? `~${account.maturePostMedianEngagement}` : '—'}
-          />
         </div>
       </div>
 
@@ -1494,30 +1847,24 @@ const InspectModal: React.FC<{
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <BigStat label="Followers" value={account.followers.toLocaleString()} />
+          <BigStat label="Influence" value={`${computeInfluence(account)}/100`} />
           <BigStat label="Engagement" value={`${account.engagementRate?.toFixed(2) || '—'}%`} />
           <BigStat label="Reach score" value={`${account.authorityScore}/100`} />
           <BigStat label="Topic match" value={`${account.nicheMatch}/100`} />
         </div>
 
+        {/* Influence explainer — surfaced in the modal so the score isn't a black box */}
+        <div className="mb-6 p-3 bg-indigo-50/70 border border-indigo-100 rounded-2xl text-[11px] text-indigo-900 leading-relaxed">
+          <span className="font-bold uppercase tracking-widest text-[9px] text-indigo-700">What is Influence?</span>
+          <p className="mt-1">A composite signal of real audience pull. We weight engagement-per-post the heaviest (50%), then how well their content matches your niche (30%), then reach authority (20%). A high score means their attention actually moves the needle for you — not just a big follower number.</p>
+        </div>
+
         {/* LinkedIn post signals — surface in the inspector so the user can judge cadence */}
-        {account.platform === 'LinkedIn' && (typeof account.daysSinceLastPost === 'number' || typeof account.maturePostMedianEngagement === 'number' || typeof account.recentPostCount === 'number') && (
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <BigStat
-              label="Last post"
-              value={
-                typeof account.daysSinceLastPost !== 'number' ? '—'
-                : account.daysSinceLastPost < 1 ? 'Today'
-                : `${Math.round(account.daysSinceLastPost)}d ago`
-              }
-            />
+        {account.platform === 'LinkedIn' && typeof account.recentPostCount === 'number' && (
+          <div className="grid grid-cols-1 gap-3 mb-6">
             <BigStat
               label="Posts last 7d"
-              value={typeof account.recentPostCount === 'number' ? `${account.recentPostCount}` : '—'}
-            />
-            <BigStat
-              label="Median engagement (3d+)"
-              value={typeof account.maturePostMedianEngagement === 'number' ? `~${account.maturePostMedianEngagement}` : '—'}
+              value={`${account.recentPostCount}`}
             />
           </div>
         )}
@@ -1622,7 +1969,7 @@ const EmptyState: React.FC = () => (
     </div>
     <h3 className="font-bold text-lg mb-2">No accounts yet</h3>
     <p className="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
-      Set up your search above and click Start. A small Chrome window will open and look for accounts in your niche while keeping your account safe.
+      Describe your niche above and tap <b>Find accounts</b>. The AI will suggest real accounts to follow with high engagement in your space.
     </p>
   </div>
 );
@@ -1631,6 +1978,12 @@ const EmptyState: React.FC = () => (
 // MICRO COMPONENTS
 // ============================================================
 
+// ────────────────────────────────────────────────────────────────────
+// FEED WATCHER SECTION (standalone)
+// Independent automation — opt-in per platform. Polls the user's home feeds
+// on a timer (extension-side), and the AI scoring runs inside the service
+// worker so it works even when the panel is closed.
+// ────────────────────────────────────────────────────────────────────
 const Card: React.FC<{ title: string; subtitle?: string; icon?: React.ReactNode; children: React.ReactNode }> = ({ title, subtitle, icon, children }) => (
   <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
     <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-100">
@@ -1984,16 +2337,16 @@ const CampaignChip: React.FC<{ campaign: DiscoveryCampaign }> = ({ campaign }) =
 // ============================================================
 type TrackingSettings = {
   intervalMinutes: number;
-  cooldownMinutes: number;
   respectOffHours: boolean;
   jitterPercent: number;
 };
 
 const TrackingSettingsCard: React.FC = () => {
   const [settings, setSettings] = useState<TrackingSettings>({
-    intervalMinutes: 15, cooldownMinutes: 20, respectOffHours: true, jitterPercent: 0.25
+    intervalMinutes: 15, respectOffHours: true, jitterPercent: 0.25
   });
-  const [trackedCount, setTrackedCount] = useState(0);
+  const [tracked, setTracked] = useState<any[]>([]);
+  const trackedCount = tracked.length;
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState<'idle' | 'saving' | 'saved'>('idle');
 
@@ -2005,18 +2358,34 @@ const TrackingSettingsCard: React.FC = () => {
     return () => window.removeEventListener('tracking_settings_loaded', handler);
   }, []);
 
-  // Watch tracked count from localStorage
+  // Watch the actual tracked-accounts list (source of truth the engine polls).
   useEffect(() => {
     const refresh = () => {
       try {
         const raw = localStorage.getItem('answerly_creator_configs');
-        setTrackedCount(raw ? JSON.parse(raw).length : 0);
-      } catch { setTrackedCount(0); }
+        const list = raw ? JSON.parse(raw) : [];
+        setTracked(Array.isArray(list) ? list : []);
+      } catch { setTracked([]); }
     };
     refresh();
     const id = setInterval(refresh, 3000);
-    return () => clearInterval(id);
+    window.addEventListener('answerly_sync', refresh);
+    return () => { clearInterval(id); window.removeEventListener('answerly_sync', refresh); };
   }, []);
+
+  // Remove an account from tracking — strips it from the synced config so the
+  // engine stops polling it (this is the source of truth, regardless of any
+  // stale UI status elsewhere).
+  const removeTracked = (url: string) => {
+    try {
+      const raw = localStorage.getItem('answerly_creator_configs');
+      const list = raw ? JSON.parse(raw) : [];
+      const updated = list.filter((c: any) => c.url !== url);
+      localStorage.setItem('answerly_creator_configs', JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('answerly_sync', { detail: updated }));
+      setTracked(updated);
+    } catch (e) { console.error('Remove tracked failed', e); }
+  };
 
   const update = (patch: Partial<TrackingSettings>) => {
     const next = { ...settings, ...patch };
@@ -2058,7 +2427,37 @@ const TrackingSettingsCard: React.FC = () => {
         <div className="px-4 pb-4 space-y-4 border-t border-gray-100 pt-4">
           {trackedCount === 0 && (
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-[11px] text-gray-600 leading-relaxed">
-              When you follow an account from the search results, the bot will start watching it for new posts. New posts show up in the <b>Pipeline</b> so you can comment on them.
+              When you follow an account from the search results, the bot will start watching it for new posts. New posts show up in the <b>Posts Tracker</b> so you can comment on them.
+            </div>
+          )}
+
+          {/* Tracked accounts — the exact list the engine polls. Remove here to
+              stop tracking, regardless of any stale status in search results. */}
+          {trackedCount > 0 && (
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2">
+                Currently watching ({trackedCount})
+              </div>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {tracked.map((c: any) => (
+                  <div key={c.url} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-gray-900 truncate">{c.label || c.url}</div>
+                      <div className="text-[10px] text-gray-400 truncate">
+                        {c.platform}
+                        {c.lastStatus ? ` · ${c.lastStatus}` : ' · not checked yet'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeTracked(c.url)}
+                      className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-rose-600 hover:bg-rose-50 border border-rose-100 transition-colors flex items-center gap-1.5"
+                      title="Stop tracking this account"
+                    >
+                      <X size={12} /> Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -2082,25 +2481,6 @@ const TrackingSettingsCard: React.FC = () => {
             </div>
             <div className="text-[10px] text-gray-500 mt-1.5">
               That's about {checksPerHour} check{checksPerHour > 1 ? 's' : ''} per hour, with random timing to avoid patterns.
-            </div>
-          </div>
-
-          {/* Per-account cooldown */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">
-                Wait between same-account checks
-              </span>
-              <span className="text-xs font-bold text-gray-900">{settings.cooldownMinutes} min</span>
-            </div>
-            <input
-              type="range" min={5} max={120} step={5}
-              value={settings.cooldownMinutes}
-              onChange={e => update({ cooldownMinutes: parseInt(e.target.value) })}
-              className="w-full accent-gray-900"
-            />
-            <div className="text-[10px] text-gray-500 mt-1.5">
-              The same account won't be checked twice within this window. Higher = safer.
             </div>
           </div>
 

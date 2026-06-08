@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Answerly Meta-Radar",
-  "version": "1.4",
-  "description": "Stealth profile monitoring, account discovery and engagement for founders.",
+  "name": "LaunchVelocity Companion",
+  "version": "2.0.0",
+  "description": "Smart engagement assistant for LinkedIn and X. Drafts in-context replies on posts you choose to track and waits for your one-tap approval before anything posts.",
   "icons": {
     "16": "icon.png",
     "48": "icon.png",
@@ -11,11 +11,8 @@
   "permissions": [
     "storage",
     "alarms",
-    "cookies",
-    "notifications",
     "tabs",
-    "scripting",
-    "windows"
+    "scripting"
   ],
   "host_permissions": [
     "https://x.com/*",
@@ -25,16 +22,12 @@
     "https://syndication.twitter.com/*",
     "https://linkedin.com/*",
     "https://*.linkedin.com/*",
-    "https://reddit.com/*",
-    "https://*.reddit.com/*",
-    "https://producthunt.com/*",
-    "https://*.producthunt.com/*",
-    "http://localhost:*/*",
-    "http://127.0.0.1:*/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
     "http://localhost:3001/*",
     "http://127.0.0.1:3001/*",
-    "http://localhost/*",
-    "http://127.0.0.1/*"
+    "http://localhost:3002/*",
+    "http://127.0.0.1:3002/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -42,12 +35,12 @@
   "content_scripts": [
     {
       "matches": [
-        "http://localhost:3000/*", 
+        "http://localhost:3000/*",
         "http://127.0.0.1:3000/*",
         "http://localhost:3001/*",
         "http://127.0.0.1:3001/*",
-        "http://localhost/*",
-        "http://127.0.0.1/*"
+        "http://localhost:3002/*",
+        "http://127.0.0.1:3002/*"
       ],
       "js": ["content_bridge.js"],
       "run_at": "document_start"
@@ -57,20 +50,27 @@
         "https://x.com/*",
         "https://*.x.com/*",
         "https://twitter.com/*",
+        "https://*.twitter.com/*"
+      ],
+      "js": ["x_net_hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://x.com/*",
+        "https://*.x.com/*",
+        "https://twitter.com/*",
         "https://*.twitter.com/*",
         "https://linkedin.com/*",
-        "https://*.linkedin.com/*",
-        "https://reddit.com/*",
-        "https://*.reddit.com/*",
-        "https://producthunt.com/*",
-        "https://*.producthunt.com/*"
+        "https://*.linkedin.com/*"
       ],
       "js": ["engagement_agent.js", "discovery_agent.js"],
       "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_title": "Answerly Feed",
+    "default_title": "LaunchVelocity Companion",
     "default_popup": "popup.html"
   }
 }
