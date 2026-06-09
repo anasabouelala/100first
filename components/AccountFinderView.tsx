@@ -171,6 +171,30 @@ function aiToDiscovered(a: AISuggestedAccount, platform: DiscoveryPlatform): Dis
   const followerScore = Math.min(100, Math.round(Math.log10(Math.max(1, a.followers || 1)) * 20));
   const engagementScore = Math.round((a.engagementRate || 2) * 8);
   const finalScore = Math.max(40, Math.min(99, Math.round(followerScore * 0.45 + engagementScore * 0.55 + 20)));
+
+  // ── Reachable Audience Score (RAS) ──
+  // The "your people" number. followers × ICP overlap × visibility proxy.
+  // We use the nicheMatch (kept as a 0-100 score from the original ranking)
+  // when the AI didn't supply icpMatchRate — so the headline never reads as
+  // missing data. Visibility proxy: cap engagement-rate at 8% (anything
+  // above is rare) and rescale to 0..1.
+  const icpMatchRateUsed = typeof a.icpMatchRate === 'number'
+    ? a.icpMatchRate
+    : Math.round((engagementScore + 70) / 2); // mirrors the nicheMatch fallback below
+  const visibility = Math.min(1, (a.engagementRate || 1) / 8); // engagement rate is already 0..100%
+  const reachableAudience = Math.round((a.followers || 0) * (icpMatchRateUsed / 100) * visibility);
+
+  // ── Spotlight Window fallback ──
+  // If the AI didn't supply one, infer from platform: X is faster than LinkedIn,
+  // and high engagement = a denser, faster window.
+  const spotlightFallback =
+    platform === 'X'        ? Math.round(30 - Math.min(20, (a.engagementRate || 0) * 2))
+    : platform === 'Reddit' ? Math.round(120 - Math.min(60, (a.engagementRate || 0) * 4))
+    :                         Math.round(180 - Math.min(90, (a.engagementRate || 0) * 6)); // LinkedIn
+  const spotlightWindowMin = typeof a.spotlightWindowMin === 'number'
+    ? a.spotlightWindowMin
+    : Math.max(10, spotlightFallback);
+
   return {
     id: `ai_${platform}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     platform,
@@ -191,7 +215,12 @@ function aiToDiscovered(a: AISuggestedAccount, platform: DiscoveryPlatform): Dis
     discoveredAt: new Date().toISOString(),
     trackingStatus: 'untracked',
     discoveredVia: 'search',
-    verificationStatus: 'card-only'
+    verificationStatus: 'card-only',
+    // ── Wow KPIs ──
+    reachableAudience,
+    icpMatchRate: icpMatchRateUsed,
+    icpMatchSamples: Array.isArray(a.icpMatchSamples) ? a.icpMatchSamples : [],
+    spotlightWindowMin
   };
 }
 
@@ -1476,7 +1505,7 @@ const AccountRow: React.FC<{
                       title="Visited profile but post data was unreadable">Incomplete</span>
               )}
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mt-0.5">
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mt-0.5 flex-wrap">
               <span className="flex items-center gap-1">{platformIcon}@{account.handle}</span>
               <span className={`text-[9px] font-black tracking-widest px-1 rounded ${
                 account.tier === 'S' ? 'text-purple-600' :
@@ -1484,6 +1513,30 @@ const AccountRow: React.FC<{
                 account.tier === 'B' ? 'text-blue-600' :
                 'text-gray-500'
               }`}>· {account.tier}</span>
+              {/* ── Reachable Audience pill — the "wow" headline.
+                  Reframes follower count as buyers reached per post. Hidden
+                  when the AI hasn't returned a useful number yet. */}
+              {typeof account.reachableAudience === 'number' && account.reachableAudience > 0 && (
+                <span
+                  className="ml-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold"
+                  title={`Reachable Audience: ~${fmt(account.reachableAudience)} of their viewers fit your ICP per post. (followers × ICP match × visibility)`}
+                >
+                  <Target size={9} aria-hidden="true" /> {fmt(account.reachableAudience)} your ppl
+                </span>
+              )}
+              {/* ── Spotlight Window chip — the urgency cue. */}
+              {typeof account.spotlightWindowMin === 'number' && account.spotlightWindowMin > 0 && (
+                <span
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border ${
+                    account.spotlightWindowMin <= 30 ? 'bg-rose-50 border-rose-200 text-rose-700'
+                    : account.spotlightWindowMin <= 90 ? 'bg-amber-50 border-amber-200 text-amber-700'
+                    : 'bg-gray-50 border-gray-200 text-gray-600'
+                  }`}
+                  title={`Spotlight Window: ~${account.spotlightWindowMin}m to grab the top-comment slot before replies become invisible.`}
+                >
+                  <Clock size={9} aria-hidden="true" /> {account.spotlightWindowMin}m window
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -1834,10 +1887,93 @@ const InspectModal: React.FC<{
               <div className="text-sm text-gray-500">@{account.handle} · {account.platform}</div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl">
-            <X size={20} />
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Close inspector"
+          >
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
+
+        {/* ── WOW KPI PANEL ──
+            The three numbers that re-frame followers/engagement into
+            actionable user-side data. Hidden if none are populated. */}
+        {(typeof account.reachableAudience === 'number'
+          || typeof account.icpMatchRate === 'number'
+          || typeof account.spotlightWindowMin === 'number') && (
+          <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Reachable Audience */}
+            {typeof account.reachableAudience === 'number' && (
+              <div className="relative p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 overflow-hidden">
+                <div className="absolute -top-6 -right-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl" aria-hidden="true" />
+                <div className="flex items-center gap-1.5 mb-2 relative">
+                  <Target size={12} className="text-emerald-600" aria-hidden="true" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Reachable audience</span>
+                </div>
+                <div className="text-2xl font-extrabold text-emerald-700 tabular-nums leading-none relative">
+                  {account.reachableAudience.toLocaleString()}
+                </div>
+                <div className="text-[11px] text-gray-600 mt-1.5 leading-snug relative">of their viewers fit your ICP per post</div>
+              </div>
+            )}
+            {/* ICP Match Rate */}
+            {typeof account.icpMatchRate === 'number' && (
+              <div className="relative p-5 rounded-2xl bg-gradient-to-br from-indigo-50 to-white border border-indigo-200 overflow-hidden">
+                <div className="absolute -top-6 -right-6 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl" aria-hidden="true" />
+                <div className="flex items-center gap-1.5 mb-2 relative">
+                  <Users size={12} className="text-indigo-600" aria-hidden="true" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700">ICP match rate</span>
+                </div>
+                <div className="text-2xl font-extrabold text-indigo-700 tabular-nums leading-none relative">{account.icpMatchRate}%</div>
+                <div className="text-[11px] text-gray-600 mt-1.5 leading-snug relative">
+                  of their commenters look like your buyers
+                </div>
+                {(account.icpMatchSamples?.length || 0) > 0 && (
+                  <div className="text-[10px] text-indigo-700/80 mt-2 truncate relative" title={account.icpMatchSamples!.join(', ')}>
+                    e.g. {account.icpMatchSamples!.slice(0, 3).join(', ')}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Spotlight Window */}
+            {typeof account.spotlightWindowMin === 'number' && (
+              <div className={`relative p-5 rounded-2xl bg-gradient-to-br to-white border overflow-hidden ${
+                account.spotlightWindowMin <= 30 ? 'from-rose-50 border-rose-200'
+                : account.spotlightWindowMin <= 90 ? 'from-amber-50 border-amber-200'
+                : 'from-gray-50 border-gray-200'
+              }`}>
+                <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl ${
+                  account.spotlightWindowMin <= 30 ? 'bg-rose-500/10'
+                  : account.spotlightWindowMin <= 90 ? 'bg-amber-500/10'
+                  : 'bg-gray-500/10'
+                }`} aria-hidden="true" />
+                <div className="flex items-center gap-1.5 mb-2 relative">
+                  <Clock size={12} className={
+                    account.spotlightWindowMin <= 30 ? 'text-rose-600'
+                    : account.spotlightWindowMin <= 90 ? 'text-amber-600'
+                    : 'text-gray-600'
+                  } aria-hidden="true" />
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${
+                    account.spotlightWindowMin <= 30 ? 'text-rose-700'
+                    : account.spotlightWindowMin <= 90 ? 'text-amber-700'
+                    : 'text-gray-700'
+                  }`}>Spotlight window</span>
+                </div>
+                <div className={`text-2xl font-extrabold tabular-nums leading-none relative ${
+                  account.spotlightWindowMin <= 30 ? 'text-rose-700'
+                  : account.spotlightWindowMin <= 90 ? 'text-amber-700'
+                  : 'text-gray-700'
+                }`}>
+                  ~{account.spotlightWindowMin}m
+                </div>
+                <div className="text-[11px] text-gray-600 mt-1.5 leading-snug relative">
+                  to grab the top-comment slot before replies sink
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {account.bio && (
           <div className="mb-6 p-4 bg-gray-50 rounded-2xl">

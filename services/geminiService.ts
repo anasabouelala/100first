@@ -1755,11 +1755,25 @@ RHYTHM: ${v.rhythm} — ${
   return sections.join('\n\n');
 }
 
+// Comment-strategy defaults inferred from the source content. Kept loose
+// (string fields) so the consumer can map to whatever its UI calls them.
+export interface CommentSpecSuggestion {
+  tone: 'casual' | 'formal' | 'funny';
+  goal: 'build_relationship' | 'ask_question' | 'share_insight' | 'get_noticed';
+  maxLength: number;            // hard budget in characters
+  customInstruction: string;    // optional one-line angle ("always end with a number")
+}
+
 export interface VoiceProfileSuggestion {
   voiceMix: VoiceMix;
   hook: HookArchitecture;
   viral: ViralPhysics;
   closer: CloserStrategy;
+  // NEW — populated when the AI can infer the writer's POV + reply strategy
+  // from the source sample. Used by the "steal a voice" flow so cloning a
+  // creator fills out perspective + comment defaults too, not just the dials.
+  perspective: PerspectiveInjector;
+  commentSpec: CommentSpecSuggestion;
   reasoning: string;
 }
 
@@ -1816,9 +1830,32 @@ export const suggestVoiceProfile = async (context: {
         required: ['statusCurrency', 'inGroupSignaling', 'tribalFraming', 'fortuneCookieClose', 'loopOpener', 'concessionMove', 'baitAndSwitch', 'forbiddenSpecificity']
       },
       closer: { type: Type.STRING, enum: ['open_question', 'punchline', 'reverse_cta', 'soft_proof', 'open_loop'] },
+      // Perspective — the writer's POV inferred from the sample. Used by the
+      // "steal a voice" flow so cloning a creator also fills out their angle.
+      perspective: {
+        type: Type.OBJECT,
+        properties: {
+          uniqueAngle:    { type: Type.STRING, description: "The one-line POV that makes this writer's content distinctive (e.g. 'I shipped 47 failed products before this one'). Infer from the sample." },
+          contrarian:     { type: Type.STRING, description: 'The mainstream belief this writer pushes back on, in one line.' },
+          forbiddenTakes: { type: Type.STRING, description: 'Topics or framings this writer pointedly avoids. Empty string if nothing obvious.' },
+          receipts:       { type: Type.STRING, description: '2-4 concrete numbers, results, or credentials hinted at in the sample. Empty string if none surface.' }
+        },
+        required: ['uniqueAngle', 'contrarian', 'forbiddenTakes', 'receipts']
+      },
+      // Comment defaults — how this writer's replies should feel.
+      commentSpec: {
+        type: Type.OBJECT,
+        properties: {
+          tone:              { type: Type.STRING, enum: ['casual', 'formal', 'funny'], description: 'Overall register of the replies.' },
+          goal:              { type: Type.STRING, enum: ['build_relationship', 'ask_question', 'share_insight', 'get_noticed'], description: "Default reply intent. 'share_insight' for experts, 'ask_question' for builders, 'get_noticed' for self-promoters, 'build_relationship' for community-first." },
+          maxLength:         { type: Type.INTEGER, description: 'Character budget. 120-180 for terse writers, 240-320 for detailed ones, 420-600 for LinkedIn-style.' },
+          customInstruction: { type: Type.STRING, description: "Optional one-line rule that captures something specific about the writer's reply style (e.g. 'always end with a contrarian aside'). Empty string if nothing distinctive." }
+        },
+        required: ['tone', 'goal', 'maxLength', 'customInstruction']
+      },
       reasoning: { type: Type.STRING, description: 'One sentence explaining WHY these settings fit this context.' }
     },
-    required: ['voiceMix', 'hook', 'viral', 'closer', 'reasoning']
+    required: ['voiceMix', 'hook', 'viral', 'closer', 'perspective', 'commentSpec', 'reasoning']
   };
 
   const p = context.perspective || { uniqueAngle: '', contrarian: '', forbiddenTakes: '', receipts: '' };
@@ -1834,15 +1871,18 @@ ${p.receipts ? `- Writer's receipts/credentials: ${p.receipts}` : ''}
 ${context.styleInspiration ? `- Style inspiration sample: ${context.styleInspiration.slice(0, 500)}` : ''}
 
 TASK:
-Choose voice mix values (0-100 for each dimension), the best hook architecture, which viral physics to activate, and the closer that fits this content best.
+Choose voice mix values (0-100 for each dimension), the best hook architecture, which viral physics to activate, the closer that fits, AND also infer the writer's POV (perspective) and their default reply strategy (commentSpec) from the sample. The perspective + commentSpec fields are critical for the "steal a voice" workflow — the user wants to clone the writer's angle and how they'd reply, not just the dials.
 
 THINK ABOUT:
 - Topic vulnerability vs hard data → adjust vulnerability/specificity
 - Audience expertise → adjust authority/in-group signaling
 - Tone fit: humor (serious 0 ↔ witty 100), warmth (clinical 0 ↔ hearth 100), optimism (gritty realist 0 ↔ evangelist 100). Match these to how the SAMPLE actually reads, not how you'd like it to read.
 - Format constraints (X tweet = high energy/staccato; LinkedIn long-form = contemplative)
-- The writer's contrarian view → enable bait-and-switch and forbidden specificity if strong
-- If they have receipts → enable concession move + status currency
+- The writer's contrarian view → enable bait-and-switch and forbidden specificity if strong; also surface it in perspective.contrarian.
+- If they have receipts → enable concession move + status currency; also list 2-4 specific receipts in perspective.receipts.
+- perspective.uniqueAngle MUST be a sharp, one-line POV (not generic). If the sample doesn't reveal one, infer the most plausible from their recurring themes.
+- commentSpec.maxLength: shorter for terse writers (120-180), medium for most (240-320), longer for LinkedIn-essay writers (420-600).
+- commentSpec.customInstruction: leave empty unless the writer has a *distinctive* reply tic (e.g. always closes with a one-liner).
 
 Return JSON only.`;
 
@@ -2681,6 +2721,20 @@ export interface AISuggestedAccount {
   matchedSignals: string[];      // why this account fits
   topTopics: string[];
   whyHighEngagement: string;     // single-sentence rationale
+
+  // ── Wow KPIs (best-effort estimates by the model) ──
+  // These reframe vanity numbers into actionable numbers. Optional because
+  // older callers don't pass targetAudience; the consumer falls back to a
+  // local heuristic when these are missing.
+
+  // % of this creator's most engaged commenters whose bios match the user's
+  // ICP. 0-100. Reflect how dense their audience is in the user's niche.
+  icpMatchRate?: number;
+  // 2-3 sample matched-commenter handles for hover-proof. Real handles only.
+  icpMatchSamples?: string[];
+  // Median minutes from post-published until ~50% of total engagement has
+  // landed. Lower = a tighter window before replies become invisible.
+  spotlightWindowMin?: number;
 }
 
 export const findAccountsWithAI = async (params: AIFinderParams): Promise<AISuggestedAccount[]> => {
@@ -2704,7 +2758,12 @@ export const findAccountsWithAI = async (params: AIFinderParams): Promise<AISugg
             engagementRate: { type: Type.NUMBER, description: "Approximate engagement rate as percent 0..100." },
             matchedSignals: { type: Type.ARRAY, items: { type: Type.STRING }, description: "2-4 reasons this account matches the user's niche." },
             topTopics: { type: Type.ARRAY, items: { type: Type.STRING }, description: "2-5 recurring topics they post about." },
-            whyHighEngagement: { type: Type.STRING, description: "One short sentence on why this account drives engagement." }
+            whyHighEngagement: { type: Type.STRING, description: "One short sentence on why this account drives engagement." },
+
+            // ── Wow KPIs ──
+            icpMatchRate: { type: Type.NUMBER, description: "Best-effort estimate (0-100) of the percentage of this account's recent engaged commenters whose bios fit the user's TARGET AUDIENCE. If you don't know, estimate based on the audience overlap between their TOPICS and the user's niche. Be honest: 30-50 is realistic for niche-adjacent accounts, 70+ is rare." },
+            icpMatchSamples: { type: Type.ARRAY, items: { type: Type.STRING }, description: "2-3 REAL handles of plausible matched commenters (no fabrications). Leave empty if you don't have specific knowledge." },
+            spotlightWindowMin: { type: Type.INTEGER, description: "Estimated median minutes from post-published until ~50% of engagement is collected. Typical ranges: 15-30 for X power users, 60-180 for LinkedIn slow burns, 180-360 for evergreen creators. Smaller = the user must reply faster to grab the top-comment slot." }
           },
           required: ["handle", "displayName", "url", "bio", "followers", "verified", "matchedSignals", "topTopics", "whyHighEngagement"]
         }
@@ -2749,6 +2808,7 @@ Rules:
 - For ${params.platform === 'Reddit' ? 'Reddit, suggest active subreddits — not individual users' : 'individual creators'}.
 - Diversify: don’t just suggest the 5 most famous names — include mid-tier creators whose audience is dense and active.
 - Each \`whyHighEngagement\` must be specific (e.g. "posts contrarian takes on B2B SaaS pricing — replies average 80+").${countryClause}
+- icpMatchRate, icpMatchSamples, spotlightWindowMin are CRITICAL — they're the headline KPIs the user sees on each account card. Be honest, don't fabricate. If you can't estimate, return null fields and the UI will fall back to a local heuristic. Real-handle samples only.
 - Return ONLY the JSON object.`;
 
   try {
@@ -2769,7 +2829,17 @@ Rules:
       followers: Math.max(0, Math.round(Number(a.followers) || 0)),
       engagementRate: typeof a.engagementRate === 'number' ? Math.max(0, Math.min(100, a.engagementRate)) : undefined,
       matchedSignals: Array.isArray(a.matchedSignals) ? a.matchedSignals : [],
-      topTopics: Array.isArray(a.topTopics) ? a.topTopics : []
+      topTopics: Array.isArray(a.topTopics) ? a.topTopics : [],
+      // ── Wow-KPI normalization. Clamp to sane ranges, drop garbage. ──
+      icpMatchRate: typeof a.icpMatchRate === 'number'
+        ? Math.max(0, Math.min(100, Math.round(a.icpMatchRate)))
+        : undefined,
+      icpMatchSamples: Array.isArray(a.icpMatchSamples)
+        ? a.icpMatchSamples.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 3)
+        : [],
+      spotlightWindowMin: typeof a.spotlightWindowMin === 'number'
+        ? Math.max(5, Math.min(720, Math.round(a.spotlightWindowMin))) // 5min - 12h
+        : undefined
     }));
   } catch (e) {
     console.error("AI account finder error:", e);

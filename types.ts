@@ -289,7 +289,9 @@ export enum AppMode {
   CONTENT_ENGINE = 'CONTENT_ENGINE',
   PLATFORM_INSIGHTS = 'PLATFORM_INSIGHTS',
   TRIAGE = 'TRIAGE',
-  ACCOUNT_FINDER = 'ACCOUNT_FINDER'
+  ACCOUNT_FINDER = 'ACCOUNT_FINDER',
+  FEED_WATCHER = 'FEED_WATCHER',
+  CONTENT_PARAMETERS = 'CONTENT_PARAMETERS'
 }
 
 // =====================================================================
@@ -302,22 +304,115 @@ export type AuthorityLevel = 'nano' | 'micro' | 'mid' | 'macro' | 'mega' | 'all'
 export type AccountTier = 'S' | 'A' | 'B' | 'C';
 export type MissionStatus = 'idle' | 'preparing' | 'scanning' | 'paused' | 'cooldown' | 'completed' | 'failed' | 'aborted';
 
+// Engagement-bar preset. Maps to per-platform numeric thresholds inside
+// the engine (ENGAGEMENT_THRESHOLDS) — see discovery_engine.js. The preset
+// shape hides the asymmetry between platforms (50 likes on X is solid;
+// 50 reactions on LinkedIn is OK; 50 upvotes in r/SaaS is great but
+// trivial in r/AskReddit).
+export type EngagementFloor = 'any' | 'some' | 'real' | 'viral';
+
+// Time window for "posts within the last N days". null = no recency filter.
+export type PostRecencyDays = 7 | 30 | 90 | null;
+
+// Per-platform seed inputs. Strongest signal we have: hand-picked accounts
+// the user already knows are good in their niche. Engine fans out from
+// each seed via the engagement graph (repliers / reactors / commenters).
+export interface DiscoverySeeds {
+  X?: string[];        // list URLs (x.com/i/lists/<id>) or @handles
+  LinkedIn?: string[]; // hashtags or /in/<handle> profile URLs
+  Reddit?: string[];   // subreddit names (e.g. "r/SaaS" or just "SaaS")
+}
+
+// =====================================================================
+// FEED WATCHER
+// =====================================================================
+// Activate per-platform inside the Account Finder. When enabled, the extension
+// polls the user's HOME FEED on that platform on a user-defined timer, scrapes
+// what's currently visible, and buffers it for the panel to score against
+// `prompt` with Gemini. Posts that meet `minRelevancy` are promoted to the
+// Posts Tracker (social_radar_history) with `relevancyScore` + `relevancyReason`
+// attached. Author info comes ONLY from what is visible on the feed card itself
+// — no profile visits.
+export interface FeedWatcherConfig {
+  enabled: { X: boolean; LinkedIn: boolean; Reddit: boolean };
+  prompt: string;             // free-text: "what I'm looking for in my feed"
+  minRelevancy: number;       // 0..100 — global threshold across all enabled platforms
+  pollIntervalMinutes: number; // user-configured timer (e.g. 15)
+  maxPostsPerSweep?: number;   // target posts to scrape & surface per sweep (1..100, default 50)
+  // Engagement layer — the Feed Watcher behaves like a selective human: for the
+  // best posts it DRAFTS a value-adding reply (or flags a repost) in the user's
+  // voice and queues it for approval. NOTHING posts automatically.
+  engagement?: {
+    enabled?: boolean;       // default true — draft suggestions during sweeps
+    maxPerSweep?: number;    // cap drafts per single sweep (default 3)
+    maxPerDay?: number;      // rolling-24h ceiling (default 14 — "casual but frequent")
+  };
+  lastSweepAt?: string;        // ISO of last completed sweep (any platform)
+  lastSweepFound?: number;     // count promoted to the Posts Tracker in the last sweep
+  lastSweepDrafted?: number;   // engagement drafts queued in the last sweep
+}
+
+// Raw post item produced by the in-page home-feed scrapers, sitting in the
+// buffer between scrape and AI scoring. Author fields ONLY include what we
+// could read off the feed card (no profile fetch).
+export interface FeedWatchPostRaw {
+  uuid: string;                    // stable id (urn / status id) so dedup survives multi-sweep
+  platform: DiscoveryPlatform;
+  postUrl: string;                 // permalink (used by the Tracker as the canonical url)
+  text: string;                    // post body text as visible on the card (trimmed)
+  scrapedAt: string;               // ISO timestamp of the scrape
+  postTimestamp?: number;          // epoch ms if the card exposed an "Xh ago" / datetime
+  // Author provenance from the feed card only:
+  author: {
+    handle: string;
+    displayName?: string;
+    profileUrl: string;
+    verified?: boolean;
+    bylineSubtitle?: string;       // e.g. LinkedIn role headline shown under the actor name
+    avatarUrl?: string;
+  };
+  cardEngagement?: {
+    likes?: number; retweets?: number; replies?: number;  // X
+    reactions?: number; comments?: number;                // LinkedIn
+    upvotes?: number;                                     // Reddit
+    total?: number;
+  };
+}
+
 export interface DiscoveryFilters {
   platforms: DiscoveryPlatform[];
   keywords: string[];
   hashtags: string[];
   excludeKeywords: string[];
+
+  // Engagement bar (Block 2 in the panel). engagementFloor is the headline
+  // filter; postRecencyDays gates how far back we look; minEngagementRate
+  // is the audience-engagement ratio filter (engagement / followers).
+  engagementFloor: EngagementFloor;
+  postRecencyDays: PostRecencyDays;
+  minEngagementRate?: number;
+
+  // Seeds (Block 3). Optional but high-leverage when supplied.
+  seeds?: DiscoverySeeds;
+
+  // Feed watcher (Block 5). Independent of a discovery mission — when enabled
+  // for a platform, the extension polls that platform's HOME FEED on a timer.
+  feedWatcher?: FeedWatcherConfig;
+
+  // Audience refinement (Block 4 — collapsed by default).
+  authorityLevel: AuthorityLevel;
   minFollowers?: number;
   maxFollowers?: number;
-  minEngagementRate?: number;
-  authorityLevel: AuthorityLevel;
   language?: string;
   location?: string;
   industry?: string;
-  postingFrequency?: 'daily' | 'weekly' | 'any';
   verifiedOnly: boolean;
-  recentActivityDays?: number;
   excludeAlreadyTracked: boolean;
+
+  // Deprecated. Kept optional so persisted missions don't break their type
+  // contract — engine ignores it. Removed from the panel; use postRecencyDays.
+  postingFrequency?: 'daily' | 'weekly' | 'any';
+  recentActivityDays?: number;
 }
 
 export interface DiscoveredAccount {
@@ -349,12 +444,59 @@ export interface DiscoveredAccount {
   // Verification lifecycle: 'preliminary' = score from search-card only;
   // 'verified' = post-profile-visit; 'incomplete' = visited but post data unreadable.
   // Absent = legacy entries that always went through full verification (treat as 'verified').
-  verificationStatus?: 'preliminary' | 'verified' | 'incomplete';
+  // 'card-only' = X/LinkedIn author scored purely from post-card engagement,
+  // no profile visit (the profile-free path); 'commenter-signal' = LinkedIn
+  // account surfaced via deep-mode commenter expansion.
+  verificationStatus?: 'preliminary' | 'verified' | 'incomplete' | 'card-only' | 'commenter-signal';
   // LinkedIn post signals (only populated after verification)
   recentPostCount?: number;            // posts in last 7d
   maturePostMedianEngagement?: number; // median (reactions+comments) on posts ≥3d old
+  postsSeen?: number;                  // how many of this author's posts surfaced in the search (consistency signal)
   daysSinceLastPost?: number;
   filterMismatchReasons?: string[];    // why this account doesn't match filters (informational, not gating)
+
+  // How this candidate was found. 'search' = keyword feed; 'post' = author of a
+  // matched post; 'seed-expand' = graph-traversal from a user-provided seed;
+  // 'commenter' = active commenter on top niche posts (deep mode).
+  discoveredVia?: 'search' | 'seed-expand' | 'fallback' | 'post' | 'commenter';
+
+  // Engagement read directly off the search-feed card (likes/RTs/reactions/
+  // upvotes etc.). Populated at discovery time, BEFORE any profile visit,
+  // so we can rank by real engagement during the cheap pass.
+  cardEngagement?: {
+    likes?: number;       // X
+    retweets?: number;    // X
+    replies?: number;     // X
+    reactions?: number;   // LinkedIn
+    upvotes?: number;     // Reddit
+    comments?: number;    // LinkedIn / Reddit
+    total?: number;       // sum used for sorting
+  };
+
+  // Subreddit-only: median engagement (ups + num_comments) on top posts
+  // of the past week. The "is this community alive" signal — much better
+  // than raw subscriber count for deciding where to engage.
+  subredditWeeklyMedianEngagement?: number;
+
+  // ── "Wow" KPIs — reframe vanity numbers (followers, engagement) into
+  //    numbers the user can act on (their ICP, their time, their window). ──
+
+  // Reachable Audience Score — how many people in YOUR ICP this account
+  // can put in front of you per post. Roughly:
+  //   followers × icpMatchRate% × engagementVisibility
+  // Surfaced as a single big number on the row card.
+  reachableAudience?: number;
+
+  // ICP Match Rate — % of this account's recent commenters whose bios fit
+  // the user's targetAudience. 0-100. When AI-supplied, comes with 2-3
+  // sample handles for hover-proof.
+  icpMatchRate?: number;
+  icpMatchSamples?: string[];
+
+  // Spotlight Window — median minutes from post-published until ~50% of
+  // total engagement has been collected. After that window, replies are
+  // largely invisible. Lower number = faster you must show up.
+  spotlightWindowMin?: number;
 }
 
 export interface MissionLog {
