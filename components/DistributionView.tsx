@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { findDistributionChannels, generateChannelContent, analyzeChannel, findChannelOpportunities, generateOpportunityReply, getIndustryBenchmarks, isGeminiConfigured } from '../services/geminiService';
 import { DistributionChannel, GeneratedContent, ChannelAnalysis, MarketOpportunity, ReplyDraft, IndustryBenchmark } from '../types';
 import {
@@ -211,29 +212,21 @@ export const DistributionView: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto pb-24 animate-fade-in">
-      {/* === HEADER === */}
-      <div className="flex items-end justify-between mb-8">
-        <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-400 font-bold mb-2">Growth Ops</div>
-          <h1 className="text-4xl font-display font-bold tracking-tight text-slate-900">
-            Distribution Lab
-          </h1>
-          <p className="text-sm text-slate-500 mt-2">Find, analyze, and execute on the highest-converting channels.</p>
-        </div>
-        {channels.length > 0 && (
-          <div className="hidden md:flex items-center gap-3">
-            <div className="text-right">
-              <div className="text-2xl font-display font-bold text-slate-900">{channels.length}</div>
-              <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Channels</div>
-            </div>
-            <div className="h-10 w-px bg-slate-200"></div>
-            <div className="text-right">
-              <div className="text-2xl font-display font-bold text-emerald-600">{tracked}</div>
-              <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">In flight</div>
-            </div>
+      {/* Page title is provided by the shared glass header in App. KPI strip
+           stays so the user still sees the quick counts at a glance. */}
+      {channels.length > 0 && (
+        <div className="mb-8 flex items-center gap-3 justify-end">
+          <div className="text-right">
+            <div className="text-2xl font-display font-bold text-slate-900">{channels.length}</div>
+            <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Channels</div>
           </div>
-        )}
-      </div>
+          <div className="h-10 w-px bg-slate-200"></div>
+          <div className="text-right">
+            <div className="text-2xl font-display font-bold text-emerald-600">{tracked}</div>
+            <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">In flight</div>
+          </div>
+        </div>
+      )}
 
       {/* === API KEY WARNING === */}
       {!apiConfigured && (
@@ -706,12 +699,24 @@ const StatusPill: React.FC<{
   dark?: boolean;
 }> = ({ status, onChange, dark }) => {
   const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const meta = STATUS_META[status];
 
+  const openMenu = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setRect({ top: r.bottom + 4, left: r.left, width: r.width });
+    setOpen(true);
+  };
+
+  // The menu renders in a PORTAL with FIXED positioning so it escapes the
+  // channel card's `overflow-hidden` + stacking context — previously the
+  // dropdown was being clipped / hidden behind sibling cards.
   return (
     <div className="relative" onClick={(e) => e.stopPropagation()}>
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onClick={() => (open ? setOpen(false) : openMenu())}
         className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
           dark
             ? 'bg-white/10 hover:bg-white/20 text-white backdrop-blur'
@@ -723,16 +728,19 @@ const StatusPill: React.FC<{
         </span>
         <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && (
+      {open && rect && createPortal(
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)}></div>
-          <div className="absolute z-40 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
+          <div className="fixed inset-0 z-[290]" onClick={() => setOpen(false)} />
+          <div
+            style={{ position: 'fixed', top: rect.top, left: rect.left, width: Math.max(rect.width, 160) }}
+            className="z-[300] bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
+          >
             {(Object.keys(STATUS_META) as ChannelStatus[]).map(s => {
               const m = STATUS_META[s];
               return (
                 <button
                   key={s}
-                  onClick={() => { onChange(s); setOpen(false); }}
+                  onClick={(e) => { e.stopPropagation(); onChange(s); setOpen(false); }}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-bold transition-all hover:bg-slate-50 ${m.color}`}
                 >
                   {m.icon} {m.label}
@@ -741,7 +749,8 @@ const StatusPill: React.FC<{
               );
             })}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );

@@ -84,11 +84,11 @@ export const AnswerlyView: React.FC = () => {
             <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-white/5 pb-8">
                 <div className="space-y-2">
                     <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
-                        <ShieldCheck className="text-blue-500" size={24} /> Stealth Engine
+                        <ShieldCheck className="text-blue-500" size={24} aria-hidden="true" /> Watch Engine
                     </h2>
-                    <p className="text-sm text-gray-500 max-w-xl font-medium leading-relaxed">
-                        Answerly monitors these vectors stealthily using your active session. 
-                        New signals will manifest in your <span className="text-blue-400">Public Radar</span> automatically.
+                    <p className="text-sm text-gray-400 max-w-xl font-medium leading-relaxed">
+                        The agent watches these accounts in the background using your active session.
+                        New signals show up in your <span className="text-blue-400">Posts Tracker</span> automatically.
                     </p>
                 </div>
                 

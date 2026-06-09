@@ -32,10 +32,27 @@ tailwind.config = {
 }
 </script>
 <style>
+    /* ── Global a11y baselines ──
+       smooth-scroll for in-page anchors, focus-visible rings for keyboard
+       nav, and a reduced-motion override so visitors with vestibular
+       sensitivity don't get the reveal animation or the ping pulse. These
+       are HIGH-severity items in the ui-ux-pro-max guidelines. */
+    html { scroll-behavior: smooth; }
     body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
     h1, h2, h3, h4 { font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.02em; }
+    :focus-visible {
+        outline: 2px solid #4f46e5;       /* indigo-600 — readable on both dark + light surfaces */
+        outline-offset: 2px;
+        border-radius: 6px;
+    }
     .reveal { opacity: 0; transform: translateY(16px); transition: opacity .8s ease-out, transform .8s ease-out; }
     .reveal.in { opacity: 1; transform: translateY(0); }
+    @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .reveal { opacity: 1; transform: none; transition: none; }
+        .animate-fade-up, .animate-ping-slow, .animate-float { animation: none !important; }
+        *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+    }
     .hl { background: linear-gradient(180deg, transparent 58%, #c4b5fd 58%); padding: 0 .08em; }
     .hl-amber { background: linear-gradient(180deg, transparent 58%, #fde68a 58%); padding: 0 .08em; }
     .dot-bg {
@@ -117,16 +134,16 @@ tailwind.config = {
                 See how it works
             </a>
         </div>
-        <p class="text-xs text-white/40 mt-5 animate-fade-up" style="animation-delay: 320ms; animation-fill-mode: backwards;">
+        <p class="text-xs text-white/70 mt-5 animate-fade-up" style="animation-delay: 320ms; animation-fill-mode: backwards;">
             7-day free trial · Nothing posts without your tap · Cancel anytime
         </p>
 
         <!-- proof bar -->
         <div class="mt-14 grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 rounded-2xl overflow-hidden border border-white/10 animate-fade-up" style="animation-delay: 400ms; animation-fill-mode: backwards;">
-            <div class="bg-gray-950 px-5 py-6"><div class="font-display text-2xl md:text-3xl font-semibold count">8–12×</div><div class="text-[11px] text-white/40 mt-1 leading-snug">more replies than a cold DM gets you</div></div>
-            <div class="bg-gray-950 px-5 py-6"><div class="font-display text-2xl md:text-3xl font-semibold count">10 min</div><div class="text-[11px] text-white/40 mt-1 leading-snug">a day. Not the two hours this used to take</div></div>
-            <div class="bg-gray-950 px-5 py-6"><div class="font-display text-2xl md:text-3xl font-semibold count">2 platforms</div><div class="text-[11px] text-white/40 mt-1 leading-snug">LinkedIn &amp; X — one dashboard</div></div>
-            <div class="bg-gray-950 px-5 py-6"><div class="font-display text-2xl md:text-3xl font-semibold count">0</div><div class="text-[11px] text-white/40 mt-1 leading-snug">posts go out without your tap. Your name, your call</div></div>
+            <div class="bg-gray-950 px-5 py-6"><div class="font-display text-2xl md:text-3xl font-semibold count">8–12×</div><div class="text-[11px] text-white/70 mt-1 leading-snug">more replies than a cold DM gets you</div></div>
+            <div class="bg-gray-950 px-5 py-6"><div class="font-display text-2xl md:text-3xl font-semibold count">10 min</div><div class="text-[11px] text-white/70 mt-1 leading-snug">a day. Not the two hours this used to take</div></div>
+            <div class="bg-gray-950 px-5 py-6"><div class="font-display text-2xl md:text-3xl font-semibold count">2 platforms</div><div class="text-[11px] text-white/70 mt-1 leading-snug">LinkedIn &amp; X — one dashboard</div></div>
+            <div class="bg-gray-950 px-5 py-6"><div class="font-display text-2xl md:text-3xl font-semibold count">0</div><div class="text-[11px] text-white/70 mt-1 leading-snug">posts go out without your tap. Your name, your call</div></div>
         </div>
     </div>
 </section>
@@ -156,21 +173,21 @@ tailwind.config = {
             <!-- visual mock: ranked account list -->
             <div class="p-5 rounded-2xl bg-gray-950 text-white relative overflow-hidden">
                 <div class="absolute -top-12 -right-10 w-44 h-44 bg-violet-600/25 rounded-full blur-2xl"></div>
-                <div class="text-[10px] font-black uppercase tracking-widest text-white/40 mb-3 relative">Suggested · United States · "B2B SaaS pricing"</div>
+                <div class="text-[10px] font-black uppercase tracking-widest text-white/70 mb-3 relative">Suggested · United States · "B2B SaaS pricing"</div>
                 <div class="space-y-2 relative">
                     <div class="flex items-center gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10">
                         <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-xs font-bold">PR</div>
-                        <div class="flex-1 min-w-0"><div class="text-sm font-semibold truncate">Patrick R.</div><div class="text-[10px] text-white/40">@patrickr · 48K · pricing strategy</div></div>
+                        <div class="flex-1 min-w-0"><div class="text-sm font-semibold truncate">Patrick R.</div><div class="text-[10px] text-white/65">@patrickr · 48K · pricing strategy</div></div>
                         <div class="text-right"><div class="text-sm font-black text-rose-400 tabular-nums">92</div><div class="text-[9px] uppercase tracking-widest text-rose-400/80">Heavyweight</div></div>
                     </div>
                     <div class="flex items-center gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10">
                         <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-xs font-bold">AL</div>
-                        <div class="flex-1 min-w-0"><div class="text-sm font-semibold truncate">April L.</div><div class="text-[10px] text-white/40">@aprilops · 22K · SaaS ops</div></div>
+                        <div class="flex-1 min-w-0"><div class="text-sm font-semibold truncate">April L.</div><div class="text-[10px] text-white/65">@aprilops · 22K · SaaS ops</div></div>
                         <div class="text-right"><div class="text-sm font-black text-orange-400 tabular-nums">76</div><div class="text-[9px] uppercase tracking-widest text-orange-400/80">Strong</div></div>
                     </div>
                     <div class="flex items-center gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10">
                         <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-xs font-bold">DM</div>
-                        <div class="flex-1 min-w-0"><div class="text-sm font-semibold truncate">Dan M.</div><div class="text-[10px] text-white/40">@danmrkt · 15K · SaaS GTM</div></div>
+                        <div class="flex-1 min-w-0"><div class="text-sm font-semibold truncate">Dan M.</div><div class="text-[10px] text-white/65">@danmrkt · 15K · SaaS GTM</div></div>
                         <div class="text-right"><div class="text-sm font-black text-amber-400 tabular-nums">61</div><div class="text-[9px] uppercase tracking-widest text-amber-400/80">Solid</div></div>
                     </div>
                 </div>
@@ -634,7 +651,7 @@ tailwind.config = {
         <div class="reveal">
             <h2 class="font-display text-3xl md:text-5xl font-semibold leading-[1.08]">
                 Cold DMs get filtered.<br/>
-                <span class="text-white/40">Specialist positioning gets you the inbound.</span>
+                <span class="text-white/55">Specialist positioning gets you the inbound.</span>
             </h2>
             <p class="text-base md:text-lg text-white/60 mt-6 max-w-xl mx-auto leading-relaxed">
                 The founders pulling leads on LinkedIn and X aren't sending more DMs. They're impossible to ignore — because they show up usefully, every day, in the exact rooms their buyers already live in. Now you can too, in 10 minutes a day, in your own voice, with a guarantee.

@@ -13,7 +13,7 @@ import { DashboardView } from './components/DashboardView';
 import {
   Zap, Menu, Home, ShieldCheck,
   Sparkles, Trash2, Plus, Crosshair, Settings2, Rss,
-  LogOut, Loader2
+  LogOut, Loader2, ArrowUpRight
 } from 'lucide-react';
 
 // Unified section titles — one simple header for every section.
@@ -23,6 +23,82 @@ const SECTION_META: Record<string, { title: string; subtitle: string }> = {
   [AppMode.FEED_WATCHER]:         { title: 'Feed Watcher',        subtitle: 'Mine your home feed for opportunities, automatically' },
   [AppMode.CONTENT_ENGINE]:       { title: 'Content Engine',      subtitle: 'Generate posts that convert' },
   [AppMode.CONTENT_PARAMETERS]:   { title: 'Voice Studio',        subtitle: 'Tune your voice once. Every post inherits it.' },
+};
+
+// ──────────────────────────────────────────────────────────────────
+// SidebarQuickStats
+// A tiny pulse panel in the sidebar showing the two numbers a user
+// actually cares about at a glance: how many accounts they're watching,
+// and how many replies they've posted today. Reads from localStorage —
+// the same sources the rest of the app writes to — and refreshes when
+// other tabs / event listeners update them. Click anywhere on the card
+// to jump straight to the Posts Tracker.
+// ──────────────────────────────────────────────────────────────────
+const SidebarQuickStats: React.FC<{ onJump: () => void }> = ({ onJump }) => {
+  const [tracked, setTracked] = useState(0);
+  const [repliesToday, setRepliesToday] = useState(0);
+
+  useEffect(() => {
+    const load = () => {
+      try {
+        const cfg = JSON.parse(localStorage.getItem('answerly_creator_configs') || '[]');
+        setTracked(Array.isArray(cfg) ? cfg.length : 0);
+      } catch { setTracked(0); }
+      try {
+        const log = JSON.parse(localStorage.getItem('comment_log') || '[]');
+        const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+        const startMs = dayStart.getTime();
+        const count = Array.isArray(log)
+          ? log.filter((e: any) => (typeof e?.at === 'number' ? e.at : Date.parse(e?.at || '')) >= startMs).length
+          : 0;
+        setRepliesToday(count);
+      } catch { setRepliesToday(0); }
+    };
+    load();
+    // Refresh on the events the rest of the app already dispatches when
+    // these collections change.
+    const onSync     = () => load();
+    const onCmtLoad  = () => load();
+    const onStorage  = (e: StorageEvent) => {
+      if (e.key === 'answerly_creator_configs' || e.key === 'comment_log') load();
+    };
+    window.addEventListener('answerly_sync', onSync);
+    window.addEventListener('comment_log_loaded', onCmtLoad);
+    window.addEventListener('storage', onStorage);
+    const id = setInterval(load, 8000);
+    return () => {
+      window.removeEventListener('answerly_sync', onSync);
+      window.removeEventListener('comment_log_loaded', onCmtLoad);
+      window.removeEventListener('storage', onStorage);
+      clearInterval(id);
+    };
+  }, []);
+
+  return (
+    <button
+      type="button"
+      onClick={onJump}
+      className="w-full text-left rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 hover:from-gray-50 hover:to-white hover:border-gray-300 transition-all p-3 group"
+      title="Open Tracked posts"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-500">Today</span>
+        <span className="flex items-center gap-1 text-[9px] font-bold text-gray-400 group-hover:text-gray-700 transition-colors">
+          Open <ArrowUpRight size={9} />
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <div className="text-[18px] font-extrabold leading-none text-gray-900 tabular-nums">{tracked}</div>
+          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1 font-bold">Tracked</div>
+        </div>
+        <div>
+          <div className="text-[18px] font-extrabold leading-none text-emerald-600 tabular-nums">{repliesToday}</div>
+          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1 font-bold">Replies</div>
+        </div>
+      </div>
+    </button>
+  );
 };
 
 // Single frosted-glass title bar shared by all sections.
@@ -153,8 +229,11 @@ function AppInner() {
   // small spinner instead of flashing the dashboard frame.
   if (auth.loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-base-200">
-        <div className="flex items-center gap-2 text-gray-500"><Loader2 size={16} className="animate-spin" /> <span className="text-sm">Checking session…</span></div>
+      <div className="min-h-screen flex items-center justify-center bg-base-200" role="status" aria-live="polite" aria-busy="true">
+        <div className="flex items-center gap-2 text-gray-600">
+          <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+          <span className="text-sm">Checking session…</span>
+        </div>
       </div>
     );
   }
@@ -163,8 +242,8 @@ function AppInner() {
       window.location.replace('/landing-growth.html');
     }
     return (
-      <div className="min-h-screen flex items-center justify-center bg-base-200">
-        <div className="text-sm text-gray-500">Redirecting to sign in…</div>
+      <div className="min-h-screen flex items-center justify-center bg-base-200" role="status" aria-live="polite">
+        <div className="text-sm text-gray-600">Redirecting to sign in…</div>
       </div>
     );
   }
@@ -228,8 +307,8 @@ function AppInner() {
       <div className="drawer-content flex flex-col bg-transparent min-h-screen">
         <div className="w-full navbar glass-morphism lg:hidden shadow-sm">
           <div className="flex-none">
-            <label htmlFor="my-drawer-2" className="btn btn-square btn-ghost">
-              <Menu />
+            <label htmlFor="my-drawer-2" className="btn btn-square btn-ghost min-h-[44px] min-w-[44px]" aria-label="Open navigation menu">
+              <Menu aria-hidden="true" />
             </label>
           </div>
           <div className="flex-1 px-2 mx-2 font-display font-bold text-xl">LaunchVelocity</div>
@@ -261,6 +340,14 @@ function AppInner() {
               <ProjectSummaryCard compact onEdit={() => setEditingProject(true)} />
             </div>
 
+            {/* Quick stats — fills the visual gap between project pill and
+                nav, and answers the two questions the user actually has when
+                they look at the sidebar: "how many accounts am I watching?"
+                and "how many replies went out today?" */}
+            <div className="px-2 mb-2">
+              <SidebarQuickStats onJump={() => setMode(AppMode.ANSWERLY_RADAR)} />
+            </div>
+
             {navGroups.map((group) => (
               <React.Fragment key={group.title}>
                 <li className="menu-title opacity-40 uppercase text-[10px] tracking-[0.2em] mt-6 mb-2 font-black">{group.title}</li>
@@ -268,12 +355,13 @@ function AppInner() {
                   <li key={item.id} className="mb-0.5">
                     <button
                       onClick={() => { setMode(item.id as any); if(window.innerWidth < 1024) setIsSidebarOpen(false); }}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-out
+                      aria-current={mode === item.id ? 'page' : undefined}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ease-out cursor-pointer min-h-[40px]
                         ${mode === item.id
                           ? 'bg-gray-900 text-white'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                         }`}>
-                      <span className={mode === item.id ? 'text-white' : 'text-gray-400'}>{item.icon}</span>
+                      <span className={mode === item.id ? 'text-white' : 'text-gray-500'} aria-hidden="true">{item.icon}</span>
                       <span>{item.label}</span>
                     </button>
                   </li>
@@ -340,11 +428,12 @@ function AppInner() {
       {/* Delete Project confirmation */}
       {confirmingDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-             onClick={() => setConfirmingDelete(false)}>
+             onClick={() => setConfirmingDelete(false)}
+             role="dialog" aria-modal="true" aria-labelledby="del-proj-title">
           <div className="glass-panel rounded-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-3">
-              <div className="bg-rose-100 text-rose-600 p-2 rounded-xl"><Trash2 size={18} /></div>
-              <h2 className="text-lg font-bold text-gray-900">Delete this project?</h2>
+              <div className="bg-rose-100 text-rose-600 p-2 rounded-xl" aria-hidden="true"><Trash2 size={18} /></div>
+              <h2 id="del-proj-title" className="text-lg font-bold text-gray-900">Delete this project?</h2>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed mb-5">
               This erases the project and all its data — personas, strategy, leads, tracked posts and content settings.

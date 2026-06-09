@@ -12,16 +12,74 @@ body {
   margin: 0;
   padding: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #f8fafc;
   color: #1e293b;
   -webkit-font-smoothing: antialiased;
+  /* Liquid-glass ambient background — layered radial colour blobs over a
+     soft vertical gradient. Fixed so it stays put while content scrolls. */
+  background-color: #eef2f7;
+  background-image:
+    radial-gradient(60rem 60rem at 12% -8%, rgba(99, 102, 241, 0.20), transparent 60%),
+    radial-gradient(50rem 50rem at 110% 10%, rgba(13, 148, 136, 0.16), transparent 55%),
+    radial-gradient(48rem 48rem at 85% 110%, rgba(225, 29, 72, 0.12), transparent 55%),
+    linear-gradient(180deg, #f3f5fb 0%, #e9edf6 100%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
-.glass-morphism {
-  background: var(--obsidian-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--obsidian-border);
+/* ─── Liquid-glass design system ─────────────────────────────────────── */
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-shadow: 0 8px 32px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --glass-blur: 18px;
+}
+
+.glass-morphism,
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Unified frosted section header bar */
+.glass-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 1.25rem;
+}
+
+/* Frosted sidebar */
+.glass-sidebar {
+  background: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border-right: 1px solid var(--glass-border) !important;
+}
+
+/* App-wide glass: frost the ubiquitous white card surfaces inside the main
+   content area. Kept readable (high opacity) so dense text/tables stay legible.
+   Scoped to `main` so badges/avatars elsewhere aren't affected app-chrome. */
+main .bg-white {
+  background-color: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  border-color: var(--glass-border);
+}
+/* Keep solid-dark hero/panels opaque — translucency over dark looks muddy. */
+main .bg-gray-900,
+main .bg-slate-900,
+main .bg-black {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .shadow-minimal {
@@ -58,3 +116,36 @@ body {
 .animate-fade-in-up {
   animation: fade-in-up 0.4s ease-out forwards;
 }
+
+/* ─── A11y baselines ──────────────────────────────────────────────────
+   Global focus-visible ring + prefers-reduced-motion guard. Both are
+   HIGH-severity items per the UI/UX Pro Max guidelines. The ring uses
+   indigo-600 — readable on both white and dark surfaces in this app. */
+:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+/* Tailwind reset removes outline on these — explicitly opt back in. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Smooth scrolling for in-page anchors. Honours the reduced-motion override above. */
+html { scroll-behavior: smooth; }

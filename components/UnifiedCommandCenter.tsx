@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
-    Radar, ExternalLink, RefreshCw, Target, Trash2, Send, Inbox, 
+    Radar, ExternalLink, RefreshCw, Target, Trash2, Send, Inbox,
     ShieldCheck, Heart, Sparkles, Check, X, ArrowRight, ArrowUpRight, Flame, MessageSquarePlus, Users,
-    Activity, Clock
+    Activity, Clock, Repeat2, Lock, Rss, Quote, Film
 } from 'lucide-react';
 import { generateSmartEngagementComment } from '../services/geminiService';
+import { useVoiceProfile } from '../hooks/useVoiceProfile';
+import { VOICE_PRESETS } from './ContentEngineView';
 import { SmartComment, PipelineLead, LeadInteraction } from '../types';
-import { AnswerlyView } from './AnswerlyView';
+import { useAutoCommentStatusMap } from './AutoCommentControls';
+// AnswerlyView ("Stealth Configuration") removed from the Radar — tracking
+// configuration now lives next to the accounts being tracked, in Account
+// Finder. Keeping it here was redundant and added visual noise.
 
 const STAGE_CONFIG = {
   'radar_help': {
@@ -55,21 +61,699 @@ const STAGE_CONFIG = {
   }
 };
 
+// ────────────────────────────────────────────────────────────────────
+// Radar post card — platform-tinted, default collapsed for long content.
+// Scraped social posts often arrive with ragged whitespace and giant text
+// blocks that wreck the feed's readability. Normalize the text first
+// (collapse 3+ blank lines, trim, dedup spaces) so it always lays out
+// the same regardless of source noise.
+// ────────────────────────────────────────────────────────────────────
+const RADAR_POST_PREVIEW_CHARS = 240;
+// Paginate the tracker — rendering hundreds of post cards (each with its own
+// expandable editor / masonry slot) was the cause of the slow load. 50/page
+// keeps the DOM small while still showing a meaningful batch.
+const POSTS_PER_PAGE = 50;
+
+// Brand-accurate inline SVG logos so Reddit / LinkedIn / X get their own
+// recognizable icons in the card header (not generic icons).
+const PlatformBrandIcon: React.FC<{ platform: string; className?: string }> = ({ platform, className = 'w-4 h-4 text-white' }) => {
+    const p = String(platform || '').toLowerCase();
+    if (p.includes('reddit')) {
+        return (
+            <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Reddit">
+                <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.05l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.057 1.597.047.222.069.447.069.675 0 2.212-2.39 4.012-5.338 4.012s-5.338-1.8-5.338-4.012c0-.218.021-.432.065-.644a1.745 1.745 0 0 1-1.025-1.586c0-.968.786-1.754 1.754-1.754.463 0 .875.18 1.179.473 1.17-.834 2.8-1.393 4.602-1.474l.522-2.462 3.03.64zm-7.422 7.871c-.708 0-1.282.574-1.282 1.282 0 .708.574 1.282 1.282 1.282.708 0 1.281-.574 1.281-1.282 0-.708-.573-1.282-1.281-1.282zm4.825 0c-.708 0-1.282.574-1.282 1.282 0 .708.574 1.282 1.282 1.282.708 0 1.282-.574 1.282-1.282 0-.708-.574-1.282-1.282-1.282zm-2.377 3.724c-.232 0-.46.015-.685.042-.254.031-.498.08-.733.146-.147.042-.273.106-.381.187a.327.327 0 0 0-.099.448.327.327 0 0 0 .448.099c.071-.054.17-.102.289-.138.169-.047.346-.083.53-.105.19-.023.389-.035.592-.035.204 0 .403.012.593.035.184.022.361.058.53.105.119.036.218.084.289.138a.327.327 0 0 0 .448-.099.327.327 0 0 0-.099-.448c-.108-.081-.234-.145-.381-.187a3.984 3.984 0 0 0-.733-.146c-.225-.027-.453-.042-.685-.042z"/>
+            </svg>
+        );
+    }
+    if (p.includes('linkedin')) {
+        return (
+            <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="LinkedIn">
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+            </svg>
+        );
+    }
+    if (p.includes('x') || p.includes('twitter')) {
+        return (
+            <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="X">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+        );
+    }
+    return <ShieldCheck className={className} />;
+};
+
+function cleanPostText(raw: string): string {
+    if (!raw) return '';
+    return raw
+        .replace(/\r\n/g, '\n')
+        // Collapse 3+ consecutive blank lines into a single blank line.
+        // Raw scrape often has chunks like "\n\n\n\n\n  Read more  \n\n\n"
+        // which renders as a giant gap that breaks the visual rhythm.
+        .replace(/\n{3,}/g, '\n\n')
+        // Trim runs of trailing whitespace on each line — scrapers leave
+        // these all over the place and they affect the rendered width.
+        .split('\n').map(l => l.replace(/[ \t]+$/g, '').replace(/[ \t]{2,}/g, ' ')).join('\n')
+        .trim();
+}
+
+// Format the post timestamp as "2h ago" / "Just now" / "3d ago" — much
+// faster to parse at a glance than a full date+time. Falls back to a date
+// for anything older than a week.
+function formatRelativeTime(ts: number | string | undefined | null): string {
+    // History items store timestamps as ISO strings — accept both.
+    const n = typeof ts === 'number' ? ts : (ts ? new Date(ts).getTime() : NaN);
+    if (!Number.isFinite(n)) return 'Recently';
+    const diffMs = Date.now() - n;
+    if (diffMs < 0) return 'Just now';
+    const m = Math.floor(diffMs / 60_000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    if (d < 7) return `${d}d ago`;
+    return new Date(n).toLocaleDateString();
+}
+
+const RadarPostCard: React.FC<{
+    item: any;
+    getPlatformIcon: (p: any, dark?: boolean) => React.ReactNode;
+    onComment: () => void;
+    commentStatus?: 'posted-auto' | 'posted-manual' | 'queued' | 'skipped';
+    draft?: { postUrl: string; draft: string } | undefined;
+    onConfirmDraft?: (postUrl: string, comment: string) => void;
+    onDiscardDraft?: (postUrl: string) => void;
+    onRemovePost?: () => void;
+    onRepost?: () => void;
+    onQuote?: () => void;
+    selected?: boolean;
+    onToggleSelect?: () => void;
+    batchDraft?: string;
+    batchState?: 'idle' | 'generating' | 'done' | 'error';
+    onBatchDraftChange?: (text: string) => void;
+    // Inline single-comment generation (the "Comment" button). The card shows an
+    // editable draft in-place (like an auto-reply) instead of opening a modal.
+    inlineDraft?: string;
+    inlineState?: 'generating' | 'done' | 'error';
+    onInlineDraftChange?: (text: string) => void;
+    onInlinePost?: (text: string) => void;
+    onInlineRegenerate?: () => void;
+    onInlineDiscard?: () => void;
+}> = ({ item, onComment, commentStatus, draft, onConfirmDraft, onDiscardDraft, onRemovePost, onRepost, onQuote, selected, onToggleSelect, batchDraft, batchState, onBatchDraftChange, inlineDraft, inlineState, onInlineDraftChange, onInlinePost, onInlineRegenerate, onInlineDiscard }) => {
+    const [expanded, setExpanded] = useState(false);
+    const [draftText, setDraftText] = useState('');
+    const [showReply, setShowReply] = useState(false);
+    useEffect(() => {
+        if (draft?.draft) { setDraftText(draft.draft); setShowReply(true); }
+    }, [draft?.draft]);
+    const isRepost = !!item.isRepost;
+    const replyRestricted = !!item.replyRestricted;
+    const platform = String(item.platform || '').toLowerCase();
+    const isX = platform.includes('x') || platform.includes('twitter');
+    const isLinkedIn = platform.includes('linkedin');
+    const isReddit = platform.includes('reddit');
+
+    // Per-platform identity. Avatar gets the brand colour; everything else
+    // stays neutral so the post content is what jumps out, not the chrome.
+    const theme = isReddit
+        ? { avatarBg: 'bg-orange-500', accent: 'text-orange-700', accentHover: 'group-hover:text-orange-700', name: 'Reddit', openOn: 'Open thread' }
+        : isLinkedIn
+        ? { avatarBg: 'bg-blue-600',  accent: 'text-blue-700',   accentHover: 'group-hover:text-blue-700',   name: 'LinkedIn', openOn: 'Open post' }
+        : isX
+        ? { avatarBg: 'bg-gray-900',  accent: 'text-gray-900',   accentHover: 'group-hover:text-gray-900',   name: 'X', openOn: 'Open post' }
+        : { avatarBg: 'bg-gray-700',  accent: 'text-gray-700',   accentHover: 'group-hover:text-gray-700',   name: 'Web', openOn: 'Open' };
+
+    // Reddit posts: item.text = title, item.body = self-text (may be empty).
+    // X / LinkedIn: item.text = the full post, item.body is unused.
+    // Splitting this out makes the title pop at the top instead of being
+    // buried in body text — the OLD card squashed everything into one block.
+    const redditTitle = isReddit ? (item.text || '').trim() : '';
+    const bodyRaw = isReddit ? (item.body || '') : (item.text || item.body || '');
+    const body = useMemo(() => cleanPostText(bodyRaw), [bodyRaw]);
+    const isLong = body.length > RADAR_POST_PREVIEW_CHARS;
+    const visibleBody = expanded || !isLong
+        ? body
+        : body.slice(0, RADAR_POST_PREVIEW_CHARS).trimEnd() + '…';
+
+    // The "creator" field is the X handle / LinkedIn name / subreddit name.
+    // First char of that goes in the avatar circle as a fallback when we don't
+    // have a profile pic. For Reddit's "r/foo", strip the prefix so we don't
+    // show "R" in the circle.
+    const creatorLabel = String(item.creator || '?');
+    const avatarSeed = isReddit
+        ? (creatorLabel.replace(/^r\//i, '').charAt(0) || 'R').toUpperCase()
+        : (creatorLabel.charAt(0) || '?').toUpperCase();
+    const creatorDisplay = isReddit
+        ? (creatorLabel.startsWith('r/') ? creatorLabel : `r/${creatorLabel}`)
+        : `@${creatorLabel}`;
+
+    const relTime = formatRelativeTime(item.timestamp);
+
+    // Visual style for the unified comment status pill. Every post shows
+    // SOME status so the user can tell at a glance whether the post has
+    // been touched yet. 'Not replied yet' is the absence-of-action state.
+    const isReplied = commentStatus === 'posted-auto' || commentStatus === 'posted-manual';
+    const commentBadge =
+        commentStatus === 'posted-auto'
+            ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✓', label: 'Auto-replied' }
+        : commentStatus === 'posted-manual'
+            ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✓', label: 'You replied' }
+        : commentStatus === 'queued'
+            ? { cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: '⏳', label: 'Auto-reply queued' }
+        : commentStatus === 'skipped'
+            ? { cls: 'bg-gray-50 text-gray-500 border-gray-200', icon: '○', label: 'Skipped by filter' }
+        : { cls: 'bg-white text-gray-400 border-gray-200', icon: '○', label: 'Not replied yet' };
+
+    // ── Profile-fit tint ──
+    // The whole card is tinted on a red→amber→green scale by how well the post
+    // fits the user's niche/voice, so the feed is scannable at a glance: greener
+    // = stronger fit (reply first), redder = weak fit. Tiers (not a raw gradient)
+    // keep text contrast readable on a dense feed.
+    const fit = typeof item.relevancyScore === 'number' ? item.relevancyScore
+        : typeof item.relevance === 'number' ? item.relevance : null;
+    const fitTier = fit === null ? null
+        : fit >= 80 ? 'excellent'
+        : fit >= 65 ? 'good'
+        : fit >= 50 ? 'mid'
+        : fit >= 35 ? 'low'
+        : 'poor';
+    const FIT_STYLES: Record<string, { card: string; num: string; bar: string; label: string }> = {
+        excellent: { card: 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 hover:border-emerald-300 hover:shadow-emerald-100', num: 'text-emerald-600', bar: 'bg-emerald-500', label: 'Strong fit' },
+        good:      { card: 'bg-gradient-to-br from-green-50/80 to-white border-green-200 hover:border-green-300 hover:shadow-green-100', num: 'text-green-600', bar: 'bg-green-500', label: 'Good fit' },
+        mid:       { card: 'bg-gradient-to-br from-amber-50/80 to-white border-amber-200 hover:border-amber-300 hover:shadow-amber-100', num: 'text-amber-600', bar: 'bg-amber-500', label: 'Moderate fit' },
+        low:       { card: 'bg-gradient-to-br from-orange-50/80 to-white border-orange-200 hover:border-orange-300 hover:shadow-orange-100', num: 'text-orange-600', bar: 'bg-orange-500', label: 'Weak fit' },
+        poor:      { card: 'bg-gradient-to-br from-rose-50/70 to-white border-rose-200 hover:border-rose-300 hover:shadow-rose-100', num: 'text-rose-500', bar: 'bg-rose-400', label: 'Low fit' },
+    };
+    const fitStyle = fitTier ? FIT_STYLES[fitTier] : { card: 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-gray-200/40', num: 'text-gray-500', bar: 'bg-gray-300', label: 'Unscored' };
+    // A replied post gets an emerald edge regardless of fit, so "done" still reads first.
+    const cardBorder = isReplied ? 'border-emerald-300' : '';
+
+    return (
+        <article className={`group border ${fitStyle.card} ${cardBorder} ${selected ? 'ring-2 ring-blue-500 ring-offset-1' : ''} hover:shadow-md rounded-2xl transition-all duration-200 ease-out overflow-hidden`}>
+            {/* FIT METER — a slim top bar whose width + colour encode profile fit. */}
+            {fit !== null && (
+                <div className="h-1 w-full bg-black/5" title={`${fitStyle.label} · ${fit}%`}>
+                    <div className={`h-full ${fitStyle.bar} transition-all`} style={{ width: `${Math.max(4, Math.min(100, fit))}%` }} />
+                </div>
+            )}
+            {/* HEADER — avatar + creator + platform + when. Single visual unit. */}
+            <header className="flex items-start gap-3 px-5 pt-4 pb-3">
+                {/* Multi-select checkbox — lets the user pick posts for batch
+                    comment generation + publish. Only rendered when the parent
+                    wires up onToggleSelect. */}
+                {onToggleSelect && (
+                    <button
+                        onClick={onToggleSelect}
+                        className={`flex-shrink-0 mt-0.5 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
+                            selected
+                                ? 'bg-blue-600 border-blue-600 text-white shadow-sm ring-2 ring-blue-200'
+                                : 'bg-white border-gray-300 hover:border-blue-500 hover:bg-blue-50'
+                        }`}
+                        title={selected ? 'Deselect post' : 'Select post for batch actions'}
+                        aria-label={selected ? 'Deselect post' : 'Select post'}
+                        aria-pressed={!!selected}
+                    >
+                        {/* Only show the tick when actually selected — an always-on
+                            faint check made the empty state look half-selected. */}
+                        {selected && <Check size={15} strokeWidth={3.5} />}
+                    </button>
+                )}
+                {/* Avatar circle with platform-icon corner badge */}
+                <div className="relative flex-shrink-0">
+                    <div className={`w-11 h-11 rounded-full ${theme.avatarBg} flex items-center justify-center text-white font-semibold text-base`}>
+                        {avatarSeed}
+                    </div>
+                    <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-white flex items-center justify-center shadow-sm">
+                        <div className={`w-4 h-4 rounded-full ${theme.avatarBg} flex items-center justify-center`}>
+                            <PlatformBrandIcon platform={item.platform} className="w-2.5 h-2.5 text-white" />
+                        </div>
+                    </div>
+                </div>
+                {/* Creator + meta */}
+                <div className="flex-1 min-w-0">
+                    <a href={item.postUrl || item.url} target="_blank" rel="noreferrer"
+                       className={`text-[15px] font-semibold text-gray-900 ${theme.accentHover} transition-colors leading-tight block truncate`}>
+                        {creatorDisplay}
+                    </a>
+                    <div className="flex items-center gap-1.5 text-[12px] text-gray-500 mt-0.5 flex-wrap">
+                        <span>{theme.name}</span>
+                        <span className="text-gray-300">·</span>
+                        <Clock size={11} className="text-gray-400" />
+                        <span title={item.timestamp ? new Date(item.timestamp).toLocaleString() : ''}>{relTime}</span>
+                        {/* Source badge — where this post came from: the home-feed
+                            watcher vs. a tracked account / keyword search. */}
+                        <span className="text-gray-300">·</span>
+                        {item.discoveredVia === 'feed' ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-violet-50 text-violet-700 border-violet-200" title="Surfaced by the Feed Watcher from your home timeline.">
+                                <Rss size={10} /> Feed
+                            </span>
+                        ) : (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-sky-50 text-sky-700 border-sky-200" title="From an account or keyword you're tracking.">
+                                <Radar size={10} /> Tracked
+                            </span>
+                        )}
+                        {/* Comment status pill — ALWAYS shown so each post answers
+                            "has this been replied to?" at a glance. */}
+                        <span className="text-gray-300">·</span>
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border ${commentBadge.cls}`}
+                            title={
+                                commentStatus === 'posted-auto' ? 'The bot auto-replied to this post.'
+                                : commentStatus === 'posted-manual' ? 'You manually replied to this post.'
+                                : commentStatus === 'queued' ? 'Queued — waiting for the AI to generate the reply.'
+                                : commentStatus === 'skipped' ? 'Skipped — match score, rate limit, or account opt-in didn\'t qualify.'
+                                : 'No comment posted on this yet.'
+                            }>
+                            <span>{commentBadge.icon}</span>{commentBadge.label}
+                        </span>
+                        {isRepost && (
+                            <>
+                                <span className="text-gray-300">·</span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-sky-50 text-sky-700 border-sky-200" title="This is a repost — a reply targets the original post.">
+                                    <Repeat2 size={11} /> Repost
+                                </span>
+                            </>
+                        )}
+                        {replyRestricted && (
+                            <>
+                                <span className="text-gray-300">·</span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-amber-50 text-amber-700 border-amber-200" title="The author limited who can reply to this post — you may not be able to reply.">
+                                    <Lock size={11} /> Replies restricted
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </div>
+                {/* Profile-fit KPI — promoted to a 3-line badge so it reads
+                    instantly: big number, tier label, "PROFILE FIT" caption.
+                    Same colour palette as the card tint / fit meter so the
+                    eye groups the signal across the card. Tooltip carries
+                    the AI's relevancy reason if it provided one. */}
+                {fit !== null && (
+                    <div
+                        className={`text-right flex-shrink-0 px-2.5 py-1.5 rounded-xl bg-white/70 border border-current/10 ${fitStyle.num}`}
+                        title={item.relevancyReason || `${fitStyle.label} — how well this post fits your niche & voice.`}
+                    >
+                        <div className={`text-[22px] font-extrabold leading-none tabular-nums ${fitStyle.num}`}>{fit}<span className="text-[13px] font-bold opacity-70">%</span></div>
+                        <div className={`text-[10px] font-extrabold uppercase tracking-wider mt-0.5 ${fitStyle.num}`}>{fitStyle.label}</div>
+                        <div className="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">profile fit</div>
+                    </div>
+                )}
+                {/* Remove this post from the tracker */}
+                {onRemovePost && (
+                    <button
+                        onClick={onRemovePost}
+                        className="flex-shrink-0 text-gray-300 hover:text-rose-500 transition-colors p-1 -mt-1 -mr-1"
+                        title="Remove this post"
+                        aria-label="Remove this post"
+                    >
+                        <X size={15} />
+                    </button>
+                )}
+            </header>
+
+            {/* BODY — Reddit shows TITLE + body (since title IS the content);
+                 X / LinkedIn just show the post text */}
+            <div className="px-5 pb-4">
+                {isReddit && redditTitle && (
+                    <h3 className="text-[16px] font-semibold text-gray-900 leading-snug mb-2">
+                        {redditTitle}
+                    </h3>
+                )}
+                {body && !/^\[Image post\]$/.test(body.trim()) && (
+                    <p className="text-[14px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {visibleBody}
+                    </p>
+                )}
+                {/* MEDIA — image thumbnails + a video/GIF marker so an
+                     image-only post is never a blank card. Clicking opens the
+                     real post (we don't proxy media). */}
+                {item.media && (item.media.images?.length > 0 || item.media.hasVideo || item.media.hasGif) && (
+                    <div className="mt-3">
+                        {item.media.images?.length > 0 && (
+                            <div className={`grid gap-1.5 rounded-xl overflow-hidden border border-gray-100 ${item.media.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                                {item.media.images.slice(0, 4).map((src: string, i: number) => (
+                                    <a key={i} href={item.postUrl || item.url} target="_blank" rel="noreferrer" className="block group/media">
+                                        <img
+                                            src={src}
+                                            alt={item.media.alt?.[i] || 'Post image'}
+                                            loading="lazy"
+                                            onError={(e) => { (e.currentTarget.closest('a') as HTMLElement).style.display = 'none'; }}
+                                            className={`w-full object-cover bg-gray-100 transition-opacity group-hover/media:opacity-90 ${item.media.images.length === 1 ? 'max-h-80' : 'h-40'}`}
+                                        />
+                                    </a>
+                                ))}
+                            </div>
+                        )}
+                        {(item.media.hasVideo || item.media.hasGif) && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-[11px] font-medium">
+                                <Film size={12} /> {item.media.hasGif ? 'GIF' : 'Video'} · open the post to watch
+                            </div>
+                        )}
+                    </div>
+                )}
+                {/* For quotes/reposts, show the ORIGINAL post too — that's what a
+                     reply actually targets, so the user sees the real context.
+                     Skip it for a native repost where the original IS the body
+                     (showing identical text twice is just noise). */}
+                {isRepost && item.originalPost?.text
+                    && item.originalPost.text.trim().slice(0, 80) !== (body || '').trim().slice(0, 80) && (
+                    <blockquote className="mt-3 border-l-2 border-sky-300 pl-3 py-1.5 bg-sky-50/50 rounded-r-md">
+                        <div className="text-[10px] uppercase tracking-wider text-sky-700 font-bold mb-1 flex items-center gap-1">
+                            <Quote size={10} /> Quoting{item.originalPost.author ? ` @${item.originalPost.author}` : ''}
+                        </div>
+                        <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {item.originalPost.text}
+                        </p>
+                    </blockquote>
+                )}
+                {isLong && (
+                    <button
+                        onClick={() => setExpanded(e => !e)}
+                        className={`mt-2 text-[12px] font-medium ${theme.accent} hover:underline transition-all duration-200`}
+                    >
+                        {expanded ? '↑ Show less' : '↓ Show full post'}
+                    </button>
+                )}
+                {/* Edge case: a link/image-only Reddit post with no title + no body */}
+                {!body && !redditTitle && (
+                    <p className="text-[13px] text-gray-400 italic">No text content — open the post to see it.</p>
+                )}
+            </div>
+
+            {/* DRAFT REVIEW — human-in-the-loop. An auto-reply draft was generated
+                 for this post; the user edits/approves before anything is posted.
+                 Collapsible via the "Suggested reply" toggle in the footer. */}
+            {draft && showReply && (
+                <div className="mx-5 mb-3 rounded-2xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-white shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-violet-600 text-white">
+                        <div className="flex items-center gap-2 text-[12px] font-bold">
+                            <Sparkles size={14} /> Suggested reply
+                            <span className="px-1.5 py-0.5 rounded-md bg-white/20 text-[10px] font-semibold uppercase tracking-wide">Needs your approval</span>
+                        </div>
+                        <button onClick={() => setShowReply(false)} className="text-white/80 hover:text-white" title="Hide" aria-label="Hide reply">
+                            <X size={14} />
+                        </button>
+                    </div>
+                    <div className="p-4">
+                        <textarea
+                            value={draftText}
+                            onChange={e => setDraftText(e.target.value)}
+                            rows={4}
+                            className="w-full px-3 py-2.5 rounded-xl border border-violet-200 bg-white text-[14px] leading-relaxed text-gray-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 resize-y"
+                        />
+                        <div className="flex items-center justify-between mt-3">
+                            <span className="text-[11px] text-gray-400">{draftText.length} characters · edit before posting</span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => onDiscardDraft?.(draft.postUrl)}
+                                    className="px-3.5 py-2 rounded-lg text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:border-gray-400 transition-colors">
+                                    Discard
+                                </button>
+                                <button
+                                    onClick={() => onConfirmDraft?.(draft.postUrl, draftText)}
+                                    disabled={replyRestricted || draftText.trim().length < 2}
+                                    className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 disabled:bg-gray-200 disabled:text-gray-400 transition-colors flex items-center gap-1.5 shadow-sm">
+                                    <Send size={13} /> Approve &amp; post
+                                </button>
+                            </div>
+                        </div>
+                        {replyRestricted && (
+                            <div className="mt-2 text-[11px] text-amber-700 flex items-center gap-1">
+                                <Lock size={11} /> The author restricted replies — posting may fail.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* INLINE COMMENT — generated by the card's own "Comment" button.
+                 Mirrors the auto-reply experience: the reply is written straight
+                 into the card in your voice; you edit and Approve & post. Nothing
+                 is posted until you approve (queue-only, human-in-the-loop). */}
+            {inlineState && (
+                <div className="mx-5 mb-3 rounded-2xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-white shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-violet-600 text-white">
+                        <div className="flex items-center gap-2 text-[12px] font-bold">
+                            <Sparkles size={14} /> Your reply
+                            {inlineState === 'generating'
+                                ? <span className="px-1.5 py-0.5 rounded-md bg-white/20 text-[10px] font-semibold uppercase tracking-wide animate-pulse">Writing…</span>
+                                : inlineState === 'error'
+                                ? <span className="px-1.5 py-0.5 rounded-md bg-rose-400/40 text-[10px] font-semibold uppercase tracking-wide">Failed</span>
+                                : <span className="px-1.5 py-0.5 rounded-md bg-white/20 text-[10px] font-semibold uppercase tracking-wide">Needs your approval</span>}
+                        </div>
+                        <button onClick={() => onInlineDiscard?.()} className="text-white/80 hover:text-white" title="Discard" aria-label="Discard reply">
+                            <X size={14} />
+                        </button>
+                    </div>
+                    <div className="p-4">
+                        {inlineState === 'generating' ? (
+                            <div className="flex items-center gap-2 text-[13px] text-violet-700 py-2">
+                                <RefreshCw size={14} className="animate-spin" /> Writing a reply in your voice…
+                            </div>
+                        ) : inlineState === 'error' ? (
+                            <div className="flex items-center justify-between">
+                                <span className="text-[13px] text-rose-600">Couldn't generate — try again.</span>
+                                <button onClick={() => onInlineRegenerate?.()} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-violet-700 bg-white border border-violet-200 hover:border-violet-400 flex items-center gap-1.5">
+                                    <RefreshCw size={12} /> Retry
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <textarea
+                                    value={inlineDraft || ''}
+                                    onChange={e => onInlineDraftChange?.(e.target.value)}
+                                    rows={4}
+                                    className="w-full px-3 py-2.5 rounded-xl border border-violet-200 bg-white text-[14px] leading-relaxed text-gray-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 resize-y"
+                                />
+                                <div className="flex items-center justify-between mt-3">
+                                    <span className="text-[11px] text-gray-400">{(inlineDraft || '').length} characters · edit before posting</span>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => onInlineRegenerate?.()}
+                                            className="px-3 py-2 rounded-lg text-xs font-semibold text-violet-700 bg-white border border-violet-200 hover:border-violet-400 transition-colors flex items-center gap-1.5">
+                                            <RefreshCw size={12} /> Regenerate
+                                        </button>
+                                        <button
+                                            onClick={() => onInlinePost?.(inlineDraft || '')}
+                                            disabled={replyRestricted || (inlineDraft || '').trim().length < 2}
+                                            className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 disabled:bg-gray-200 disabled:text-gray-400 transition-colors flex items-center gap-1.5 shadow-sm">
+                                            <Send size={13} /> Approve &amp; post
+                                        </button>
+                                    </div>
+                                </div>
+                                {replyRestricted && (
+                                    <div className="mt-2 text-[11px] text-amber-700 flex items-center gap-1">
+                                        <Lock size={11} /> The author restricted replies — posting may fail.
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* BATCH DRAFT — generated by "Generate comments for selected".
+                Editable in place; published by "Publish selected". Only shows
+                once a batch generation has touched this (selected) post. */}
+            {batchState && batchState !== 'idle' && (
+                <div className="mx-5 mb-3 rounded-2xl border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-white shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-[12px] font-bold">
+                        <Sparkles size={14} /> Batch comment
+                        {batchState === 'generating' && <span className="px-1.5 py-0.5 rounded-md bg-white/20 text-[10px] font-semibold uppercase tracking-wide animate-pulse">Generating…</span>}
+                        {batchState === 'done' && <span className="px-1.5 py-0.5 rounded-md bg-white/20 text-[10px] font-semibold uppercase tracking-wide">Review &amp; publish</span>}
+                        {batchState === 'error' && <span className="px-1.5 py-0.5 rounded-md bg-rose-400/40 text-[10px] font-semibold uppercase tracking-wide">Failed</span>}
+                    </div>
+                    <div className="p-4">
+                        {batchState === 'generating' ? (
+                            <div className="flex items-center gap-2 text-[13px] text-blue-700 py-2">
+                                <RefreshCw size={14} className="animate-spin" /> Writing a comment in your voice…
+                            </div>
+                        ) : batchState === 'error' ? (
+                            <div className="text-[13px] text-rose-600 py-1">Couldn't generate — try again from the batch bar.</div>
+                        ) : (
+                            <>
+                                <textarea
+                                    value={batchDraft || ''}
+                                    onChange={e => onBatchDraftChange?.(e.target.value)}
+                                    rows={3}
+                                    className="w-full px-3 py-2.5 rounded-xl border border-blue-200 bg-white text-[14px] leading-relaxed text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y"
+                                />
+                                <span className="text-[11px] text-gray-400">{(batchDraft || '').length} characters · edit before publishing</span>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* FOOTER — actions */}
+            <div className="flex items-center gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50/60">
+                {/* The Auto-reply DRAFT toggle (only when an auto-draft is ready)
+                     sits alongside the manual Comment button — both always
+                     available; auto-generation only happens when the account
+                     has Auto-reply ON in the Account Finder. */}
+                {draft && (
+                    <button
+                        onClick={() => setShowReply(s => !s)}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white transition-all duration-200 ease-out active:scale-[0.97] animate-pulse"
+                        title="An auto-reply draft is ready — review and approve it">
+                        <Sparkles size={12} /> {showReply ? 'Hide suggested reply' : 'Review suggested reply'}
+                    </button>
+                )}
+                <button
+                    onClick={onComment}
+                    disabled={inlineState === 'generating'}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium
+                                transition-all duration-200 ease-out hover:shadow-md hover:shadow-gray-300/40 active:scale-[0.97]
+                                disabled:opacity-60 disabled:cursor-default
+                                ${isReplied
+                                    ? 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
+                                    : 'bg-gray-900 hover:bg-gray-800 text-white'
+                                }`}
+                    title={isReplied ? 'Already replied — generate another reply in your voice' : 'Generate a reply in your voice, right here'}>
+                    {inlineState === 'generating'
+                        ? <><RefreshCw size={12} className="animate-spin" /> Writing…</>
+                        : <><Sparkles size={12} /> {isReplied ? 'Reply again' : 'Comment'}</>}
+                </button>
+                {/* Repost & Quote — X/Twitter only. Repost is one-tap; Quote
+                     opens the comment composer in quote mode (adds your take). */}
+                {isX && onRepost && (
+                    <button
+                        onClick={onRepost}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:text-emerald-700 bg-white border border-gray-200 hover:border-emerald-300 rounded-lg text-xs font-medium transition-all duration-200 ease-out active:scale-[0.97]"
+                        title="Repost this to your followers (no added text)">
+                        <Repeat2 size={12} /> Repost
+                    </button>
+                )}
+                {isX && onQuote && (
+                    <button
+                        onClick={onQuote}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:text-violet-700 bg-white border border-gray-200 hover:border-violet-300 rounded-lg text-xs font-medium transition-all duration-200 ease-out active:scale-[0.97]"
+                        title="Quote this post with your own take">
+                        <Quote size={12} /> Quote
+                    </button>
+                )}
+                <a href={item.postUrl || item.url} target="_blank" rel="noreferrer"
+                   className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:border-gray-400 rounded-lg text-xs font-medium
+                              transition-all duration-200 ease-out active:scale-[0.97]">
+                    <ExternalLink size={12} /> {theme.openOn}
+                </a>
+            </div>
+        </article>
+    );
+};
+
 export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }) => {
   const [radarHistory, setRadarHistory] = useState<any[]>([]);
+  const [drafts, setDrafts] = useState<any[]>([]);
   const [extensionConnected, setExtensionConnected] = useState(false);
   const [leads, setLeads] = useState<PipelineLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [activeMainTab, setActiveMainTab] = useState<'radar' | 'leads'>('radar');
   const [commentingLead, setCommentingLead] = useState<any | null>(null);
   const [commentMode, setCommentMode] = useState<'lead' | 'visibility'>('lead');
+  // Which engagement the composer will perform on Send: a normal reply
+  // ('comment') or a quote-tweet ('quote'). Set by the card's Comment/Quote
+  // buttons before the modal opens.
+  const [engagementAction, setEngagementAction] = useState<'comment' | 'quote'>('comment');
   const [smartComments, setSmartComments] = useState<SmartComment | null>(null);
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
-  const [commentOptions, setCommentOptions] = useState({ tone: 'casual', goal: 'build_relationship', maxLength: 250, customInstruction: '' });
+  // Comment specification (tone/goal/length/angle) is configured ONCE in Voice
+  // Studio and read from the shared hook (vp.commentSpec) — no per-post
+  // re-parametrising and no redundancy with the voice dials.
+  // Per-option editable text. Generated comments are always tweakable before
+  // sending; this holds the user's edits keyed by option index.
+  const [editedComments, setEditedComments] = useState<Record<number, string>>({});
+
+  // ── Multi-select + batch comment state (Posts Tracker) ──
+  // selectedPosts holds post keys (postUrl|url|uuid). batchDrafts/batchStates
+  // hold the per-post generated comment + its lifecycle so each card can show
+  // an editable draft. Everything is queue-only — nothing posts without the
+  // user pressing Publish.
+  const [selectedPosts, setSelectedPosts] = useState<Set<string>>(new Set());
+  const [batchDrafts, setBatchDrafts] = useState<Record<string, string>>({});
+  const [batchStates, setBatchStates] = useState<Record<string, 'generating' | 'done' | 'error'>>({});
+  const [isBatchRunning, setIsBatchRunning] = useState(false);
+
+  // ── Inline single-comment state (Posts Tracker) ──
+  // Clicking "Comment" on a card now generates a reply directly INSIDE the card
+  // (same inline editable box auto-replies use) instead of opening a modal. The
+  // generation uses the active Voice Studio parameters; nothing posts until the
+  // user presses "Approve & post". Keyed by postUrl|url|uuid, like the batch maps.
+  const [inlineDrafts, setInlineDrafts] = useState<Record<string, string>>({});
+  const [inlineStates, setInlineStates] = useState<Record<string, 'generating' | 'done' | 'error'>>({});
+
+  // ── Posts Tracker filters ──
+  // minFit: only show posts whose profile fit is >= this %. platformFilter:
+  // restrict the feed to a single platform. Both are applied before rendering
+  // and before "Select all". Persisted to localStorage so the user's filter
+  // choice survives reloads / tab switches.
+  const [minFit, setMinFit] = useState<number>(() => {
+    const v = Number(localStorage.getItem('posts_tracker_min_fit'));
+    return Number.isFinite(v) ? v : 0;
+  });
+  const [platformFilter, setPlatformFilter] = useState<'all' | 'x' | 'linkedin' | 'reddit'>(() => {
+    const v = localStorage.getItem('posts_tracker_platform_filter');
+    return (v === 'x' || v === 'linkedin' || v === 'reddit') ? v : 'all';
+  });
+  useEffect(() => { try { localStorage.setItem('posts_tracker_min_fit', String(minFit)); } catch {} }, [minFit]);
+  useEffect(() => { try { localStorage.setItem('posts_tracker_platform_filter', platformFilter); } catch {} }, [platformFilter]);
+
+  // Current pagination page (0-indexed). Reset when filters change so the user
+  // doesn't end up stranded on an empty page after narrowing the feed.
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [minFit, platformFilter]);
+
+  // Voice-profile hook — provides saved-profiles library so the user can
+  // generate comments in any of their saved voices without leaving this view.
+  const vp = useVoiceProfile();
+
+  // Active voice label — surfaced on top of the Posts Tracker so the user
+  // always knows WHICH voice the agent is using to generate comments here.
+  // A saved profile (applied via the Studio) sets aiSuggestionReason to
+  // "Saved profile · <name>"; otherwise we resolve the built-in preset's name,
+  // falling back to "Custom voice" when the user has hand-tuned the dials.
+  const activeVoice = useMemo(() => {
+    const reason = vp.aiSuggestionReason || '';
+    if (reason.startsWith('Saved profile ·')) {
+      return { emoji: '💾', name: reason.replace('Saved profile ·', '').trim() || 'Saved voice' };
+    }
+    if (vp.activePreset) {
+      const p = VOICE_PRESETS.find(x => x.id === vp.activePreset);
+      if (p) return { emoji: p.emoji, name: p.name };
+    }
+    return { emoji: '🎛', name: 'Custom voice' };
+  }, [vp.activePreset, vp.aiSuggestionReason]);
+
+  // The active-voice chip is also an EDITOR: clicking it opens an inline
+  // popover where the user can switch presets / saved profiles AND fine-tune
+  // the live voice dials + comment spec. Any dial change clears the preset
+  // (turning it into a fully modifiable "Custom voice"), so the voice the
+  // tracker uses to draft comments is editable right here.
+  const [voiceEditorOpen, setVoiceEditorOpen] = useState(false);
+
+  const commentModalRef = React.useRef<HTMLDivElement>(null);
   const [notingLead, setNotingLead] = useState<any | null>(null);
   const [noteText, setNoteText] = useState('');
 
+  // Responsive masonry column count for the Posts Tracker. Mirrors the old
+  // Tailwind breakpoints (base=1, md=2, 2xl=3) but lets us distribute cards
+  // into fixed columns by index — see the masonry render below.
+  const [radarColumnCount, setRadarColumnCount] = useState(3);
+  useEffect(() => {
+    const compute = () => {
+      const w = window.innerWidth;
+      setRadarColumnCount(w >= 1536 ? 3 : w >= 768 ? 2 : 1);
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
+  }, []);
+
   const trackedUrls = useMemo(() => new Set(leads.map(l => l.url)), [leads]);
+
+  // Auto-comment status indexed by post URL — populates the badges that
+  // appear on each RadarPostCard. Polls the extension every 3s.
+  const autoCommentStatusMap = useAutoCommentStatusMap();
   
   // 1. PUBLIC RADAR: Influencer tracking hits, excluding any recon or identified leads
   const influencerSignals = useMemo(() => {
@@ -122,11 +806,16 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
         const combined = [...localHist, ...answerlyExtHistory];
         const uniqueMap = new Map();
         combined.forEach(item => { uniqueMap.set(item.uuid || item.url, item); });
-        const sorted = Array.from(uniqueMap.values()).sort((a: any, b: any) => 
+        const sorted = Array.from(uniqueMap.values()).sort((a: any, b: any) =>
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
-        setRadarHistory(sorted.slice(0, 100));
-        if (localHist.length > 0) setExtensionConnected(true);
+        // Show every tracked post — no cap. Posts only leave the list when deleted.
+        const capped = sorted;
+        setRadarHistory(capped);
+        // Mirror to localStorage so the Dashboard "Posts Tracker activity"
+        // chart has data (it reads social_radar_history synchronously).
+        try { localStorage.setItem('social_radar_history', JSON.stringify(capped)); } catch {}
+        if (localHist.length > 0 || answerlyExtHistory.length > 0) setExtensionConnected(true);
     };
     const handlePong = () => setExtensionConnected(true);
     const handleHistory = (e: any) => {
@@ -161,6 +850,60 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
         clearInterval(interval);
     };
   }, []);
+
+  // Auto-reply DRAFTS awaiting the user's confirmation. Shown under their post.
+  useEffect(() => {
+    const onDrafts = (e: any) => {
+      const d = e.detail;
+      if (Array.isArray(d)) setDrafts(d.filter((x: any) => x.status === 'pending'));
+      else if (d?.success) setDrafts(d.drafts || []);
+    };
+    window.addEventListener('auto_comment_drafts_update', onDrafts);
+    window.addEventListener('auto_comment_drafts_loaded', onDrafts);
+    const ping = () => window.dispatchEvent(new CustomEvent('auto_comment_drafts_get'));
+    ping();
+    const id = setInterval(ping, 5000);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('auto_comment_drafts_update', onDrafts);
+      window.removeEventListener('auto_comment_drafts_loaded', onDrafts);
+    };
+  }, []);
+
+  const draftByPostUrl = useMemo(() => {
+    const m = new Map<string, any>();
+    drafts.forEach(d => m.set(d.postUrl, d));
+    return m;
+  }, [drafts]);
+
+  const handleConfirmDraft = (postUrl: string, comment: string) => {
+    window.dispatchEvent(new CustomEvent('auto_comment_confirm', { detail: { postUrl, comment } }));
+    setDrafts(prev => prev.filter(d => d.postUrl !== postUrl));
+  };
+  const handleDiscardDraft = (postUrl: string) => {
+    window.dispatchEvent(new CustomEvent('auto_comment_discard', { detail: { postUrl } }));
+    setDrafts(prev => prev.filter(d => d.postUrl !== postUrl));
+  };
+  const handleRemovePost = (item: any) => {
+    window.dispatchEvent(new CustomEvent('posts_remove', { detail: { uuid: item.uuid, postUrl: item.postUrl || item.url } }));
+    setRadarHistory(prev => {
+      const next = prev.filter(h => (h.uuid || h.url) !== (item.uuid || item.url));
+      // The list is a merge of the extension history AND the localStorage mirror
+      // (`social_radar_history`). If we don't update the mirror too, the next
+      // updateCombinedHistory() (fires every 10s) re-merges the stale item back
+      // — which is why "delete" looked broken. Keep the mirror in sync.
+      try { localStorage.setItem('social_radar_history', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const handleClearPosts = () => {
+    window.dispatchEvent(new CustomEvent('posts_clear'));
+    setRadarHistory([]);
+    // Clear the localStorage mirror too, otherwise updateCombinedHistory()
+    // repopulates the list from the stale mirror within ~10s ("Clear all"
+    // appeared to do nothing).
+    try { localStorage.setItem('social_radar_history', '[]'); } catch {}
+  };
 
   const handleTrackInPipeline = (item: any) => {
     if (trackedUrls.has(item.url)) return;
@@ -308,7 +1051,11 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
         }
     }
 
-    setRadarHistory(prev => prev.filter(h => (h.url || h.uuid) !== id));
+    setRadarHistory(prev => {
+      const next = prev.filter(h => (h.url || h.uuid) !== id);
+      try { localStorage.setItem('social_radar_history', JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
 
@@ -353,26 +1100,57 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
     });
   };
 
-  async function handleOpenSmartReply(lead: any, isRadarSignal = false) {
+  // One-tap repost — no composer needed. Dispatches straight to the bridge,
+  // which queues a stealth repost on the post's URL. Nothing posts until the
+  // extension processes the queue (still human-gated by the click here).
+  function handleRepost(item: any) {
+    const targetUrl = item.postUrl || item.url;
+    if (!targetUrl) return;
+    window.dispatchEvent(new CustomEvent('pipeline_request_repost', { detail: { url: targetUrl } }));
+    logInteraction(item, 'repost');
+  }
+
+  // Quote — reuse the smart-reply composer, but flag the action as a
+  // quote-tweet so Send Now dispatches actionType 'quote'.
+  function handleQuote(item: any) {
+    handleOpenSmartReply(item, true, 'quote');
+  }
+
+  async function handleOpenSmartReply(lead: any, isRadarSignal = false, action: 'comment' | 'quote' = 'comment') {
+    setEngagementAction(action);
     let targetLead = lead;
     const mode = isRadarSignal ? 'visibility' : 'lead';
     if (isRadarSignal) {
         handleTrackInPipeline(lead);
         targetLead = {
-            url: lead.url, 
+            url: lead.url,
             postUrl: lead.postUrl || lead.url,
-            title: lead.creator, 
-            why: "Detected via Inbound Radar", 
-            postText: lead.text || lead.body, 
+            title: lead.creator,
+            why: "Detected via Inbound Radar",
+            postText: lead.text || lead.body,
             tags: [lead.platform],
             campaignId: lead.campaignId,
             campaignName: lead.campaignName,
-            intent: lead.intent
+            intent: lead.intent,
+            // Carry any queued Feed Watcher draft through so the modal can
+            // pre-fill it for one-tap approval.
+            suggestedComment: lead.suggestedComment,
+            suggestedAction: lead.suggestedAction,
+            engagementRationale: lead.engagementRationale,
+            engagementStatus: lead.engagementStatus
         };
     }
     setCommentingLead(targetLead);
     setCommentMode(mode);
-    setSmartComments(null);
+    // If the Feed Watcher already drafted a reply for this post (queue-only),
+    // pre-fill the modal with it so the user reviews & approves instead of
+    // generating from scratch. Nothing was posted — this is the approval step.
+    const queuedDraft = (lead.suggestedComment || '').trim();
+    if (queuedDraft) {
+        setSmartComments({ options: [{ body: queuedDraft, why: lead.engagementRationale || 'Drafted by the Feed Watcher in your voice — review and send.' }] });
+    } else {
+        setSmartComments(null);
+    }
     setIsGeneratingComment(false); // Don't auto-generate; let user set options first
   }
 
@@ -385,12 +1163,211 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
             commentingLead.postText || commentingLead.why || '',
             appDesc || 'A growth platform',
             commentingLead.title || commentingLead.creator || '',
-            { ...commentOptions, mode: commentMode }
+            // Pass the active voice profile so the generated comment matches
+            // whichever saved profile is currently applied (or the user's
+            // current Voice Studio settings).
+            { ...vp.commentSpec, mode: commentMode as any, voiceMix: vp.voiceMix, perspective: vp.perspective }
         );
         setSmartComments(result);
+        setEditedComments({}); // fresh generation → drop any prior edits
     } catch (e) { console.error(e); }
     finally { setIsGeneratingComment(false); }
   }
+
+  // ── Batch comment helpers (multi-select in the Posts Tracker) ──
+  const postKey = (item: any) => item?.postUrl || item?.url || item?.uuid || '';
+
+  // ── Inline single-comment handlers ──
+  // Clicking "Comment" generates a reply straight into the card using the active
+  // Voice Studio parameters — no modal, no extra "Generate" click. This mirrors
+  // the auto-reply draft experience for manual replies.
+  async function handleInlineComment(item: any) {
+    const k = postKey(item);
+    if (!k) return;
+    setInlineStates(prev => ({ ...prev, [k]: 'generating' }));
+    setInlineDrafts(prev => ({ ...prev, [k]: '' }));
+    try {
+      const result = await generateSmartEngagementComment(
+        item.postText || item.text || item.body || item.why || '',
+        appDesc || 'A growth platform',
+        item.title || item.creator || '',
+        { ...vp.commentSpec, mode: 'visibility' as any, voiceMix: vp.voiceMix, perspective: vp.perspective }
+      );
+      const body = (result?.options?.[0]?.body || '').trim();
+      if (body) {
+        setInlineDrafts(prev => ({ ...prev, [k]: body }));
+        setInlineStates(prev => ({ ...prev, [k]: 'done' }));
+      } else {
+        setInlineStates(prev => ({ ...prev, [k]: 'error' }));
+      }
+    } catch (e) {
+      console.error('inline comment failed', e);
+      setInlineStates(prev => ({ ...prev, [k]: 'error' }));
+    }
+  }
+
+  // Approve & queue the inline draft. Queue-only, human-in-the-loop — the user
+  // explicitly pressed Approve. Same dispatch path as the modal's "Send Now".
+  function handleInlinePost(item: any, text: string) {
+    const clean = (text || '').trim();
+    if (!clean) return;
+    window.dispatchEvent(new CustomEvent('pipeline_queue_engagement', {
+      detail: { lead: { ...item, actionType: 'comment', commentText: clean } }
+    }));
+    logInteraction(item, 'reply');
+    markReplied(item, clean);
+    const k = postKey(item);
+    setInlineStates(prev => { const m = { ...prev }; delete m[k]; return m; });
+    setInlineDrafts(prev => { const m = { ...prev }; delete m[k]; return m; });
+  }
+
+  function handleInlineDiscard(item: any) {
+    const k = postKey(item);
+    setInlineStates(prev => { const m = { ...prev }; delete m[k]; return m; });
+    setInlineDrafts(prev => { const m = { ...prev }; delete m[k]; return m; });
+  }
+
+  const toggleSelectPost = (item: any) => {
+    const k = postKey(item);
+    if (!k) return;
+    setSelectedPosts(prev => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
+
+  const clearBatchSelection = () => {
+    setSelectedPosts(new Set());
+    setBatchDrafts({});
+    setBatchStates({});
+  };
+
+  // Generate a comment for every selected post, in the active voice — same
+  // generator the single composer + auto-reply use. Runs sequentially to stay
+  // within the Gemini rate budget and so the user watches drafts populate.
+  async function generateBatchComments() {
+    const items = influencerSignals.filter((it: any) => selectedPosts.has(postKey(it)));
+    if (items.length === 0 || isBatchRunning) return;
+    setIsBatchRunning(true);
+    // Mark all selected as generating up front.
+    setBatchStates(() => {
+      const m: Record<string, 'generating' | 'done' | 'error'> = {};
+      items.forEach(it => { m[postKey(it)] = 'generating'; });
+      return m;
+    });
+    for (const it of items) {
+      const k = postKey(it);
+      try {
+        const result = await generateSmartEngagementComment(
+          it.postText || it.text || it.body || it.why || '',
+          appDesc || 'A growth platform',
+          it.title || it.creator || '',
+          { ...vp.commentSpec, mode: 'visibility' as any, voiceMix: vp.voiceMix, perspective: vp.perspective }
+        );
+        const body = (result?.options?.[0]?.body || '').trim();
+        if (body) {
+          setBatchDrafts(prev => ({ ...prev, [k]: body }));
+          setBatchStates(prev => ({ ...prev, [k]: 'done' }));
+        } else {
+          setBatchStates(prev => ({ ...prev, [k]: 'error' }));
+        }
+      } catch (e) {
+        console.error('batch comment failed', e);
+        setBatchStates(prev => ({ ...prev, [k]: 'error' }));
+      }
+    }
+    setIsBatchRunning(false);
+  }
+
+  // Publish (queue) every selected post that has a non-empty draft. Queue-only,
+  // human-in-the-loop: the user explicitly selected these and pressed Publish.
+  function publishBatchComments() {
+    const items = influencerSignals.filter((it: any) => selectedPosts.has(postKey(it)));
+    let published = 0;
+    items.forEach(it => {
+      const k = postKey(it);
+      const text = (batchDrafts[k] || '').trim();
+      if (!text) return;
+      window.dispatchEvent(new CustomEvent('pipeline_queue_engagement', {
+        detail: { lead: { ...it, actionType: 'comment', commentText: text } }
+      }));
+      logInteraction(it, 'reply');
+      markReplied(it, text);
+      published++;
+    });
+    if (published > 0) clearBatchSelection();
+  }
+
+  const selectedReadyCount = useMemo(
+    () => influencerSignals.filter((it: any) => selectedPosts.has(postKey(it)) && (batchDrafts[postKey(it)] || '').trim()).length,
+    [influencerSignals, selectedPosts, batchDrafts]
+  );
+
+  // Apply the Posts Tracker filters (min profile-fit %, platform) to the feed.
+  const getFit = (it: any): number | null =>
+    typeof it?.relevancyScore === 'number' ? it.relevancyScore
+    : typeof it?.relevance === 'number' ? it.relevance : null;
+  const filteredSignals = useMemo(() => {
+    return influencerSignals.filter((it: any) => {
+      if (minFit > 0) {
+        const f = getFit(it);
+        if (f === null || f < minFit) return false;
+      }
+      if (platformFilter !== 'all') {
+        const p = String(it.platform || '').toLowerCase();
+        const isX = p.includes('x') || p.includes('twitter');
+        const isLi = p.includes('linkedin');
+        const isRe = p.includes('reddit');
+        if (platformFilter === 'x' && !isX) return false;
+        if (platformFilter === 'linkedin' && !isLi) return false;
+        if (platformFilter === 'reddit' && !isRe) return false;
+      }
+      return true;
+    });
+  }, [influencerSignals, minFit, platformFilter]);
+
+  // Paginate the filtered feed. pageCount is at least 1 so the controls render
+  // sanely even when there are zero posts. clamp page to the last valid index
+  // if the underlying list shrinks (e.g. user deletes posts on the last page).
+  const pageCount = Math.max(1, Math.ceil(filteredSignals.length / POSTS_PER_PAGE));
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1);
+  }, [page, pageCount]);
+  const safePage = Math.min(page, pageCount - 1);
+  const pagedSignals = useMemo(
+    () => filteredSignals.slice(safePage * POSTS_PER_PAGE, (safePage + 1) * POSTS_PER_PAGE),
+    [filteredSignals, safePage]
+  );
+
+  // Mark a post as "You replied" the instant the user fires a manual comment,
+  // so the radar badge updates without waiting for the auto-pipeline. Writes
+  // to the extension's unified comment_log (survives the 3s refresh) AND
+  // optimistically updates the in-page mirror so the badge flips immediately.
+  const markReplied = (lead: any, text: string) => {
+    const url = lead?.postUrl || lead?.url || lead?.uuid;
+    if (!url) return;
+    try {
+      window.dispatchEvent(new CustomEvent('comment_log_add', { detail: {
+        url,
+        source: 'manual',
+        comment: text,
+        creator: lead.creator || lead.name || lead.title || null,
+        platform: lead.platform || null,
+      }}));
+      // Optimistic local mirror + instant rebuild for the status-map hook.
+      const log = JSON.parse(localStorage.getItem('comment_log') || '[]');
+      if (!log.some((c: any) => (c.url || c.postUrl) === url)) {
+        log.unshift({ at: Date.now(), url, source: 'manual', commentPreview: (text || '').slice(0, 200) });
+        localStorage.setItem('comment_log', JSON.stringify(log.slice(0, 200)));
+        window.dispatchEvent(new CustomEvent('comment_log_loaded', { detail: { success: true, log } }));
+      }
+    } catch (e) { console.warn('markReplied failed', e); }
+  };
+
+  // The comment modal is `position: fixed` + flex-centered, so it is always
+  // pinned to the middle of the viewport. We intentionally do NOT scrollIntoView
+  // anymore (it caused the page behind to jump); the overlay handles visibility.
 
   const getPlatformIcon = (platformInput: any = 'X', isDark = false) => {
     const platform = String(platformInput || 'X').toLowerCase();
@@ -414,112 +1391,297 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50/30">
-      {/* ── Browser-Style Tab Bar ── */}
-      <div className="flex items-end px-12 border-b border-gray-200 bg-white pt-6">
-          <button 
-              onClick={() => setActiveMainTab('radar')}
-              className={`flex items-center gap-2 px-10 py-4 rounded-t-[2.5rem] text-xs font-black uppercase tracking-widest transition-all relative z-10 ${
-                  activeMainTab === 'radar' 
-                  ? 'bg-white text-amber-600 border-x border-t border-gray-200 -mb-[1px] shadow-[0_-15px_35px_rgba(0,0,0,0.08)]' 
-                  : 'text-gray-400 hover:text-gray-600 pb-3'
-              }`}
-          >
-              <div className={`p-1.5 rounded-xl ${activeMainTab === 'radar' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400'}`}>
-                  <MessageSquarePlus size={16} />
-              </div>
-              Public Radar
-          </button>
-          
-          <div className="flex-1"></div>
-          
-          <div className="pb-4 pr-4">
-              {!extensionConnected ? (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-500 rounded-2xl text-[10px] font-black uppercase tracking-tighter border border-rose-100 animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                      Disconnected
+    <div className="min-h-screen">
+      <div className="py-2 animate-fade-in max-w-[1600px] mx-auto px-1 sm:px-2">
+        <header className="flex items-start justify-between mb-6 gap-4 flex-wrap">
+          <div>
+            <h2 className="text-2xl font-display font-medium text-gray-900 tracking-tight">Tracked posts</h2>
+            <p className="text-sm text-gray-500 mt-0.5">New posts from accounts you follow — be first to engage.</p>
+            {/* Aggregate Profile Fit — one-glance summary of how well the
+                CURRENT (filtered) feed matches the user's niche / voice.
+                Pulled from the same getFit() the cards use, so the number
+                and tint line up. Hidden if no scored posts in view. */}
+            {(() => {
+              const scored = filteredSignals.map((it: any) => getFit(it)).filter((v: number | null): v is number => typeof v === 'number');
+              if (!scored.length) return null;
+              const avg = Math.round(scored.reduce((a, b) => a + b, 0) / scored.length);
+              const strong = scored.filter(v => v >= 65).length;
+              const tone = avg >= 65 ? 'emerald' : avg >= 50 ? 'amber' : 'rose';
+              return (
+                <div className="mt-2 inline-flex items-center gap-3 px-3 py-1.5 rounded-xl bg-white border border-gray-200 shadow-sm" title="Average Profile Fit across the posts currently in view. Tweak the niche / voice in Voice Studio to raise this.">
+                  <div className="flex items-center gap-1.5">
+                    <Target size={12} className={`text-${tone}-600`} />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Avg fit</span>
                   </div>
-              ) : (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-500 rounded-2xl text-[10px] font-black uppercase tracking-tighter border border-emerald-100">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      Active
-                  </div>
-              )}
-          </div>
-      </div>
-
-      <div className="p-12 animate-fade-in max-w-[1600px] mx-auto">
-        {/* Batch actions shown inline above list, no floating bar needed */}
-
-        <div className="flex items-center justify-between mb-16">
-            <div className="flex items-center gap-6">
-                <div className="w-20 h-20 bg-amber-500 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-amber-200/50">
-                    <Radar size={40} className="text-white" />
+                  <span className={`text-base font-extrabold tabular-nums text-${tone}-600`}>{avg}%</span>
+                  <span className="text-[11px] text-gray-500"><b className="text-gray-700 tabular-nums">{strong}</b>/{scored.length} strong</span>
                 </div>
-                <div>
-                    <h2 className="text-5xl font-display font-medium tracking-tight text-gray-900">Public <span className="text-amber-600 font-bold">Radar</span></h2>
-                    <p className="text-sm font-black uppercase tracking-[0.3em] text-gray-300 mt-2">Tracked account activity — be first to engage</p>
-                </div>
-            </div>
-            
-            <div className="flex items-center gap-6">
-                <div className="text-right">
-                    <div className="px-5 py-2 bg-amber-100 text-amber-600 rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest inline-block mb-3 shadow-sm border border-amber-200">Influencer Tracking</div>
-                    <p className="text-sm text-gray-400 font-medium max-w-[240px]">Be the first to engage with big accounts to get noticed.</p>
-                </div>
-            </div>
-        </div>
-
-        {/* Radar feed */}
-        <div className="space-y-3 max-w-5xl">
-                <div className="space-y-4">
-                    {influencerSignals.length === 0 ? (
-                        <div className="py-32 text-center bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
-                            <Radar size={48} className="mx-auto mb-4 text-gray-300" />
-                            <h3 className="text-lg font-bold text-gray-400 uppercase tracking-widest">Radar Quiet</h3>
-                            <p className="text-sm text-gray-400 mt-2">No followed posts detected. Check your extension settings.</p>
-                        </div>
-                    ) : (
-                        influencerSignals.map((item: any) => (
-                            <div key={item.uuid || item.url} className="group flex items-start gap-6 p-6 rounded-[2rem] border bg-amber-50/20 border-amber-100 hover:border-amber-300 transition-all shadow-sm">
-                                <a href={item.postUrl || item.url} target="_blank" rel="noreferrer" className="w-12 h-12 rounded-2xl flex items-center justify-center border bg-white border-amber-200 text-amber-500 shadow-sm hover:border-blue-300 hover:bg-blue-50 transition-all">
-                                    {getPlatformIcon(item.platform)}
-                                </a>
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <a href={item.postUrl || item.url} target="_blank" rel="noreferrer" className="font-bold text-gray-900 leading-none hover:text-blue-600 transition-colors">@{item.creator}</a>
-                                        <div className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border bg-amber-500 text-white border-amber-500">New Post</div>
-                                        <span className="text-[10px] text-gray-400 font-mono flex items-center gap-1">
-                                            <Clock size={10} />
-                                            {item.timestamp ? 
-                                                new Date(item.timestamp).toLocaleDateString() + ' ' + 
-                                                new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) 
-                                                : 'Recently'}
-                                        </span>
-                                    </div>
-                                    <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed mb-4">
-                                        {item.text || item.body}
-                                    </p>
-                                    <div className="flex items-center gap-3">
-                                        <button onClick={() => handleOpenSmartReply(item, true)} className="flex items-center gap-2 px-6 py-2 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg shadow-gray-900/10">
-                                            <Sparkles size={14} className="text-amber-400" /> Comment Now
-                                        </button>
-                                        <a href={item.postUrl || item.url} target="_blank" rel="noreferrer" className="p-2 text-gray-400 hover:text-gray-900 bg-white border border-gray-200 rounded-xl shadow-sm transition-all">
-                                            <ExternalLink size={16} />
-                                        </a>
-                                        <div className="flex-1"></div>
-                                        <div className="text-[10px] font-black text-amber-500/50 uppercase tracking-tighter">Followed Influencer</div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                    
-                    {/* Stealth Configuration / Account Addition Section */}
-                    <div className="mt-12 pt-8 border-t border-gray-100">
-                        <AnswerlyView />
+              );
+            })()}
+            {/* Active voice — comments here are generated with this voice.
+                A prominent control so users always know (and can change) the
+                voice the tracker writes comments in. The popover lists ONLY the
+                user's saved voices; picking one immediately re-points generation
+                (applySavedProfile updates the shared vp state that
+                generateComments / handleInlineComment / batch read). */}
+            <div className="mt-3 relative inline-block">
+              <button
+                type="button"
+                onClick={() => setVoiceEditorOpen(o => !o)}
+                className="group inline-flex items-center gap-2.5 pl-2.5 pr-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/25 ring-1 ring-violet-400/40 hover:from-violet-500 hover:to-indigo-500 transition-all active:scale-[0.98]"
+                title="Comments in the tracker are generated with this voice. Click to switch or fine-tune it."
+              >
+                <span className="flex items-center justify-center w-7 h-7 rounded-xl bg-white/20">
+                  <Sparkles size={14} className="text-amber-200" />
+                </span>
+                <span className="flex flex-col items-start leading-tight">
+                  <span className="text-[9px] font-black uppercase tracking-[0.15em] text-white/70">Comment voice</span>
+                  <span className="text-[13px] font-bold leading-none mt-0.5">{activeVoice.emoji} {activeVoice.name}</span>
+                </span>
+                <span className="ml-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full bg-white/15 text-white/90">Change</span>
+                <span className={`text-[10px] text-white/70 transition-transform ${voiceEditorOpen ? 'rotate-180' : ''}`}>▾</span>
+              </button>
+              <p className="text-[10px] text-gray-400 mt-1 ml-1">Every comment you generate here is written in this voice.</p>
+              {voiceEditorOpen && (
+                <>
+                  {/* click-away backdrop */}
+                  <div className="fixed inset-0 z-40" onClick={() => setVoiceEditorOpen(false)} />
+                  <div className="absolute left-0 top-full mt-2 z-50 w-[360px] max-h-[72vh] overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl p-4 text-left animate-fade-in">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">Voice for comments</span>
+                      <button onClick={() => setVoiceEditorOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={14} /></button>
                     </div>
+
+                    {/* Saved voices ONLY. The tracker writes comments in a voice
+                        you deliberately built and saved in Voice Studio — no
+                        built-in presets are offered here, so the comment voice
+                        is always one you authored. Picking one calls
+                        vp.applySavedProfile, which updates the voiceMix/spec
+                        that generation reads. */}
+                    <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1.5">Your saved voices</p>
+                    {vp.library.length > 0 ? (
+                      <div className="space-y-1.5 mb-3">
+                        {vp.library.map(s => {
+                          const active = (vp.aiSuggestionReason || '') === `Saved profile · ${s.name}`;
+                          return (
+                            <button
+                              key={s.id}
+                              onClick={() => { vp.applySavedProfile(s.id); setVoiceEditorOpen(false); }}
+                              className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-left border transition-colors ${active ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-700 border-gray-200 hover:border-violet-300 hover:bg-violet-50'}`}
+                              title={s.note || s.name}
+                            >
+                              <span className="flex items-center gap-2 min-w-0">
+                                <span>💾</span>
+                                <span className="text-[12px] font-bold truncate">{s.name}</span>
+                              </span>
+                              {active && <Check size={14} className="shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mb-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-3 py-4 text-center">
+                        <p className="text-[12px] font-semibold text-gray-600">No saved voices yet</p>
+                        <p className="text-[11px] text-gray-400 leading-snug mt-1">Build and save a voice in <span className="font-semibold">Voice Studio</span>, then pick it here to write every comment in it.</p>
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-gray-400 leading-snug">
+                      Comments in the tracker are written in your selected saved voice. Create or fine-tune voices in <span className="font-semibold">Voice Studio</span>.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {influencerSignals.length > 0 && (
+              <button
+                onClick={handleClearPosts}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-2xl text-[10px] font-black uppercase tracking-tighter border border-gray-200 text-gray-500 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors"
+                title="Remove every post from the tracker"
+              >
+                <Trash2 size={12} /> Clear all
+              </button>
+            )}
+            {!extensionConnected ? (
+                <div className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-500 rounded-2xl text-[10px] font-black uppercase tracking-tighter border border-rose-100 animate-pulse">
+                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                    Disconnected
                 </div>
+            ) : (
+                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-500 rounded-2xl text-[10px] font-black uppercase tracking-tighter border border-emerald-100">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    Active
+                </div>
+            )}
+          </div>
+        </header>
+
+        {/* Batch selection toolbar + filters — select posts, generate comments
+            for all of them at once (same generator as auto-reply), then publish
+            the ones you keep. Filters narrow the feed by profile-fit % and
+            platform. Only shown when there are posts to act on. */}
+        {influencerSignals.length > 0 && (
+          <div className="mb-3 flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => {
+                const pageKeys = pagedSignals.map((it: any) => postKey(it)).filter(Boolean);
+                const allSelected = pageKeys.length > 0 && pageKeys.every(k => selectedPosts.has(k));
+                setSelectedPosts(prev => {
+                  const next = new Set(prev);
+                  if (allSelected) pageKeys.forEach(k => next.delete(k));
+                  else pageKeys.forEach(k => next.add(k));
+                  return next;
+                });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-700 bg-white transition-colors"
+            >
+              <Check size={12} />
+              {pagedSignals.length > 0 && pagedSignals.every((it: any) => selectedPosts.has(postKey(it))) ? 'Deselect page' : 'Select page'}
+            </button>
+            <span className="text-[11px] text-gray-400">{selectedPosts.size > 0 ? `${selectedPosts.size} selected` : 'Tick posts to batch-generate comments'}</span>
+
+            <div className="w-px h-5 bg-gray-200 mx-1" />
+
+            {/* Profile-fit filter */}
+            <div className="flex items-center gap-1.5">
+              <Target size={12} className="text-gray-400" />
+              <select
+                value={minFit}
+                onChange={e => setMinFit(Number(e.target.value))}
+                className="text-[11px] font-semibold border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:border-blue-400"
+                title="Only show posts at or above this profile fit"
+              >
+                <option value={0}>Any fit</option>
+                <option value={80}>≥ 80% · strong</option>
+                <option value={65}>≥ 65% · good</option>
+                <option value={50}>≥ 50% · moderate</option>
+                <option value={35}>≥ 35% · weak+</option>
+              </select>
+            </div>
+
+            {/* Platform filter */}
+            <div className="flex items-center gap-1">
+              {([['all', 'All'], ['x', 'X'], ['linkedin', 'LinkedIn'], ['reddit', 'Reddit']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setPlatformFilter(val as any)}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${
+                    platformFilter === val ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                  }`}
+                >{label}</button>
+              ))}
+            </div>
+
+            {(minFit > 0 || platformFilter !== 'all') && (
+              <span className="text-[11px] text-gray-400">{filteredSignals.length} / {influencerSignals.length} shown</span>
+            )}
+          </div>
+        )}
+
+        {/* Posts feed — a responsive masonry grid that fills the width on
+            large screens (1 col on mobile, up to 3 wide on big displays) so we
+            stop wasting the side space. break-inside-avoid keeps each card
+            whole within its column. */}
+        <div className="space-y-3">
+                {influencerSignals.length === 0 ? (
+                    <div className="py-20 px-6 text-center bg-white/70 rounded-3xl border border-dashed border-gray-200">
+                        <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gray-900/5 flex items-center justify-center">
+                            <Radar size={26} className="text-gray-400" />
+                        </div>
+                        <h3 className="text-base font-semibold text-gray-700">No new posts yet</h3>
+                        <p className="text-[13px] text-gray-400 mt-1.5 max-w-sm mx-auto leading-relaxed">
+                            When an account you track posts something, it lands here. Add accounts in the Account Finder and keep this tab open.
+                        </p>
+                    </div>
+                ) : filteredSignals.length === 0 ? (
+                    <div className="py-16 px-6 text-center bg-white/70 rounded-3xl border border-dashed border-gray-200">
+                        <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gray-900/5 flex items-center justify-center">
+                            <Target size={26} className="text-gray-400" />
+                        </div>
+                        <h3 className="text-base font-semibold text-gray-700">No posts match your filters</h3>
+                        <p className="text-[13px] text-gray-400 mt-1.5 max-w-sm mx-auto leading-relaxed">
+                            {influencerSignals.length} post{influencerSignals.length === 1 ? '' : 's'} hidden by the current fit / platform filters. Lower the profile-fit threshold or switch the platform to “All”.
+                        </p>
+                        <button
+                            onClick={() => { setMinFit(0); setPlatformFilter('all'); }}
+                            className="mt-4 px-3.5 py-2 rounded-lg text-[12px] font-semibold bg-gray-900 text-white hover:bg-gray-700 transition-colors"
+                        >Clear filters</button>
+                    </div>
+                ) : (
+                    <div className="flex gap-4 items-start">
+                        {/* MASONRY (round-robin columns). Cards are distributed
+                            into a fixed number of columns by index (i % count),
+                            so every card has a PERMANENT column — expanding one
+                            card (inline comment editor / selection UI) only grows
+                            its own column and never reorders or jumps siblings,
+                            which was the failure of the old balanced CSS masonry.
+                            Within a column cards stack with no vertical gaps, so
+                            there is no empty space between posts (the grid left
+                            gaps below shorter cards in each row). */}
+                        {Array.from({ length: radarColumnCount }, (_, colIndex) => (
+                            <div key={colIndex} className="flex-1 min-w-0 flex flex-col gap-4">
+                                {/* Render only the current page so the DOM
+                                    stays small — the tracker used to slow to a
+                                    crawl with hundreds of cards mounted. */}
+                                {pagedSignals
+                                    .filter((_: any, i: number) => i % radarColumnCount === colIndex)
+                                    .map((item: any) => (
+                                        <div key={item.uuid || item.url} className="min-w-0">
+                                            <RadarPostCard
+                                                item={item}
+                                                getPlatformIcon={getPlatformIcon}
+                                                onComment={() => handleInlineComment(item)}
+                                                commentStatus={autoCommentStatusMap.get(item.postUrl || item.url)}
+                                                draft={draftByPostUrl.get(item.postUrl || item.url)}
+                                                onConfirmDraft={handleConfirmDraft}
+                                                onDiscardDraft={handleDiscardDraft}
+                                                onRemovePost={() => handleRemovePost(item)}
+                                                onRepost={() => handleRepost(item)}
+                                                onQuote={() => handleQuote(item)}
+                                                selected={selectedPosts.has(item.postUrl || item.url || item.uuid)}
+                                                onToggleSelect={() => toggleSelectPost(item)}
+                                                batchDraft={batchDrafts[item.postUrl || item.url || item.uuid]}
+                                                batchState={batchStates[item.postUrl || item.url || item.uuid]}
+                                                onBatchDraftChange={(t) => setBatchDrafts(prev => ({ ...prev, [item.postUrl || item.url || item.uuid]: t }))}
+                                                inlineDraft={inlineDrafts[item.postUrl || item.url || item.uuid]}
+                                                inlineState={inlineStates[item.postUrl || item.url || item.uuid]}
+                                                onInlineDraftChange={(t) => setInlineDrafts(prev => ({ ...prev, [item.postUrl || item.url || item.uuid]: t }))}
+                                                onInlinePost={(t) => handleInlinePost(item, t)}
+                                                onInlineRegenerate={() => handleInlineComment(item)}
+                                                onInlineDiscard={() => handleInlineDiscard(item)}
+                                            />
+                                        </div>
+                                    ))}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Pagination footer — only shown when there's more than one
+                    page. Range string ("51–100 of 312") gives the user
+                    context; arrow buttons disable at the ends. */}
+                {filteredSignals.length > POSTS_PER_PAGE && (
+                    <div className="flex items-center justify-between gap-3 pt-3 mt-2 border-t border-gray-100 text-[12px] text-gray-500">
+                        <span className="tabular-nums">
+                            Showing {safePage * POSTS_PER_PAGE + 1}–{Math.min((safePage + 1) * POSTS_PER_PAGE, filteredSignals.length)} of {filteredSignals.length}
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setPage(p => Math.max(0, p - 1))}
+                                disabled={safePage === 0}
+                                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-gray-200 bg-white text-gray-600 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >← Prev</button>
+                            <span className="tabular-nums text-gray-500">Page {safePage + 1} / {pageCount}</span>
+                            <button
+                                onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                                disabled={safePage >= pageCount - 1}
+                                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-gray-200 bg-white text-gray-600 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >Next →</button>
+                        </div>
+                    </div>
+                )}
             {false && (
                 <div className="space-y-6">
                     {/* ── MISSION INTELLIGENCE TRIAGE ── */}
@@ -609,7 +1771,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                                     </div>
                                                     <span className="text-[10px] font-bold text-emerald-600">{signal.relevance || 88}% Match</span>
                                                 </div>
-                                                <p className="text-[11px] text-gray-600 leading-relaxed italic line-clamp-3 pl-3">
+                                                <p className="text-[11px] text-gray-600 leading-relaxed italic pl-3 whitespace-pre-wrap">
                                                     "{signal.text || signal.body}"
                                                 </p>
                                                 <div className="pt-1 flex items-center gap-1.5 pl-3">
@@ -725,8 +1887,14 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                             <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 uppercase tracking-widest border border-slate-200">
                                                 {lead.interactionType === 'Comment' ? '💬 COMMENT' : '📣 POST'}
                                             </span>
+
+                                            {/* Feed Watcher queued a draft for this post (queue-only — nothing posted yet) */}
+                                            {lead.engagementStatus === 'queued' && (lead.suggestedAction === 'repost'
+                                                ? <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-violet-50 text-violet-600 uppercase tracking-widest border border-violet-100">♻️ Repost suggested</span>
+                                                : <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 uppercase tracking-widest border border-emerald-100">✍️ Reply drafted</span>
+                                            )}
                                         </div>
-                                        <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">
+                                        <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
                                             {lead.postText || lead.text || lead.why}
                                         </p>
 
@@ -751,7 +1919,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                                         }`}
                                                     >
                                                         <Sparkles size={13} />
-                                                        {hasCommented ? 'Commented' : 'Write Comment'}
+                                                        {hasCommented ? 'Commented' : (lead.engagementStatus === 'queued' && lead.suggestedComment ? 'Review draft' : 'Write Comment')}
                                                     </button>
 
                                                     {/* NEW: Automated Like Button */}
@@ -969,16 +2137,54 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
             </div>
         )}
 
-        {/* ── Comment Writing Modal ── */}
-        {commentingLead && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-gray-950/60 backdrop-blur-md">
+        {/* ── Batch action bar (floating) ──
+            Appears when posts are selected. Generate comments for all selected
+            in one go (queued in your voice), review/edit each inline, then
+            Publish the batch. Queue-only — nothing posts until you press it. */}
+        {selectedPosts.size > 0 && createPortal(
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] flex items-center gap-3 px-5 py-3 rounded-2xl bg-gray-900 text-white shadow-2xl border border-gray-700 max-w-[95vw] flex-wrap justify-center">
+                <span className="text-xs font-bold">{selectedPosts.size} post{selectedPosts.size > 1 ? 's' : ''} selected</span>
+                <div className="w-px h-5 bg-white/20" />
+                <button
+                    onClick={generateBatchComments}
+                    disabled={isBatchRunning}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                >
+                    {isBatchRunning ? <><RefreshCw size={13} className="animate-spin" /> Generating…</> : <><Sparkles size={13} /> Generate comments</>}
+                </button>
+                <button
+                    onClick={publishBatchComments}
+                    disabled={selectedReadyCount === 0 || isBatchRunning}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-colors"
+                    title={selectedReadyCount === 0 ? 'Generate comments first' : `Queue ${selectedReadyCount} comment(s) for posting`}
+                >
+                    <Send size={13} /> Publish selected{selectedReadyCount > 0 ? ` (${selectedReadyCount})` : ''}
+                </button>
+                <button
+                    onClick={clearBatchSelection}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                    title="Clear selection"
+                    aria-label="Clear selection"
+                >
+                    <X size={16} />
+                </button>
+            </div>,
+            document.body
+        )}
+
+        {/* ── Comment Writing Modal ──
+            Rendered through a portal to <body> so it's never affected by an
+            ancestor's CSS transform (the daisyUI drawer layout applies
+            transforms, which would otherwise make `position: fixed` resolve
+            against that ancestor instead of the viewport — that was why the
+            modal sat off-screen and required scrolling). In the portal it is
+            always pinned dead-center of the user's screen. */}
+        {commentingLead && createPortal(
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-gray-950/60 backdrop-blur-md" ref={commentModalRef}>
                 <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
                     {/* Header */}
-                    <div className="p-6 border-b border-gray-100 flex justify-between items-start">
+                    <div className="p-6 border-b border-gray-100 flex justify-between items-start flex-shrink-0">
                         <div>
-                            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
-                                {commentMode === 'visibility' ? 'Brand Visibility Comment' : 'Sales Prospect Comment'}
-                            </p>
                             <h3 className="text-lg font-bold text-gray-900">Write a comment for @{commentingLead.title || commentingLead.creator}</h3>
                             {commentingLead.postText && (
                                 <p className="text-xs text-gray-400 mt-1 line-clamp-1 italic">"{commentingLead.postText}"</p>
@@ -989,69 +2195,56 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto">
-                        {/* Customization Panel */}
-                        <div className="p-6 border-b border-gray-50 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                {/* Tone */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-600 mb-2">Tone</label>
-                                    <div className="flex gap-2">
-                                        {[['casual', 'Casual'], ['formal', 'Formal'], ['funny', 'Witty']].map(([val, label]) => (
-                                            <button key={val} onClick={() => setCommentOptions(o => ({ ...o, tone: val }))}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                                                    commentOptions.tone === val ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
-                                                }`}>{label}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                                {/* Goal */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-600 mb-2">What do you want to achieve?</label>
-                                    <select
-                                        value={commentOptions.goal}
-                                        onChange={e => setCommentOptions(o => ({ ...o, goal: e.target.value }))}
-                                        className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 bg-white"
+                    {/* Saved voices picker — quick switch row at the top of the modal.
+                        Reads from the same library Voice Studio writes to.
+                        Applying a profile here makes the next "Generate" use that voice. */}
+                    {vp.library.length > 0 && (
+                        <div className="px-6 py-3 border-b border-gray-100 bg-amber-50/50 flex items-center gap-2 flex-wrap flex-shrink-0">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-900 mr-1">Voice</span>
+                            {vp.library.map(p => {
+                                const tip = `${p.note ? p.note + ' — ' : ''}auth ${p.voiceMix.authority} · energy ${p.voiceMix.energy} · prov ${p.voiceMix.provocation}`;
+                                return (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => vp.applySavedProfile(p.id)}
+                                        title={tip}
+                                        className="px-2.5 py-1 rounded-md border border-amber-200 bg-white text-amber-900 text-[11px] font-medium hover:border-amber-400 transition-colors"
                                     >
-                                        <option value="build_relationship">Start a real conversation</option>
-                                        <option value="ask_question">Ask an interesting question</option>
-                                        <option value="share_insight">Share a useful insight</option>
-                                        <option value="get_noticed">Stand out from the crowd</option>
-                                    </select>
-                                </div>
+                                        🔖 {p.name}
+                                    </button>
+                                );
+                            })}
+                            <span className="ml-auto text-[10px] text-amber-900/60 italic">Applied profile is used for the next generation.</span>
+                        </div>
+                    )}
+
+                    <div className="flex-1 overflow-y-auto min-h-0">
+                        {/* Comment-spec summary (read-only).
+                            Tone / goal / length / angle are configured ONCE in
+                            Voice Studio (vp.commentSpec) and reused for every
+                            comment, so there's nothing to set per post here. We
+                            show the active spec so the user knows what they'll
+                            get, with a hint pointing to Voice Studio to change it. */}
+                        <div className="p-6 border-b border-gray-50">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-xs font-semibold text-gray-600">Comment style <span className="font-normal text-gray-400">— set in Voice Studio</span></label>
                             </div>
-                            {/* Length */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-600 mb-2">
-                                    Max comment length: <span className="text-gray-900">{commentOptions.maxLength} characters</span>
-                                </label>
-                                <input type="range" min={80} max={500} step={20}
-                                    value={commentOptions.maxLength}
-                                    onChange={e => setCommentOptions(o => ({ ...o, maxLength: Number(e.target.value) }))}
-                                    className="w-full accent-gray-900"
-                                />
-                                <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                                    <span>Short (80)</span><span>Tweet-length (250)</span><span>Long (500)</span>
-                                </div>
+                            <div className="flex flex-wrap gap-2">
+                                <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-900 text-white capitalize">{vp.commentSpec.tone}</span>
+                                <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-gray-100 text-gray-700">
+                                    {vp.commentSpec.goal === 'build_relationship' ? 'Start a conversation'
+                                        : vp.commentSpec.goal === 'ask_question' ? 'Ask a question'
+                                        : vp.commentSpec.goal === 'share_insight' ? 'Share insight'
+                                        : 'Stand out'}
+                                </span>
+                                <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-gray-100 text-gray-700">≤ {vp.commentSpec.maxLength} chars</span>
+                                {vp.commentSpec.customInstruction.trim() && (
+                                    <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200 max-w-full truncate" title={vp.commentSpec.customInstruction}>
+                                        “{vp.commentSpec.customInstruction}”
+                                    </span>
+                                )}
                             </div>
-                            {/* Custom Instruction */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-600 mb-2">Any specific angle? <span className="font-normal text-gray-400">(optional)</span></label>
-                                <input type="text"
-                                    value={commentOptions.customInstruction}
-                                    onChange={e => setCommentOptions(o => ({ ...o, customInstruction: e.target.value }))}
-                                    placeholder='e.g. "Mention the difficulty of scaling teams" or "Be empathetic"'
-                                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400"
-                                />
-                            </div>
-                            {/* Generate Button */}
-                            <button
-                                onClick={generateComments}
-                                disabled={isGeneratingComment}
-                                className="w-full py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                            >
-                                {isGeneratingComment ? <><RefreshCw size={15} className="animate-spin" /> Generating...</> : <><Sparkles size={15} /> Generate comments</>}
-                            </button>
+                            <p className="text-[11px] text-gray-400 italic mt-2">Change tone, goal, length or your standing angle once in <b>Voice Studio → Comment defaults</b>.</p>
                         </div>
 
                         {/* Results */}
@@ -1063,50 +2256,87 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                         <RefreshCw size={12} /> Regenerate
                                     </button>
                                 </div>
-                                {smartComments.options.map((opt, i) => (
+                                {smartComments.options.map((opt, i) => {
+                                    const value = editedComments[i] ?? opt.body;
+                                    return (
                                     <div
                                         key={i}
                                         className="group relative bg-white border border-gray-100 p-5 rounded-2xl hover:border-blue-200 transition-all text-left shadow-sm hover:shadow-md"
                                     >
                                         <div className="flex items-start justify-between gap-6">
-                                            <div className="flex-1">
+                                            <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 px-3 py-1 bg-blue-50 rounded-full">
                                                         {opt.type === 'agreement' ? 'Agree & build' : opt.type === 'insight' ? 'Share insight' : 'Ask a question'}
                                                     </span>
+                                                    {(editedComments[i] !== undefined && editedComments[i] !== opt.body) && (
+                                                        <span className="text-[10px] text-amber-600 font-semibold">edited</span>
+                                                    )}
                                                 </div>
-                                                <p className="text-sm text-gray-800 leading-relaxed font-medium">{opt.body}</p>
-                                                <p className="text-[10px] text-gray-400 mt-2 italic">{opt.why}</p>
+                                                {/* Editable comment — the user can always tweak the
+                                                    generated text before sending. The send buttons use
+                                                    this exact value. */}
+                                                <textarea
+                                                    value={value}
+                                                    onChange={e => setEditedComments(prev => ({ ...prev, [i]: e.target.value }))}
+                                                    rows={Math.min(8, Math.max(2, Math.ceil(value.length / 60)))}
+                                                    className="w-full text-sm text-gray-800 leading-relaxed font-medium border border-gray-200 rounded-xl p-3 resize-y focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                                                />
+                                                <div className="flex items-center justify-between mt-1.5">
+                                                    <p className="text-[10px] text-gray-400 italic truncate pr-2">{opt.why}</p>
+                                                    <span className="text-[10px] text-gray-400 flex-shrink-0">{value.length} chars</span>
+                                                </div>
                                             </div>
-                                            
+
                                             <div className="flex flex-col gap-2 min-w-[140px]">
                                                 <button
                                                     onClick={() => {
-                                                        const event = new CustomEvent('pipeline_queue_engagement', { 
-                                                            detail: { 
+                                                        const text = (editedComments[i] ?? opt.body).trim();
+                                                        if (!text) return;
+                                                        const event = new CustomEvent('pipeline_queue_engagement', {
+                                                            detail: {
                                                                 lead: {
                                                                     ...commentingLead,
-                                                                    actionType: 'comment',
-                                                                    commentText: opt.body
+                                                                    actionType: engagementAction,
+                                                                    commentText: text
                                                                 }
-                                                            } 
+                                                            }
                                                         });
                                                         window.dispatchEvent(event);
-                                                        logInteraction(commentingLead, 'reply');
+                                                        logInteraction(commentingLead, engagementAction === 'quote' ? 'quote' : 'reply');
+                                                        markReplied(commentingLead, text);
                                                         setCommentingLead(null);
                                                         setSmartComments(null);
                                                     }}
                                                     className="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95"
                                                 >
-                                                    <Sparkles size={14} /> Send Now
+                                                    {engagementAction === 'quote' ? <Quote size={14} /> : <Sparkles size={14} />}
+                                                    {engagementAction === 'quote' ? 'Quote Now' : 'Send Now'}
                                                 </button>
-                                                
+
                                                 <button
                                                     onClick={() => {
-                                                        const targetUrl = commentingLead.postUrl || commentingLead.url || commentingLead.uuid;
-                                                        localStorage.setItem('answerly_comment_buffer', JSON.stringify({ url: targetUrl, text: opt.body }));
+                                                        const text = (editedComments[i] ?? opt.body).trim();
+                                                        if (!text) return;
+                                                        // Only postUrl/url are real links. uuid is an INTERNAL id
+                                                        // (e.g. "li_3f9a…" / "feed_…") — passing it to window.open
+                                                        // makes the browser treat it as a RELATIVE path and resolve
+                                                        // it against the current origin → http://localhost:3000/li_…
+                                                        // (the "Open Manual sends me back to localhost" bug). This
+                                                        // happens for LinkedIn new-feed cards that expose no permalink.
+                                                        const rawUrl = commentingLead.postUrl || commentingLead.url || '';
+                                                        const targetUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '';
+                                                        localStorage.setItem('answerly_comment_buffer', JSON.stringify({ url: targetUrl || commentingLead.uuid, text }));
                                                         logInteraction(commentingLead, 'reply');
-                                                        window.open(targetUrl, '_blank');
+                                                        markReplied(commentingLead, text);
+                                                        if (targetUrl) {
+                                                            window.open(targetUrl, '_blank');
+                                                        } else {
+                                                            // No capturable permalink — never bounce to localhost.
+                                                            // The reply is saved + the post marked replied; open
+                                                            // LinkedIn manually to paste it.
+                                                            alert("Ce post n'a pas de lien direct capturable depuis le fil LinkedIn. Ta réponse est enregistrée — ouvre le post sur LinkedIn pour la coller.");
+                                                        }
                                                         setCommentingLead(null);
                                                         setSmartComments(null);
                                                     }}
@@ -1117,12 +2347,30 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
+
+                    {/* Sticky footer — Generate button lives here so it's
+                        always visible regardless of how tall the customisation
+                        panel + results get. This fixes the "I have to scroll
+                        to find the Generate button" reported issue. */}
+                    <div className="flex-shrink-0 border-t border-gray-100 bg-white p-4">
+                        <button
+                            onClick={generateComments}
+                            disabled={isGeneratingComment}
+                            className="w-full py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {isGeneratingComment
+                                ? <><RefreshCw size={15} className="animate-spin" /> Generating...</>
+                                : <><Sparkles size={15} /> {smartComments ? 'Regenerate comments' : 'Generate comments'}</>}
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </div>,
+            document.body
         )}
         {/* ── Note Modal ── */}
         {notingLead && (
