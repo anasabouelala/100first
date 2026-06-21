@@ -60,6 +60,8 @@ output directory, and an SPA fallback rewrite).
 | `VITE_GEMINI_API_KEY` | client | Same Gemini key, exposed to the browser. |
 | `VITE_SUPABASE_URL` | client (auth) | Supabase project URL. |
 | `VITE_SUPABASE_ANON_KEY` | client (auth) | Supabase anon / publishable key only — never `service_role`. |
+| `VITE_DEEPSEEK_API_KEY` | client | DeepSeek key backing the AI adapter in `services/geminiService.ts`. |
+| `STEEL_API_KEY` | local server only | Steel key for the PH-Scout backend (`server.js`); not used by the web app. |
 
 `.env`, `.env.local`, and `.env.*.local` are gitignored. Set the same values in Vercel.
 

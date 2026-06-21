@@ -35,4 +35,5 @@ dist-ssr
 /inspect_styles.js
 /screenshot*.js
 /test_ext.js
+/list_models.js
 .vite-restart.log

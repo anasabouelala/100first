@@ -20,8 +20,8 @@ try {
 const app  = express();
 const PORT = 3002;
 
-const STEEL_KEY  = process.env.STEEL_API_KEY  || '***REMOVED***';
-const GEMINI_KEY = process.env.GEMINI_API_KEY || '***REMOVED***';
+const STEEL_KEY  = process.env.STEEL_API_KEY  || '';
+const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 
 app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'] }));
 app.use(express.json());

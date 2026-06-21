@@ -18,7 +18,7 @@ import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, Generat
 //   • Gemini's `Type` enum / `Schema` shape — re-implemented locally with the
 //      same uppercase names so existing schema literals compile unchanged.
 
-const DEEPSEEK_API_KEY = '***REMOVED***';
+const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY ?? '';
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 // Default model. Per spec — kept as a single source of truth so swapping the
