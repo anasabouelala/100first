@@ -19,6 +19,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { generateSmartEngagementComment } from '../services/geminiService';
+import { useVoiceProfile } from '../hooks/useVoiceProfile';
 import { SmartComment, PipelineLead, LeadInteraction } from '../types';
 
 const STAGE_CONFIG = {
@@ -64,6 +65,9 @@ export const PipelineView: React.FC<{ appDesc?: string, audience?: string }> = (
   const [smartComments, setSmartComments] = useState<SmartComment | null>(null);
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+  // Shared Voice Studio profile — so Smart Reply drafts in the user's configured
+  // voice instead of generic filler (same source the Posts Tracker uses).
+  const vp = useVoiceProfile();
 
   const logInteraction = (url: string, type: LeadInteraction['type']) => {
     const lead = leads.find(l => l.url === url);
@@ -180,7 +184,8 @@ export const PipelineView: React.FC<{ appDesc?: string, audience?: string }> = (
         const result = await generateSmartEngagementComment(
             lead.postText || lead.why,
             appDesc || "A growth platform",
-            lead.name || lead.title
+            lead.name || lead.title,
+            { ...vp.commentSpec, platform: lead.tags?.[0], voiceMix: vp.voiceMix, perspective: vp.perspective }
         );
         setSmartComments(result);
     } catch (e) { console.error(e); } 
@@ -338,9 +343,14 @@ export const PipelineView: React.FC<{ appDesc?: string, audience?: string }> = (
                                 <button 
                                     key={i}
                                     onClick={() => {
-                                        const targetUrl = commentingLead.postUrl || commentingLead.url;
-                                        localStorage.setItem('answerly_comment_buffer', JSON.stringify({ url: targetUrl, text: opt.body }));
-                                        window.open(targetUrl, '_blank');
+                                        const rawUrl = commentingLead.postUrl || commentingLead.url || '';
+                                        const targetUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '';
+                                        localStorage.setItem('answerly_comment_buffer', JSON.stringify({ url: targetUrl || commentingLead.uuid, text: opt.body }));
+                                        if (targetUrl) {
+                                            window.open(targetUrl, '_blank');
+                                        } else {
+                                            alert("Ce post n'a pas de lien direct capturable depuis le fil LinkedIn. Ta réponse est enregistrée — ouvre le post sur LinkedIn pour la coller.");
+                                        }
                                         setCommentingLead(null);
                                     }}
                                     className="w-full text-left p-6 bg-white border border-gray-100 rounded-3xl hover:border-blue-600 hover:shadow-lg transition-all group"

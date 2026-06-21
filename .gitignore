@@ -25,3 +25,14 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Claude Code local agent state, worktrees (each carries its own node_modules), skills, hooks
+.claude/
+
+# Local scratch / one-off dev scripts (not part of the app)
+/scratch/
+/rewrite*.cjs
+/inspect_styles.js
+/screenshot*.js
+/test_ext.js
+.vite-restart.log

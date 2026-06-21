@@ -74,17 +74,17 @@ const KPI: React.FC<{
       className={`group text-left bg-white border border-gray-100 hover:border-gray-300 hover:shadow-sm rounded-2xl p-5
                   transition-all duration-200 ease-out active:scale-[0.99]
                   ${onClick ? 'cursor-pointer' : 'cursor-default'}`}>
-      <div className="flex items-center justify-between mb-4 text-gray-400">
-        <span className="flex items-center gap-2 text-xs text-gray-500">
+      <div className="flex items-center justify-between mb-4 text-gray-500">
+        <span className="flex items-center gap-2 text-xs font-medium text-gray-600">
           {icon}
           <span>{label}</span>
         </span>
-        {onClick && <ArrowUpRight size={13} className="text-gray-200 group-hover:text-gray-700 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />}
+        {onClick && <ArrowUpRight size={13} className="text-gray-400 group-hover:text-gray-800 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />}
       </div>
       <div className="flex items-baseline gap-2">
-        <span className="text-3xl font-medium text-gray-900 tabular-nums">{value}</span>
+        <span className="text-3xl font-semibold text-gray-900 tabular-nums">{value}</span>
         {trend && trend !== 'flat' && (
-          <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${
+          <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${
             trend === 'up' ? 'text-emerald-600' : 'text-rose-600'
           }`}>
             {trend === 'up' ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
@@ -92,7 +92,7 @@ const KPI: React.FC<{
           </span>
         )}
       </div>
-      {hint && <div className="text-[11px] text-gray-400 mt-1">{hint}</div>}
+      {hint && <div className="text-[11px] text-gray-500 mt-1">{hint}</div>}
     </button>
   );
 };
@@ -113,17 +113,17 @@ const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; t
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h3 className="text-[15px] font-medium text-gray-900 tracking-tight">Posts Tracker activity</h3>
-          <p className="text-[12px] text-gray-400 mt-0.5">Posts captured in the last 14 days.</p>
+          <h3 className="text-[15px] font-semibold text-gray-900 tracking-tight">Posts Tracker activity</h3>
+          <p className="text-[12px] text-gray-500 mt-0.5">Posts captured in the last 14 days.</p>
         </div>
         <div className="flex items-center gap-6 text-right">
           <div>
-            <div className="text-xl font-medium text-gray-900 tabular-nums leading-none">{total}</div>
-            <div className="text-[11px] text-gray-400 mt-1">Total signals</div>
+            <div className="text-xl font-semibold text-gray-900 tabular-nums leading-none">{total}</div>
+            <div className="text-[11px] text-gray-500 mt-1">Total signals</div>
           </div>
           <div>
-            <div className="text-xl font-medium text-gray-900 tabular-nums leading-none">{avg.toFixed(1)}</div>
-            <div className="text-[11px] text-gray-400 mt-1">Daily avg</div>
+            <div className="text-xl font-semibold text-gray-900 tabular-nums leading-none">{avg.toFixed(1)}</div>
+            <div className="text-[11px] text-gray-500 mt-1">Daily avg</div>
           </div>
         </div>
       </div>
@@ -152,7 +152,7 @@ const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; t
           ))}
 
           {[0, 6, 13].map(i => (
-            <text key={i} x={xFor(i)} y={H - 6} fontSize={10} fill="#9ca3af" textAnchor="middle">
+            <text key={i} x={xFor(i)} y={H - 6} fontSize={10} fill="#6b7280" textAnchor="middle">
               {i === 13 ? 'Today' : i === 0 ? '14d ago' : '7d ago'}
             </text>
           ))}
@@ -181,16 +181,16 @@ export const DashboardView: React.FC<Props> = ({ setMode, onEditProject }) => {
           title="Edit project"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <span className="text-xs font-medium text-gray-900">{project.productName}</span>
-          {project.stage && <span className="text-[10px] text-gray-400">· {project.stage}</span>}
-          <span className="text-[10px] text-gray-300 group-hover:text-gray-600 transition-colors">Edit</span>
+          <span className="text-xs font-semibold text-gray-900">{project.productName}</span>
+          {project.stage && <span className="text-[10px] text-gray-500">· {project.stage}</span>}
+          <span className="text-[10px] text-gray-400 group-hover:text-gray-700 transition-colors">Edit</span>
         </button>
       )}
 
       {/* Header */}
       <header className="space-y-1">
-        <h2 className="text-2xl font-display font-medium text-gray-900 tracking-tight">Dashboard</h2>
-        <p className="text-sm text-gray-500">A quick read on what's moving.</p>
+        <h2 className="text-2xl font-display font-semibold text-gray-900 tracking-tight">Dashboard</h2>
+        <p className="text-sm text-gray-600">A quick read on what's moving.</p>
       </header>
 
       {/* 3 KPIs */}

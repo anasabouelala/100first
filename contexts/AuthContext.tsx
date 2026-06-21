@@ -88,15 +88,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { error };
   };
 
+  // Support mock authentication for local development/screenshots
+  const isMockEnabled = typeof window !== 'undefined' && window.localStorage?.getItem('mock_auth') === 'true';
+  const mockUser = isMockEnabled ? {
+    id: 'mock-user-uuid',
+    email: 'mock-user@example.com',
+    user_metadata: { full_name: 'Mock Developer' }
+  } as any : null;
+  const mockSession = isMockEnabled ? {
+    access_token: 'mock-token',
+    refresh_token: 'mock-token',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    token_type: 'bearer',
+    user: mockUser
+  } as any : null;
+
   const value: AuthCtx = {
-    session,
-    user: session?.user ?? null,
-    loading,
-    configured: isSupabaseConfigured,
-    signIn,
-    signUp,
-    signOut,
-    sendPasswordReset
+    session: session || mockSession,
+    user: session?.user ?? mockUser,
+    loading: isMockEnabled ? false : loading,
+    configured: isMockEnabled ? true : isSupabaseConfigured,
+    signIn: isMockEnabled ? async () => ({ error: null }) : signIn,
+    signUp: isMockEnabled ? async () => ({ error: null, needsEmailConfirm: false }) : signUp,
+    signOut: isMockEnabled ? async () => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('mock_auth');
+        window.localStorage.removeItem('project_config_v1');
+      }
+    } : signOut,
+    sendPasswordReset: isMockEnabled ? async () => ({ error: null }) : sendPasswordReset
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

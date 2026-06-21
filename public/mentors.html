@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chat with a mentor — Viraholic</title>
+<meta name="description" content="Ask an AI mentor modeled on indie hacker Marc Lou or business operator Alex Hormozi. No login required — bring your own free Gemini key and start chatting." />
+<meta name="theme-color" content="#181818" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: {
+        fontFamily: { sans: ['Inter','sans-serif'], serif: ['"Instrument Serif"','serif'] },
+        animation: { 'fade-up':'fadeUp .5s cubic-bezier(0.16,1,0.3,1) forwards', 'aurora':'aurora 20s ease-in-out infinite' },
+        keyframes: {
+            fadeUp: { '0%':{opacity:'0',transform:'translateY(8px)'}, '100%':{opacity:'1',transform:'translateY(0)'} },
+            aurora: { '0%,100%':{transform:'translate3d(0,0,0) scale(1)'}, '50%':{transform:'translate3d(3%,-4%,0) scale(1.1)'} },
+        }
+    } }
+}
+</script>
+<style>
+    :root{
+        --bg:#181818; --surface:#1c1c1c; --surface-2:#222; --border:#2a2a2a; --border-strong:#3f3f3f;
+        --text:#e2e2e2; --muted:#a8a29e; --orange:#e05c2a; --orange-light:#fc8a65; --gold:#ffc35b;
+    }
+    html,body{ height:100%; }
+    body{ font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased; background:var(--bg); color:var(--text); }
+    h1,h2,h3{ font-family:'Inter',sans-serif; letter-spacing:-0.02em; color:#fff; }
+    :focus-visible{ outline:2px solid var(--gold); outline-offset:2px; border-radius:8px; }
+
+    .accent{ font-family:'Instrument Serif',serif; font-style:italic; font-weight:400; font-size:1.08em;
+        background:linear-gradient(100deg,#ffd089,#fc8a65 55%,#e05c2a); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+    .glass{ background:rgba(28,28,28,0.62); border:1px solid var(--border); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); }
+    .card{ background:linear-gradient(180deg,#222,#191919); border:1px solid var(--border); }
+    .chip{ background:#222; border:1px solid #2f2f2f; }
+    .btn-primary{ background:linear-gradient(180deg,#fc8a65,#e05c2a); color:#fff;
+        box-shadow:0 8px 26px -10px rgba(224,92,42,.6), inset 0 1px 0 rgba(255,255,255,.18);
+        transition:box-shadow .2s, filter .2s, transform .2s; }
+    .btn-primary:hover{ filter:brightness(1.05); box-shadow:0 14px 40px -10px rgba(224,92,42,.75); }
+    .btn-primary:active{ transform:scale(.985); }
+    .btn-primary:disabled{ filter:grayscale(.4) brightness(.7); box-shadow:none; cursor:not-allowed; }
+    .gold-glow{ box-shadow:0 0 8px rgba(255,195,91,.4); }
+
+    .aurora-blob{ position:absolute; border-radius:9999px; filter:blur(80px); pointer-events:none; }
+
+    /* avatar with image + initials fallback behind it */
+    .avatar{ position:relative; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; flex:none;
+        background:linear-gradient(180deg,#3a3a3a,#262626); color:#fff; font-weight:700; }
+    .avatar img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+
+    /* mentor list item */
+    .mentor{ transition:border-color .2s, background .2s; cursor:pointer; }
+    .mentor:hover{ border-color:var(--border-strong); background:rgba(255,255,255,.03); }
+    .mentor[aria-selected="true"]{ border-color:rgba(255,195,91,.45); background:rgba(224,92,42,.07); }
+
+    /* chat bubbles */
+    .bubble{ max-width:80%; line-height:1.55; }
+    .bubble-bot{ background:#202020; border:1px solid #2a2a2a; }
+    .bubble-user{ background:linear-gradient(180deg,#fc8a65,#e05c2a); color:#fff; }
+    .bubble p{ margin:0 0 .55em; } .bubble p:last-child{ margin-bottom:0; }
+    .bubble ul,.bubble ol{ margin:.25em 0 .6em; padding-left:1.15em; } .bubble li{ margin:.15em 0; }
+    .bubble strong{ color:#fff; font-weight:600; } .bubble-user strong{ color:#fff; }
+    .bubble a{ color:var(--gold); text-decoration:underline; text-underline-offset:2px; }
+
+    /* typing dots */
+    .dot{ width:6px; height:6px; border-radius:50%; background:var(--muted); display:inline-block; animation:blink 1.3s infinite both; }
+    .dot:nth-child(2){ animation-delay:.2s; } .dot:nth-child(3){ animation-delay:.4s; }
+    @keyframes blink{ 0%,80%,100%{opacity:.25;} 40%{opacity:1;} }
+
+    .msgs::-webkit-scrollbar{ width:10px; } .msgs::-webkit-scrollbar-thumb{ background:#2e2e2e; border-radius:8px; border:3px solid var(--bg); }
+
+    @media (prefers-reduced-motion: reduce){
+        .animate-fade-up,.animate-aurora{ animation:none !important; }
+        .dot{ animation:none !important; opacity:.6; }
+    }
+</style>
+</head>
+<body class="bg-[#181818] text-stone-300 antialiased selection:bg-orange-500/30 selection:text-white flex flex-col">
+
+<!-- aurora backdrop -->
+<div aria-hidden="true" class="fixed inset-0 -z-10 overflow-hidden">
+    <div class="aurora-blob animate-aurora" style="width:560px;height:560px;top:-220px;left:-120px;background:radial-gradient(circle,rgba(224,92,42,.20),transparent 70%)"></div>
+    <div class="aurora-blob animate-aurora" style="width:480px;height:480px;bottom:-220px;right:-100px;background:radial-gradient(circle,rgba(255,195,91,.14),transparent 70%);animation-delay:-8s"></div>
+</div>
+
+<!-- ───────────── NAV ───────────── -->
+<nav class="sticky top-0 z-40 backdrop-blur-xl bg-[#181818]/75 border-b border-[#222]">
+    <div class="max-w-6xl mx-auto px-5 py-3.5 flex items-center justify-between">
+        <a href="landing.html" class="flex items-center gap-2" aria-label="Back to Viraholic">
+            <div class="w-7 h-7 rounded-lg text-white flex items-center justify-center gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+            </div>
+            <span class="font-semibold text-base text-white tracking-tight">Viraholic</span>
+        </a>
+        <div class="flex items-center gap-2">
+            <button id="keyBtn" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-stone-300 chip hover:border-[#3f3f3f] transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 7a4 4 0 11-4 4l-6 6v3h3l1-1h2v-2h2l1.5-1.5A4 4 0 0015 7z"/></svg>
+                <span id="keyBtnLabel">Add Gemini key</span>
+            </button>
+            <a href="landing.html" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-stone-400 hover:text-white rounded-xl text-sm font-medium transition-colors">← Back to site</a>
+        </div>
+    </div>
+</nav>
+
+<!-- ───────────── KEY PANEL (collapsible) ───────────── -->
+<div id="keyPanel" class="hidden border-b border-[#222] bg-[#1c1c1c]/80 backdrop-blur-md">
+    <div class="max-w-6xl mx-auto px-5 py-4">
+        <label for="keyInput" class="block text-xs font-medium text-stone-300 mb-2">
+            Paste your free Gemini API key — it stays in your browser only, never sent anywhere but Google.
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="text-amber-300 underline underline-offset-2 hover:text-amber-200">Get a free key →</a>
+        </label>
+        <div class="flex flex-col sm:flex-row gap-2">
+            <input id="keyInput" type="password" autocomplete="off" placeholder="AIza…" class="flex-1 px-3 py-2.5 rounded-xl bg-[#141414] border border-[#2a2a2a] text-sm text-white placeholder-stone-600 outline-none focus:border-[#3f3f3f]" />
+            <div class="flex gap-2">
+                <button id="keySave" type="button" class="btn-primary px-5 py-2.5 rounded-xl text-sm font-semibold">Save key</button>
+                <button id="keyClear" type="button" class="px-4 py-2.5 rounded-xl text-sm font-medium chip text-stone-300 hover:border-[#3f3f3f]">Remove</button>
+            </div>
+        </div>
+        <p id="keyStatus" class="text-[11px] text-stone-500 mt-2"></p>
+    </div>
+</div>
+
+<!-- ───────────── MAIN ───────────── -->
+<main class="flex-1 max-w-6xl w-full mx-auto px-5 py-6 grid grid-cols-1 md:grid-cols-[280px_1fr] gap-5 min-h-0">
+
+    <!-- Mentor picker -->
+    <aside class="md:sticky md:top-[76px] md:self-start">
+        <div class="mb-3">
+            <h1 class="text-2xl font-semibold text-white leading-tight">Chat with a <span class="accent">mentor.</span></h1>
+            <p class="text-[13px] text-stone-400 mt-1.5 leading-relaxed">Pick a brain. Ask anything about building, launching, offers, growth.</p>
+        </div>
+        <div id="mentorList" class="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-1" role="listbox" aria-label="Choose a mentor"></div>
+
+        <p class="hidden md:block text-[11px] text-stone-600 mt-4 leading-relaxed">
+            AI personas inspired by public talks, posts &amp; books. Not affiliated with, endorsed by, or actually these people.
+        </p>
+    </aside>
+
+    <!-- Chat panel -->
+    <section class="card rounded-2xl flex flex-col min-h-[60vh] md:h-[calc(100vh-116px)] overflow-hidden">
+        <!-- chat header -->
+        <header class="flex items-center gap-3 px-5 py-3.5 border-b border-[#2a2a2a]">
+            <span id="chatAvatar" class="avatar w-10 h-10 rounded-full text-sm"></span>
+            <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                    <span id="chatName" class="font-semibold text-white text-[15px] truncate">—</span>
+                    <span class="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-400/30 text-amber-300">AI persona</span>
+                </div>
+                <div id="chatHandle" class="text-[12px] text-stone-500 truncate">@—</div>
+            </div>
+        </header>
+
+        <!-- messages -->
+        <div id="msgs" class="msgs flex-1 overflow-y-auto px-5 py-5 space-y-4" aria-live="polite"></div>
+
+        <!-- suggestions -->
+        <div id="suggestions" class="px-5 pb-2 flex flex-wrap gap-2"></div>
+
+        <!-- composer -->
+        <form id="composer" class="border-t border-[#2a2a2a] p-3 flex items-end gap-2">
+            <textarea id="input" rows="1" placeholder="Ask your mentor…" class="flex-1 resize-none max-h-32 px-3.5 py-3 rounded-xl bg-[#141414] border border-[#2a2a2a] text-sm text-white placeholder-stone-600 outline-none focus:border-[#3f3f3f] leading-relaxed"></textarea>
+            <button id="send" type="submit" class="btn-primary px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-1.5" aria-label="Send message">
+                <span class="hidden sm:inline">Send</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </button>
+        </form>
+    </section>
+</main>
+
+<script>
+const MODEL = 'gemini-2.5-flash';
+const KEY_STORE = 'lv_gemini_key';
+
+const MENTORS = {
+    marc: {
+        name: 'Marc Lou',
+        handle: '@marc_louvion',
+        initials: 'ML',
+        avatar: 'https://unavatar.io/twitter/marc_louvion',
+        blurb: 'Indie hacker · ships fast, stays solo',
+        greeting: "hey 👋 I'm an AI version of Marc Lou. ask me anything about shipping fast, getting your first customers, building in public, or making a micro-SaaS actually profitable. what are you working on?",
+        suggestions: [
+            "How do I get my first 10 paying customers?",
+            "I have no audience. Where do I start on X?",
+            "Should I keep building or just launch?"
+        ],
+        system: `You are "Marc" — an AI mentor modeled on indie hacker Marc Lou (@marc_louvion). You are NOT the real Marc Lou; you are an AI persona inspired by his public tweets, blog, and YouTube. If asked, say you're an AI version of him.
+
+Voice: friendly, casual, mostly lowercase, encouraging, blunt about what actually works. Short and punchy — 2 to 5 short paragraphs or a tight bullet list. The occasional emoji (🚀😅) but don't overdo it. Drop small first-person anecdotes ("when I launched ShipFast…", "my first product made $0 for months until…").
+
+Core beliefs to channel:
+- ship fast and ship ugly. launch in days, not months. done > perfect.
+- distribution and marketing beat perfect code. nobody cares about your stack.
+- build many small profitable products (micro-SaaS), don't chase one unicorn.
+- charge money from day one. free users aren't validation.
+- build in public on X, do SEO, talk to users, sell boilerplates/templates.
+- stay solo and lean. don't raise VC. keep costs near zero.
+You built things like ShipFast, CodeFast, DataFast, TrustMRR and make a solid monthly revenue solo.
+
+Always give concrete, tactical, do-this-today advice — not vague motivation. If someone asks something off-topic, give a quick honest answer then steer back to building/shipping/marketing. Never pretend to be the real Marc.`
+    },
+    alex: {
+        name: 'Alex Hormozi',
+        handle: '@AlexHormozi',
+        initials: 'AH',
+        avatar: 'https://unavatar.io/twitter/AlexHormozi',
+        blurb: 'Acquisition.com · offers, leads, volume',
+        greeting: "I'm an AI modeled on Alex Hormozi. Most businesses don't have a traffic problem or a product problem — they have an offer problem. Tell me what you sell and who you sell it to, and I'll help you make it impossible to say no.",
+        suggestions: [
+            "How do I make an offer people can't refuse?",
+            "How do I get leads without paid ads?",
+            "I'm not closing sales. What am I doing wrong?"
+        ],
+        system: `You are "Alex" — an AI mentor modeled on Alex Hormozi (@AlexHormozi), founder of Acquisition.com, author of $100M Offers and $100M Leads. You are NOT the real Alex Hormozi; you are an AI persona inspired by his books, videos, and posts. If asked, say you're an AI version of him.
+
+Voice: direct, punchy, declarative. Short sentences. High energy, tough love, zero fluff. Use line breaks for emphasis. Favor concrete numbers and vivid analogies. Phrases like "Here's the thing:", "Most people get this backwards.", "Let me be blunt."
+
+Frameworks to actually use when relevant:
+- The Value Equation: Value = (Dream Outcome × Perceived Likelihood of Achievement) ÷ (Time Delay × Effort & Sacrifice). To increase value, raise the top, shrink the bottom.
+- Grand Slam Offer: make an offer so good people feel stupid saying no — stack value, add guarantees, scarcity, urgency, bonuses; then NAME it.
+- Core Four for leads: warm outreach, cold outreach, post free content, paid ads — do more reps.
+- Give away so much free value people feel obligated.
+- Volume negates luck. The rich do reps the poor won't.
+- Charge more. Price is not your problem; your offer is.
+
+Always end with a clear, specific next action the person can take. Keep it tight. Never pretend to be the real Alex.`
+    }
+};
+
+// ── elements ──
+const $ = (id) => document.getElementById(id);
+const mentorListEl = $('mentorList'), msgsEl = $('msgs'), suggestionsEl = $('suggestions');
+const inputEl = $('input'), composerEl = $('composer'), sendBtn = $('send');
+const chatAvatarEl = $('chatAvatar'), chatNameEl = $('chatName'), chatHandleEl = $('chatHandle');
+const keyBtn = $('keyBtn'), keyBtnLabel = $('keyBtnLabel'), keyPanel = $('keyPanel');
+const keyInput = $('keyInput'), keySave = $('keySave'), keyClear = $('keyClear'), keyStatus = $('keyStatus');
+
+let currentId = 'marc';
+const histories = {};        // id -> [{role:'user'|'bot', text}]
+let busy = false;
+
+// ── api key handling ──
+function getKey(){ return localStorage.getItem(KEY_STORE) || ''; }
+function hasKey(){ return !!getKey(); }
+function refreshKeyUI(){
+    const has = hasKey();
+    keyBtnLabel.textContent = has ? 'Gemini key ✓' : 'Add Gemini key';
+    keyBtn.classList.toggle('text-amber-300', has);
+    inputEl.disabled = false; // always allow typing; we prompt on send if missing
+    keyStatus.textContent = has ? 'Saved in this browser. Calls go straight to Google with your key.' : 'No key saved yet.';
+}
+keyBtn.addEventListener('click', () => {
+    const open = !keyPanel.classList.contains('hidden');
+    keyPanel.classList.toggle('hidden', open);
+    if (!open){ keyInput.value = getKey(); keyInput.focus(); }
+});
+keySave.addEventListener('click', () => {
+    const v = keyInput.value.trim();
+    if (!v){ keyStatus.textContent = 'Paste a key first.'; return; }
+    localStorage.setItem(KEY_STORE, v);
+    refreshKeyUI();
+    keyPanel.classList.add('hidden');
+    appendSystemNote('Key saved 🔑 — go ahead and ask away.');
+});
+keyClear.addEventListener('click', () => {
+    localStorage.removeItem(KEY_STORE); keyInput.value=''; refreshKeyUI();
+});
+
+// ── render helpers ──
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// tiny markdown: **bold**, line breaks, "- " bullets
+function formatText(t){
+    const esc = escapeHtml(t);
+    const lines = esc.split('\n');
+    let html = '', inList = false;
+    for (let raw of lines){
+        const line = raw.trimEnd();
+        const bullet = line.match(/^\s*[-•*]\s+(.*)$/);
+        if (bullet){
+            if (!inList){ html += '<ul>'; inList = true; }
+            html += '<li>' + bullet[1] + '</li>';
+        } else {
+            if (inList){ html += '</ul>'; inList = false; }
+            if (line.trim() === '') continue;
+            html += '<p>' + line + '</p>';
+        }
+    }
+    if (inList) html += '</ul>';
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    return html;
+}
+function avatarMarkup(m){
+    return `<img src="${m.avatar}" alt="${m.name}" referrerpolicy="no-referrer" onerror="this.remove()"><span>${m.initials}</span>`;
+}
+function scrollDown(){ msgsEl.scrollTop = msgsEl.scrollHeight; }
+
+function renderMessage(role, text){
+    const m = MENTORS[currentId];
+    const row = document.createElement('div');
+    row.className = 'flex gap-3 animate-fade-up ' + (role==='user' ? 'flex-row-reverse' : '');
+    const av = document.createElement('span');
+    if (role === 'user'){
+        av.className = 'avatar w-8 h-8 rounded-full text-[11px]';
+        av.style.background = 'linear-gradient(180deg,#3f3f46,#27272a)';
+        av.textContent = 'You';
+        av.style.fontSize = '10px';
+    } else {
+        av.className = 'avatar w-8 h-8 rounded-full text-[11px]';
+        av.innerHTML = avatarMarkup(m);
+    }
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble rounded-2xl px-4 py-2.5 text-[14px] ' + (role==='user' ? 'bubble-user' : 'bubble-bot text-stone-200');
+    bubble.innerHTML = formatText(text);
+    row.appendChild(av); row.appendChild(bubble);
+    msgsEl.appendChild(row);
+    scrollDown();
+    return bubble;
+}
+function appendSystemNote(text){
+    const n = document.createElement('div');
+    n.className = 'text-center text-[11px] text-stone-500 animate-fade-up';
+    n.textContent = text;
+    msgsEl.appendChild(n); scrollDown();
+}
+function showTyping(){
+    const m = MENTORS[currentId];
+    const row = document.createElement('div');
+    row.id = 'typing';
+    row.className = 'flex gap-3 animate-fade-up';
+    row.innerHTML = `<span class="avatar w-8 h-8 rounded-full text-[11px]">${avatarMarkup(m)}</span>
+        <div class="bubble bubble-bot rounded-2xl px-4 py-3 flex items-center gap-1"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`;
+    msgsEl.appendChild(row); scrollDown();
+}
+function hideTyping(){ const t = $('typing'); if (t) t.remove(); }
+
+// ── mentor list + selection ──
+function buildMentorList(){
+    mentorListEl.innerHTML = '';
+    Object.entries(MENTORS).forEach(([id, m]) => {
+        const el = document.createElement('div');
+        el.className = 'mentor flex items-center gap-3 p-3 rounded-2xl border border-[#2a2a2a] min-w-[230px] md:min-w-0';
+        el.setAttribute('role','option');
+        el.setAttribute('tabindex','0');
+        el.setAttribute('aria-selected', String(id === currentId));
+        el.dataset.id = id;
+        el.innerHTML = `
+            <span class="avatar w-11 h-11 rounded-full text-sm">${avatarMarkup(m)}</span>
+            <div class="min-w-0">
+                <div class="font-semibold text-white text-[14px] leading-tight truncate">${m.name}</div>
+                <div class="text-[11px] text-stone-500 truncate">${m.blurb}</div>
+            </div>`;
+        el.addEventListener('click', () => selectMentor(id));
+        el.addEventListener('keydown', (e) => { if (e.key==='Enter'||e.key===' '){ e.preventDefault(); selectMentor(id); } });
+        mentorListEl.appendChild(el);
+    });
+}
+function syncSelectedUI(){
+    [...mentorListEl.children].forEach(c => c.setAttribute('aria-selected', String(c.dataset.id === currentId)));
+}
+function renderSuggestions(){
+    const m = MENTORS[currentId];
+    suggestionsEl.innerHTML = '';
+    // only show suggestions when the convo is just the greeting
+    if ((histories[currentId] || []).length > 1){ return; }
+    m.suggestions.forEach(q => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'text-[12px] text-stone-300 chip rounded-full px-3 py-1.5 hover:border-[#3f3f3f] transition-colors';
+        b.textContent = q;
+        b.addEventListener('click', () => { inputEl.value = q; sendMessage(); });
+        suggestionsEl.appendChild(b);
+    });
+}
+function selectMentor(id){
+    currentId = id;
+    const m = MENTORS[id];
+    chatNameEl.textContent = m.name;
+    chatHandleEl.textContent = m.handle;
+    chatAvatarEl.innerHTML = avatarMarkup(m);
+    syncSelectedUI();
+    // seed greeting once
+    if (!histories[id]){ histories[id] = [{ role:'bot', text:m.greeting }]; }
+    // re-render the thread
+    msgsEl.innerHTML = '';
+    histories[id].forEach(msg => renderMessage(msg.role, msg.text));
+    renderSuggestions();
+    inputEl.focus();
+}
+
+// ── Gemini call ──
+async function callGemini(history){
+    const key = getKey();
+    const m = MENTORS[currentId];
+    // build contents: drop the leading greeting (bot) so the first turn is the user
+    const contents = [];
+    for (const msg of history){
+        if (contents.length === 0 && msg.role === 'bot') continue; // skip greeting
+        contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] });
+    }
+    const body = {
+        system_instruction: { parts: [{ text: m.system }] },
+        contents,
+        generationConfig: { temperature: 0.9, topP: 0.95, maxOutputTokens: 900 }
+    };
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+    const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (!res.ok){
+        let detail = '';
+        try { detail = (await res.json())?.error?.message || ''; } catch(e){}
+        if (res.status === 400 && /api key/i.test(detail)) throw new Error('That API key looks invalid. Check it under "Gemini key" up top.');
+        if (res.status === 403) throw new Error('Key rejected (403). Make sure the Generative Language API is enabled for this key.');
+        if (res.status === 429) throw new Error('Rate limit hit — wait a few seconds and try again.');
+        throw new Error(detail || `Request failed (${res.status}).`);
+    }
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+    if (!text){
+        const blocked = data?.promptFeedback?.blockReason;
+        throw new Error(blocked ? `Response blocked (${blocked}). Try rephrasing.` : 'Empty response — try again.');
+    }
+    return text.trim();
+}
+
+// ── send ──
+async function sendMessage(){
+    if (busy) return;
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    if (!hasKey()){
+        keyPanel.classList.remove('hidden');
+        keyInput.focus();
+        appendSystemNote('Add your free Gemini key first ☝️ (it stays in your browser).');
+        return;
+    }
+
+    inputEl.value = ''; autosize();
+    histories[currentId].push({ role:'user', text });
+    renderMessage('user', text);
+    renderSuggestions();
+
+    busy = true; sendBtn.disabled = true;
+    showTyping();
+    try {
+        const reply = await callGemini(histories[currentId]);
+        hideTyping();
+        histories[currentId].push({ role:'bot', text: reply });
+        renderMessage('bot', reply);
+    } catch (err){
+        hideTyping();
+        appendSystemNote('⚠ ' + (err.message || 'Something went wrong.'));
+    } finally {
+        busy = false; sendBtn.disabled = false; inputEl.focus();
+    }
+}
+
+// ── composer behaviour ──
+function autosize(){ inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 128) + 'px'; }
+inputEl.addEventListener('input', autosize);
+inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+});
+composerEl.addEventListener('submit', (e) => { e.preventDefault(); sendMessage(); });
+
+// ── boot ──
+buildMentorList();
+selectMentor(currentId);
+refreshKeyUI();
+</script>
+</body>
+</html>

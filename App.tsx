@@ -35,40 +35,61 @@ const SECTION_META: Record<string, { title: string; subtitle: string }> = {
 // to jump straight to the Posts Tracker.
 // ──────────────────────────────────────────────────────────────────
 const SidebarQuickStats: React.FC<{ onJump: () => void }> = ({ onJump }) => {
-  const [tracked, setTracked] = useState(0);
+  const [postsToday, setPostsToday] = useState(0);
   const [repliesToday, setRepliesToday] = useState(0);
 
   useEffect(() => {
     const load = () => {
+      const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+      const startMs = dayStart.getTime();
+
+      // ── Posts added today ── counts every entry in social_radar_history
+      // whose timestamp/discoveredAt is from today. That's the same store the
+      // Tracked-posts feed reads, so the number stays in sync with what the
+      // user is about to see.
       try {
-        const cfg = JSON.parse(localStorage.getItem('answerly_creator_configs') || '[]');
-        setTracked(Array.isArray(cfg) ? cfg.length : 0);
-      } catch { setTracked(0); }
+        const hist = JSON.parse(localStorage.getItem('social_radar_history') || '[]');
+        const count = Array.isArray(hist)
+          ? hist.filter((p: any) => {
+              const raw = p?.timestamp ?? p?.discoveredAt ?? p?.at;
+              const t = typeof raw === 'number' ? raw : Date.parse(raw || '');
+              return Number.isFinite(t) && t >= startMs;
+            }).length
+          : 0;
+        setPostsToday(count);
+      } catch { setPostsToday(0); }
+
+      // ── Replies posted today ── same comment_log used everywhere else.
       try {
         const log = JSON.parse(localStorage.getItem('comment_log') || '[]');
-        const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
-        const startMs = dayStart.getTime();
         const count = Array.isArray(log)
-          ? log.filter((e: any) => (typeof e?.at === 'number' ? e.at : Date.parse(e?.at || '')) >= startMs).length
+          ? log.filter((e: any) => {
+              const raw = e?.at ?? e?.timestamp;
+              const t = typeof raw === 'number' ? raw : Date.parse(raw || '');
+              return Number.isFinite(t) && t >= startMs;
+            }).length
           : 0;
         setRepliesToday(count);
       } catch { setRepliesToday(0); }
     };
     load();
-    // Refresh on the events the rest of the app already dispatches when
-    // these collections change.
     const onSync     = () => load();
     const onCmtLoad  = () => load();
+    const onHistory  = () => load();
     const onStorage  = (e: StorageEvent) => {
-      if (e.key === 'answerly_creator_configs' || e.key === 'comment_log') load();
+      if (e.key === 'social_radar_history' || e.key === 'comment_log') load();
     };
     window.addEventListener('answerly_sync', onSync);
     window.addEventListener('comment_log_loaded', onCmtLoad);
+    window.addEventListener('answerly_history_update', onHistory);
     window.addEventListener('storage', onStorage);
-    const id = setInterval(load, 8000);
+    // Also rollover at midnight — refresh every 60s instead of 8s. With the
+    // event listeners doing the heavy lifting we don't need a tight poll.
+    const id = setInterval(load, 60000);
     return () => {
       window.removeEventListener('answerly_sync', onSync);
       window.removeEventListener('comment_log_loaded', onCmtLoad);
+      window.removeEventListener('answerly_history_update', onHistory);
       window.removeEventListener('storage', onStorage);
       clearInterval(id);
     };
@@ -78,23 +99,24 @@ const SidebarQuickStats: React.FC<{ onJump: () => void }> = ({ onJump }) => {
     <button
       type="button"
       onClick={onJump}
-      className="w-full text-left rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 hover:from-gray-50 hover:to-white hover:border-gray-300 transition-all p-3 group"
-      title="Open Tracked posts"
+      aria-label={`Open Tracked posts. ${postsToday} new posts and ${repliesToday} replies today.`}
+      className="w-full text-left rounded-2xl border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all p-3.5 group cursor-pointer"
+      title={`${postsToday} new posts · ${repliesToday} replies today — open Tracked posts`}
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2.5">
         <span className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-500">Today</span>
         <span className="flex items-center gap-1 text-[9px] font-bold text-gray-400 group-hover:text-gray-700 transition-colors">
-          Open <ArrowUpRight size={9} />
+          Open <ArrowUpRight size={9} aria-hidden="true" />
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <div className="text-[18px] font-extrabold leading-none text-gray-900 tabular-nums">{tracked}</div>
-          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1 font-bold">Tracked</div>
+      <div className="grid grid-cols-2 gap-2 divide-x divide-gray-100">
+        <div className="pr-1">
+          <div className="text-[20px] font-extrabold leading-none text-gray-900 tabular-nums">{postsToday}</div>
+          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1.5 font-bold">New posts</div>
         </div>
-        <div>
-          <div className="text-[18px] font-extrabold leading-none text-emerald-600 tabular-nums">{repliesToday}</div>
-          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1 font-bold">Replies</div>
+        <div className="pl-3">
+          <div className="text-[20px] font-extrabold leading-none text-emerald-600 tabular-nums">{repliesToday}</div>
+          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1.5 font-bold">Replies</div>
         </div>
       </div>
     </button>
@@ -311,7 +333,7 @@ function AppInner() {
               <Menu aria-hidden="true" />
             </label>
           </div>
-          <div className="flex-1 px-2 mx-2 font-display font-bold text-xl">LaunchVelocity</div>
+          <div className="flex-1 px-2 mx-2 font-display font-bold text-xl">Viraholic</div>
         </div>
 
         <main className="flex-1 p-4 lg:p-10 overflow-x-hidden">
@@ -324,14 +346,14 @@ function AppInner() {
 
       <div className="drawer-side z-50 shadow-xl lg:shadow-none">
         <label htmlFor="my-drawer-2" aria-label="close sidebar" className="drawer-overlay"></label>
-        <ul className="menu p-4 w-80 min-h-full glass-sidebar text-base-content flex flex-col justify-between">
+        <ul className="menu p-4 w-80 min-h-full glass-sidebar text-gray-700 flex flex-col justify-between">
           <div>
             <div className="px-4 py-4 mb-3 flex items-center gap-2">
               <div className="bg-primary/10 p-2 rounded-lg">
                 <Zap className="text-primary" size={24} />
               </div>
               <div>
-                <h1 className="font-display font-bold text-xl leading-none tracking-tight">Launch<br/>Velocity</h1>
+                <h1 className="font-display font-bold text-xl leading-none tracking-tight text-gray-900">Launch<br/>Velocity</h1>
               </div>
             </div>
 
@@ -358,8 +380,8 @@ function AppInner() {
                       aria-current={mode === item.id ? 'page' : undefined}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ease-out cursor-pointer min-h-[40px]
                         ${mode === item.id
-                          ? 'bg-gray-900 text-white'
-                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                          ? 'grad-btn'
+                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                         }`}>
                       <span className={mode === item.id ? 'text-white' : 'text-gray-500'} aria-hidden="true">{item.icon}</span>
                       <span>{item.label}</span>

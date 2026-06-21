@@ -322,6 +322,11 @@ export function useVoiceProfile() {
           customInstruction: suggestion.commentSpec.customInstruction || ''
         });
       }
+      // Style Inspiration — the writing sample IS the style guide. Persist
+      // it so the Style Inspiration section reflects the stolen voice and
+      // subsequent generations get the raw rhythm/word-choices to clone.
+      // Cap at 4k chars so we don't bloat localStorage.
+      setStyleInspiration(sourceContent.slice(0, 4000));
       setActivePreset(null);
       setAiSuggestionReason(suggestion.reasoning);
     } catch (e: any) {

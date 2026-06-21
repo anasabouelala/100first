@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { 
+import {
     Radar, ExternalLink, RefreshCw, Target, Trash2, Send, Inbox,
     ShieldCheck, Heart, Sparkles, Check, X, ArrowRight, ArrowUpRight, Flame, MessageSquarePlus, Users,
-    Activity, Clock, Repeat2, Lock, Rss, Quote, Film
+    Activity, Clock, Repeat2, Lock, Rss, Quote, Film, Zap
 } from 'lucide-react';
 import { generateSmartEngagementComment } from '../services/geminiService';
 import { useVoiceProfile } from '../hooks/useVoiceProfile';
+import { useProject } from '../contexts/ProjectContext';
 import { VOICE_PRESETS } from './ContentEngineView';
 import { SmartComment, PipelineLead, LeadInteraction } from '../types';
 import { useAutoCommentStatusMap } from './AutoCommentControls';
@@ -237,6 +238,42 @@ const RadarPostCard: React.FC<{
         : fit >= 50 ? 'mid'
         : fit >= 35 ? 'low'
         : 'poor';
+
+    // ── Reply-Priority Score ──
+    // Combines fit (50%) + recency (35%) + engagement-already-on-the-post
+    // (15%) into a single 0-100 "should I reply NOW" number. The user
+    // already knows the FIT — what they lack is urgency. We surface the
+    // tier (HOT / WARM / COOL / COLD) as a coloured pill next to the fit
+    // badge so the eye can prioritize the queue at a glance.
+    const minutesOld = (() => {
+        const t = item.timestamp ? Date.parse(item.timestamp) : NaN;
+        if (!Number.isFinite(t)) return null;
+        return Math.max(0, (Date.now() - t) / 60000);
+    })();
+    // Recency score: 100 for ≤30min, decays to 0 over 24h (linear).
+    const recencyScore = minutesOld === null ? 50
+        : minutesOld <= 30 ? 100
+        : minutesOld >= 1440 ? 0
+        : Math.round(100 - ((minutesOld - 30) / (1440 - 30)) * 100);
+    // Engagement-presence: any non-zero engagement signal counts as "alive".
+    // We don't have rich per-platform numbers here, so this is a binary boost.
+    const hasEngagement =
+        (item.likes || 0) + (item.comments || 0) + (item.reactions || 0)
+        + (item.upvotes || 0) + (item.engagement?.total || 0) > 0;
+    const engagementScore = hasEngagement ? 100 : 30;
+    // Composite priority, clamped 0-100.
+    const priority = fit === null && minutesOld === null ? null
+        : Math.round(
+              (typeof fit === 'number' ? fit : 50) * 0.50 +
+              recencyScore * 0.35 +
+              engagementScore * 0.15
+          );
+    const priorityTier =
+        priority === null ? null
+        : priority >= 80 ? { label: 'HOT',  bg: 'bg-rose-100',   text: 'text-rose-700',   ring: 'ring-rose-200',   tip: 'Top priority — reply now while the spotlight is on.' }
+        : priority >= 65 ? { label: 'WARM', bg: 'bg-orange-100', text: 'text-orange-700', ring: 'ring-orange-200', tip: 'Worth replying soon — still in the engagement window.' }
+        : priority >= 45 ? { label: 'COOL', bg: 'bg-amber-50',   text: 'text-amber-700',  ring: 'ring-amber-200',  tip: 'Can wait — fresher or higher-fit posts will outrank it.' }
+        :                  { label: 'COLD', bg: 'bg-gray-100',   text: 'text-gray-600',   ring: 'ring-gray-200',   tip: 'Low priority — old or low-fit. Probably skip.' };
     const FIT_STYLES: Record<string, { card: string; num: string; bar: string; label: string }> = {
         excellent: { card: 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 hover:border-emerald-300 hover:shadow-emerald-100', num: 'text-emerald-600', bar: 'bg-emerald-500', label: 'Strong fit' },
         good:      { card: 'bg-gradient-to-br from-green-50/80 to-white border-green-200 hover:border-green-300 hover:shadow-green-100', num: 'text-green-600', bar: 'bg-green-500', label: 'Good fit' },
@@ -643,6 +680,7 @@ const RadarPostCard: React.FC<{
 };
 
 export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }) => {
+  const { project } = useProject();
   const [radarHistory, setRadarHistory] = useState<any[]>([]);
   const [drafts, setDrafts] = useState<any[]>([]);
   const [extensionConnected, setExtensionConnected] = useState(false);
@@ -756,16 +794,65 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
   const autoCommentStatusMap = useAutoCommentStatusMap();
   
   // 1. PUBLIC RADAR: Influencer tracking hits, excluding any recon or identified leads
+  // ── Client-side profile-fit fallback ──────────────────────────────────
+  // Tracked-account posts arrive from the extension WITHOUT a relevancyScore —
+  // only the recon/discovery flow scores posts server-side, and that path
+  // (DeepSeek) is both unreliable and never runs for tracked posts. So the fit
+  // badge was simply missing for the whole Tracked-posts feed. We compute a
+  // deterministic, explainable fit here from the project's own niche keywords,
+  // used purely as a fallback when no numeric score exists. It is in-memory
+  // only — we never write it back to social_radar_history, so a real score
+  // (if one ever lands) still wins.
+  const fitKeywords = useMemo(() => {
+    const STOP = new Set(['the','and','for','with','that','this','your','you','our','are','was','from','into','out','who','how','why','what','when','will','can','all','any','one','two','get','got','use','used','using','via','per','etc','their','them','they','its','his','her','she','him','not','but','has','have','had','a','an','to','of','in','on','at','by','is','it','or','as','be','we','i','my','me','do','so','up','no','if','about','more','most','than','then','also','just','like','want','need','help','make','made','app','tool','tools','platform','product','users','user','people','founder','founders','growth']);
+    const blob = [
+      project?.productName, project?.category, project?.targetAudience,
+      project?.valueProposition, project?.pitch, project?.competitors,
+      appDesc,
+    ].filter(Boolean).join(' ').toLowerCase();
+    const words = blob.match(/[a-z0-9][a-z0-9+\-]{2,}/g) || [];
+    const freq = new Map<string, number>();
+    for (const w of words) { if (STOP.has(w)) continue; freq.set(w, (freq.get(w) || 0) + 1); }
+    // Strong signal words (audience/category/value-prop) are the discriminating
+    // ones; keep the highest-frequency distinct terms, capped so a long pitch
+    // doesn't drown the signal.
+    return new Set([...freq.keys()].slice(0, 48));
+  }, [project?.productName, project?.category, project?.targetAudience, project?.valueProposition, project?.pitch, project?.competitors, appDesc]);
+
+  const inferFit = (item: any): { score: number; reason: string } | null => {
+    if (!fitKeywords.size) return null;
+    const text = String(item?.text || item?.title || item?.content || '').toLowerCase();
+    if (!text.trim()) return null;
+    const matched: string[] = [];
+    for (const kw of fitKeywords) {
+      if (text.includes(kw)) matched.push(kw);
+    }
+    const hits = matched.length;
+    // Smooth diminishing-returns curve: 0 hits → 38, 1 → 60, 2 → 73, 3 → 81,
+    // 5 → 90, capped at 95 so an inferred score never poses as a perfect match.
+    const score = Math.min(95, Math.round(38 + 57 * (1 - Math.exp(-hits / 2.2))));
+    const reason = hits > 0
+      ? `Estimated fit · matches your niche on ${matched.slice(0, 4).join(', ')}`
+      : 'Estimated fit · no strong niche keywords in this post';
+    return { score, reason };
+  };
+
   const influencerSignals = useMemo(() => {
     return radarHistory.filter(item => {
       if (trackedUrls.has(item.url || item.uuid)) return false;
-      const isRecon = item.isRecon || 
-                      item.text?.includes('[RECON]') || 
+      const isRecon = item.isRecon ||
+                      item.text?.includes('[RECON]') ||
                       item.platform?.toLowerCase().includes('recon') ||
                       item.campaignId;
       return !isRecon;
+    }).map(item => {
+      // Already scored (recon/AI)? Leave it untouched.
+      if (typeof item.relevancyScore === 'number' || typeof item.relevance === 'number') return item;
+      const inferred = inferFit(item);
+      if (!inferred) return item;
+      return { ...item, relevancyScore: inferred.score, relevancyReason: inferred.reason, _fitInferred: true };
     });
-  }, [radarHistory, trackedUrls]);
+  }, [radarHistory, trackedUrls, fitKeywords]);
 
   // 2. RECON SIGNALS: Hits from automated missions that aren't in the pipeline yet
   const newReconSignals = useMemo(() => {
@@ -1397,51 +1484,32 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
           <div>
             <h2 className="text-2xl font-display font-medium text-gray-900 tracking-tight">Tracked posts</h2>
             <p className="text-sm text-gray-500 mt-0.5">New posts from accounts you follow — be first to engage.</p>
-            {/* Aggregate Profile Fit — one-glance summary of how well the
-                CURRENT (filtered) feed matches the user's niche / voice.
-                Pulled from the same getFit() the cards use, so the number
-                and tint line up. Hidden if no scored posts in view. */}
-            {(() => {
-              const scored = filteredSignals.map((it: any) => getFit(it)).filter((v: number | null): v is number => typeof v === 'number');
-              if (!scored.length) return null;
-              const avg = Math.round(scored.reduce((a, b) => a + b, 0) / scored.length);
-              const strong = scored.filter(v => v >= 65).length;
-              const tone = avg >= 65 ? 'emerald' : avg >= 50 ? 'amber' : 'rose';
-              return (
-                <div className="mt-2 inline-flex items-center gap-3 px-3 py-1.5 rounded-xl bg-white border border-gray-200 shadow-sm" title="Average Profile Fit across the posts currently in view. Tweak the niche / voice in Voice Studio to raise this.">
-                  <div className="flex items-center gap-1.5">
-                    <Target size={12} className={`text-${tone}-600`} />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Avg fit</span>
-                  </div>
-                  <span className={`text-base font-extrabold tabular-nums text-${tone}-600`}>{avg}%</span>
-                  <span className="text-[11px] text-gray-500"><b className="text-gray-700 tabular-nums">{strong}</b>/{scored.length} strong</span>
-                </div>
-              );
-            })()}
-            {/* Active voice — comments here are generated with this voice.
-                A prominent control so users always know (and can change) the
-                voice the tracker writes comments in. The popover lists ONLY the
-                user's saved voices; picking one immediately re-points generation
-                (applySavedProfile updates the shared vp state that
-                generateComments / handleInlineComment / batch read). */}
-            <div className="mt-3 relative inline-block">
-              <button
-                type="button"
-                onClick={() => setVoiceEditorOpen(o => !o)}
-                className="group inline-flex items-center gap-2.5 pl-2.5 pr-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/25 ring-1 ring-violet-400/40 hover:from-violet-500 hover:to-indigo-500 transition-all active:scale-[0.98]"
-                title="Comments in the tracker are generated with this voice. Click to switch or fine-tune it."
-              >
-                <span className="flex items-center justify-center w-7 h-7 rounded-xl bg-white/20">
-                  <Sparkles size={14} className="text-amber-200" />
-                </span>
-                <span className="flex flex-col items-start leading-tight">
-                  <span className="text-[9px] font-black uppercase tracking-[0.15em] text-white/70">Comment voice</span>
-                  <span className="text-[13px] font-bold leading-none mt-0.5">{activeVoice.emoji} {activeVoice.name}</span>
-                </span>
-                <span className="ml-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full bg-white/15 text-white/90">Change</span>
-                <span className={`text-[10px] text-white/70 transition-transform ${voiceEditorOpen ? 'rotate-180' : ''}`}>▾</span>
-              </button>
-              <p className="text-[10px] text-gray-400 mt-1 ml-1">Every comment you generate here is written in this voice.</p>
+
+            {/* ── Comment-voice control ──
+                The Avg-Fit KPI that used to sit here was removed: it duplicated
+                the per-post fit badges and the fit filter just below. What's
+                left is a single, self-sized control telling the user WHICH
+                voice the agent writes comments in — click to switch / fine-tune. */}
+            <div className="mt-4">
+              {/* Active voice — a self-sized pill, not a stretched card */}
+              <div className="relative inline-block">
+                <button
+                  type="button"
+                  onClick={() => setVoiceEditorOpen(o => !o)}
+                  aria-haspopup="listbox"
+                  aria-expanded={voiceEditorOpen}
+                  className="group flex items-center gap-2.5 pl-2 pr-3.5 py-2 rounded-full bg-white border border-gray-200 hover:border-violet-300 hover:shadow-md shadow-sm transition-all text-gray-800"
+                  title="Comments in the tracker are generated with this voice. Click to switch or fine-tune it."
+                >
+                  <span className="flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-sm" aria-hidden="true">
+                    <Sparkles size={15} />
+                  </span>
+                  <span className="flex flex-col items-start leading-tight text-left">
+                    <span className="text-[8px] font-black uppercase tracking-[0.18em] text-gray-400">Comment voice</span>
+                    <span className="text-[13px] font-bold leading-none mt-0.5 text-gray-900">{activeVoice.emoji} {activeVoice.name}</span>
+                  </span>
+                  <span className={`ml-1 text-[10px] text-gray-400 group-hover:text-violet-500 transition-transform ${voiceEditorOpen ? 'rotate-180' : ''}`} aria-hidden="true">▾</span>
+                </button>
               {voiceEditorOpen && (
                 <>
                   {/* click-away backdrop */}
@@ -1492,6 +1560,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                   </div>
                 </>
               )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1579,6 +1648,51 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
             )}
           </div>
         )}
+
+        {/* Today's Activity — quick metrics */}
+        {(() => {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const todayPostsCount = influencerSignals.filter((p: any) => {
+            const postTime = new Date(p.timestamp || p.scannedAt || new Date());
+            postTime.setHours(0, 0, 0, 0);
+            return postTime.getTime() === today.getTime();
+          }).length;
+
+          const commentLogRaw = localStorage.getItem('comment_log') || '[]';
+          const commentLog = JSON.parse(commentLogRaw);
+          const todayReplies = commentLog.filter((c: any) => {
+            const commentTime = new Date(c.at || 0);
+            commentTime.setHours(0, 0, 0, 0);
+            return commentTime.getTime() === today.getTime();
+          }).length;
+
+          if (todayPostsCount > 0 || todayReplies > 0) {
+            return (
+              <div className="mb-6 grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-100">
+                  <div className="p-2 rounded-xl bg-blue-600 text-white flex items-center justify-center">
+                    <Zap size={16} />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-600">Today's posts</span>
+                    <div className="text-xl font-bold text-blue-900 leading-none">{todayPostsCount}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-100">
+                  <div className="p-2 rounded-xl bg-violet-600 text-white flex items-center justify-center">
+                    <MessageSquarePlus size={16} />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-violet-600">Replies today</span>
+                    <div className="text-xl font-bold text-violet-900 leading-none">{todayReplies}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Posts feed — a responsive masonry grid that fills the width on
             large screens (1 col on mobile, up to 3 wide on big displays) so we

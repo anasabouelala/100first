@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Viraholic — Grow your users to 100</title>
+<meta name="description" content="The AI co-pilot for indie founders chasing their first 100 users. Finds the creators and communities your buyers follow, watches their posts, drafts smart replies you approve — plus a launch strategy, competitor map, distribution plan, and a content engine tuned to your voice." />
+<meta property="og:title" content="Viraholic — Grow your users to 100" />
+<meta property="og:description" content="Find the right accounts. Watch their posts. Approve AI replies. Plus strategy, competitor map and a voice-matched content engine — all in one place." />
+<meta name="theme-color" content="#eef2f7" />
+
+<!-- Exact superx.so type system: Inter (body + headings) + Instrument Serif (italic accents) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+    darkMode: 'class',
+    theme: {
+        extend: {
+            fontFamily: {
+                sans: ['Inter', 'sans-serif'],
+                serif: ['"Instrument Serif"', 'serif'],
+            },
+            animation: {
+                'fade-up': 'fadeUp 0.7s cubic-bezier(0.16,1,0.3,1) forwards',
+                'aurora': 'aurora 18s ease-in-out infinite',
+                'aurora-slow': 'aurora 26s ease-in-out infinite',
+            },
+            keyframes: {
+                fadeUp: { '0%': { opacity: '0', transform: 'translateY(14px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                aurora: {
+                    '0%, 100%': { transform: 'translate3d(0,0,0) scale(1)' },
+                    '33%': { transform: 'translate3d(4%,-6%,0) scale(1.12)' },
+                    '66%': { transform: 'translate3d(-5%,4%,0) scale(0.94)' },
+                },
+            }
+        }
+    }
+}
+</script>
+<style>
+    /* ── Light "liquid-glass" palette — matches the white/indigo dashboard ── */
+    :root {
+        --bg:#eef2f7;
+        --surface:#ffffff;
+        --border:rgba(15,23,42,0.10);
+        --border-strong:rgba(79,70,229,0.45);
+        --text:#334155;            /* slate-700 body */
+        --ink:#0f172a;             /* headings */
+        --muted:#64748b;           /* slate-500 */
+        --primary:#6366f1;         /* indigo-500 */
+        --primary-2:#3b82f6;       /* blue-500 */
+        --glass-bg:rgba(255,255,255,0.72);
+        --glass-border:rgba(255,255,255,0.6);
+        --glass-shadow:0 8px 32px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+        font-family: 'Inter', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        color: var(--text);
+        background-color: #eef2f7;
+        background-image:
+            radial-gradient(60rem 60rem at 12% -8%, rgba(99,102,241,0.20), transparent 60%),
+            radial-gradient(50rem 50rem at 110% 10%, rgba(13,148,136,0.16), transparent 55%),
+            radial-gradient(48rem 48rem at 85% 110%, rgba(225,29,72,0.12), transparent 55%),
+            linear-gradient(180deg, #f3f5fb 0%, #e9edf6 100%);
+        background-attachment: fixed; background-repeat: no-repeat;
+    }
+    h1, h2, h3, h4 { font-family: 'Inter', sans-serif; letter-spacing: -0.02em; color: var(--ink); }
+
+    :focus-visible { outline: 2px solid #4f46e5; outline-offset: 3px; border-radius: 8px; }
+    ::selection { background: rgba(99,102,241,0.25) !important; color: #0f172a !important; }
+
+    /* Instrument Serif italic accent — same treatment, recoloured to indigo/blue */
+    .accent {
+        font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400;
+        letter-spacing: 0; font-size: 1.08em;
+        background: linear-gradient(100deg, #3b82f6 0%, #6366f1 55%, #4f46e5 100%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .grad-text {
+        background: linear-gradient(120deg, #6366f1 0%, #3b82f6 55%, #4f46e5 100%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+
+    /* Fine blueprint grid, faded toward edges (dark lines on light) */
+    .grid-bg {
+        background-image:
+            linear-gradient(rgba(15,23,42,0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(15,23,42,0.05) 1px, transparent 1px);
+        background-size: 56px 56px;
+        background-position: center;
+        -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 40%, transparent 100%);
+                mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 40%, transparent 100%);
+    }
+
+    /* Soft radial glow blobs (recoloured per-blob in the override section below) */
+    .aurora-blob { position: absolute; border-radius: 9999px; filter: blur(80px); pointer-events: none; }
+
+    /* White liquid-glass card */
+    .card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow);
+        backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%);
+        transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease, background .25s ease;
+    }
+    .card:hover {
+        border-color: rgba(99,102,241,0.45);
+        box-shadow: 0 0 0 1px rgba(99,102,241,0.12), 0 24px 60px -30px rgba(79,70,229,0.40);
+    }
+
+    /* Frosted translucent surfaces (nav, pills) */
+    .glass {
+        background: rgba(255,255,255,0.70);
+        border: 1px solid var(--glass-border);
+        backdrop-filter: blur(22px) saturate(160%);
+        -webkit-backdrop-filter: blur(22px) saturate(160%);
+    }
+
+    /* Gradient-bordered (highlighted) card */
+    .grad-border { position: relative; background: rgba(99,102,241,0.06); border: 1px solid transparent; }
+    .grad-border::before {
+        content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+        background: linear-gradient(140deg, #6366f1, #3b82f6);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+    }
+
+    /* Icon chip */
+    .chip { background: rgba(255,255,255,0.7); border: 1px solid rgba(15,23,42,0.10); }
+
+    /* Primary CTA — indigo→blue gradient (matches dashboard primary) */
+    .btn-primary {
+        background: linear-gradient(180deg, #6366f1 0%, #3b82f6 100%);
+        color: #fff !important;
+        box-shadow: 0 10px 30px -10px rgba(79,70,229,0.5), inset 0 1px 0 rgba(255,255,255,0.25);
+        transition: box-shadow .2s ease, transform .2s ease, filter .2s ease;
+    }
+    .btn-primary:hover { box-shadow: 0 16px 44px -10px rgba(79,70,229,0.6), inset 0 1px 0 rgba(255,255,255,0.3); filter: brightness(1.04); }
+    .btn-primary:active { transform: scale(0.985); }
+    .btn-primary * { color: #fff !important; }
+
+    .btn-secondary {
+        background: rgba(255,255,255,0.7); border: 1px solid rgba(15,23,42,0.12); color: #334155;
+        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        transition: border-color .2s ease, background .2s ease, transform .2s ease;
+    }
+    .btn-secondary:hover { border-color: rgba(15,23,42,0.25); background: rgba(255,255,255,0.92); }
+    .btn-secondary:active { transform: scale(0.985); }
+
+    .gold-glow { box-shadow: 0 0 10px rgba(99,102,241,0.4); }
+
+    .reveal { opacity: 0; transform: translateY(18px); transition: opacity .8s ease-out, transform .8s ease-out; }
+    .reveal.in { opacity: 1; transform: translateY(0); }
+
+    /* ── Recolour the dark inline utility classes (dark→light) so the structure,
+         copy, and fonts stay 1:1 while the palette flips to white/indigo glass. ── */
+    .text-white { color: #0f172a !important; }                       /* headings + in-card emphasis */
+    .hover\:text-white:hover { color: #0f172a !important; }
+    [style*="background"][style*="#fc8a65"] { background: linear-gradient(180deg,#6366f1,#3b82f6) !important; }  /* logo / step badges / pills */
+    [style*="background"][style*="#fc8a65"], [style*="background"][style*="#fc8a65"] * { color: #fff !important; }                    /* white text on those fills */
+    .text-stone-200 { color:#334155 !important; }
+    .text-stone-300 { color:#475569 !important; }
+    .text-stone-400 { color:#64748b !important; }
+    .text-stone-500 { color:#94a3b8 !important; }
+    .text-amber-300, [class*="text-amber-300"] { color:#4f46e5 !important; }
+    .text-amber-200 { color:#4338ca !important; }
+    .bg-amber-300 { background-color:#6366f1 !important; }
+    .bg-\[\#222\] { background-color: rgba(15,23,42,0.05) !important; }
+    .bg-\[\#181818\]\/75 { background-color: rgba(255,255,255,0.78) !important; }
+    .bg-black\/30 { background-color: rgba(15,23,42,0.04) !important; }
+    .border-\[\#222\], .border-\[\#2a2a2a\], .border-\[\#2f2f2f\] { border-color: rgba(15,23,42,0.10) !important; }
+    /* Soft inline gold tint boxes (chips, reply snippets) → indigo tint */
+    :not(.aurora-blob)[style*="255,195,91"] { background: rgba(99,102,241,0.08) !important; border-color: rgba(99,102,241,0.25) !important; }
+    /* Aurora glow blobs → indigo / teal / rose (matches the dashboard ambient) */
+    .aurora-blob[style*="224,92,42"]   { background: radial-gradient(circle at center, rgba(99,102,241,0.20), transparent 70%) !important; }
+    .aurora-blob[style*="255,195,91"]  { background: radial-gradient(circle at center, rgba(13,148,136,0.16), transparent 70%) !important; }
+    .aurora-blob[style*="252,138,101"] { background: radial-gradient(circle at center, rgba(225,29,72,0.12), transparent 70%) !important; }
+
+    @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .reveal { opacity: 1; transform: none; transition: none; }
+        .animate-fade-up, .animate-aurora, .animate-aurora-slow { animation: none !important; }
+        *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+    }
+</style>
+</head>
+<body class="antialiased selection:bg-orange-500/30 selection:text-white">
+
+<!-- ───────────── NAV ───────────── -->
+<nav class="sticky top-0 z-50 backdrop-blur-xl bg-[#181818]/75 border-b border-[#222]">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <a href="#top" class="flex items-center gap-2" aria-label="Viraholic home">
+            <div class="w-7 h-7 rounded-lg text-white flex items-center justify-center gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+            </div>
+            <span class="font-semibold text-base text-white tracking-tight">Viraholic</span>
+        </a>
+        <div class="hidden md:flex items-center gap-7 text-sm text-stone-400">
+            <a href="#how" class="hover:text-white transition-colors">How it works</a>
+            <a href="#features" class="hover:text-white transition-colors">Features</a>
+            <a href="#pricing" class="hover:text-white transition-colors">Pricing</a>
+            <a href="#faq" class="hover:text-white transition-colors">FAQ</a>
+            <a href="mentors.html" class="text-amber-300/90 hover:text-amber-200 transition-colors">Ask a mentor</a>
+        </div>
+        <a href="#cta" class="btn-primary inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold">
+            Start free <span class="opacity-80">→</span>
+        </a>
+    </div>
+</nav>
+
+<!-- ───────────── HERO ───────────── -->
+<section id="top" class="relative overflow-hidden">
+    <!-- warm glow background -->
+    <div aria-hidden="true" class="absolute inset-0 -z-10">
+        <div class="aurora-blob animate-aurora" style="width:620px;height:620px;top:-200px;left:-120px;background:radial-gradient(circle at center,rgba(224,92,42,0.30),transparent 70%);"></div>
+        <div class="aurora-blob animate-aurora-slow" style="width:560px;height:560px;top:-140px;right:-100px;background:radial-gradient(circle at center,rgba(255,195,91,0.22),transparent 70%);"></div>
+        <div class="aurora-blob animate-aurora" style="width:520px;height:520px;top:160px;left:38%;background:radial-gradient(circle at center,rgba(252,138,101,0.16),transparent 70%);"></div>
+    </div>
+    <div class="absolute inset-0 -z-10 grid-bg"></div>
+
+    <div class="max-w-6xl mx-auto px-6 pt-16 md:pt-24 pb-24 md:pb-32 relative">
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass text-xs mb-7 animate-fade-up">
+            <span class="relative flex h-2 w-2">
+                <span class="absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75 animate-ping"></span>
+                <span class="relative inline-flex h-2 w-2 rounded-full bg-amber-300 gold-glow"></span>
+            </span>
+            <span class="text-stone-300 font-medium">AI account finder · for indie founders</span>
+        </div>
+
+        <h1 class="text-4xl md:text-6xl lg:text-7xl font-semibold leading-[1.05] tracking-tight max-w-4xl text-white animate-fade-up" style="animation-delay: 80ms; animation-fill-mode: backwards;">
+            Grow your users <span class="accent">to 100.</span>
+        </h1>
+
+        <p class="text-base md:text-lg text-stone-400 mt-6 max-w-2xl leading-relaxed animate-fade-up" style="animation-delay: 160ms; animation-fill-mode: backwards;">
+            Your AI co-pilot for the first 100 users. Viraholic finds the creators and communities your buyers actually follow, watches their posts, drafts a smart reply for every one — you approve, it posts. Plus a launch strategy, competitor map, a distribution plan, and a content engine tuned to your voice.
+        </p>
+
+        <div class="mt-8 flex flex-wrap items-center gap-3 animate-fade-up" style="animation-delay: 240ms; animation-fill-mode: backwards;">
+            <a href="#cta" class="group btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold">
+                Start free
+                <svg class="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </a>
+            <a href="#how" class="btn-secondary inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium">
+                See how it works
+            </a>
+            <span class="text-xs text-stone-500 ml-1">Browser extension · no API keys required to start</span>
+        </div>
+
+        <!-- Hero visual — 3 step cards explaining the loop. -->
+        <div class="mt-16 md:mt-20 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-up" style="animation-delay: 320ms; animation-fill-mode: backwards;">
+            <!-- STEP 1 — Find -->
+            <div class="relative p-6 rounded-2xl card overflow-hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-[11px] font-black uppercase tracking-widest text-stone-500">Step 01</span>
+                    <div class="w-9 h-9 rounded-xl chip text-stone-200 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">Find the right accounts</h3>
+                <p class="text-[13px] text-stone-400 leading-relaxed mb-4">Tell it your niche and your buyer. It scans X, LinkedIn and Reddit and surfaces the creators and communities your buyers actually follow — scored, ranked, deduped.</p>
+                <div class="flex flex-wrap gap-1.5">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#222] border border-[#2f2f2f] text-stone-300">@levelsio · 540K</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-md text-amber-200" style="background:rgba(255,195,91,0.08);border:1px solid rgba(255,195,91,0.22)">r/SaaS · 312K</span>
+                </div>
+            </div>
+
+            <!-- STEP 2 — Track -->
+            <div class="relative p-6 rounded-2xl card overflow-hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-[11px] font-black uppercase tracking-widest text-stone-500">Step 02</span>
+                    <div class="w-9 h-9 rounded-xl chip text-stone-200 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">Watch their posts</h3>
+                <p class="text-[13px] text-stone-400 leading-relaxed mb-4">A browser extension polls every tracked account on a stealth cadence. New posts land in your Posts Tracker the moment they go up — with the original post quoted when it's a repost.</p>
+                <div class="rounded-lg border border-[#2a2a2a] bg-black/30 p-2.5 text-[11px] text-stone-400 leading-relaxed">
+                    <span class="font-bold text-white">@levelsio</span> · 2m ago<br>
+                    "Just shipped a 1-week sprint…"
+                </div>
+            </div>
+
+            <!-- STEP 3 — Approve & post (highlighted) -->
+            <div class="relative p-6 rounded-2xl grad-border overflow-hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-[11px] font-black uppercase tracking-widest text-amber-300">Step 03</span>
+                    <div class="w-9 h-9 rounded-xl text-white flex items-center justify-center gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">Approve the reply, it posts</h3>
+                <p class="text-[13px] text-stone-300 leading-relaxed mb-4">For every post from an opted-in account, it drafts a reply tuned to the platform and your voice. You edit, hit <b class="text-white">Approve &amp; post</b> — the extension publishes it. Human-in-the-loop, always.</p>
+                <div class="rounded-lg p-2.5 text-[11px] text-stone-200 leading-relaxed italic" style="background:rgba(255,195,91,0.07);border:1px solid rgba(255,195,91,0.25)">
+                    "Curious how you handled X here — we hit the same wall last week and…"
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── PROBLEM ───────────── -->
+<section class="border-t border-[#222]">
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">The problem</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight max-w-3xl text-white">
+                Shipping is easy now. <span class="accent">Distribution is the moat.</span>
+            </h2>
+            <p class="text-base text-stone-400 mt-5 max-w-2xl leading-relaxed">
+                AI made building cheap. Everyone has a SaaS. The bottleneck shifted: now the founder who finds buyers fastest wins. Most don't.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12">
+            <div class="reveal p-5 rounded-2xl card">
+                <div class="text-2xl mb-2">🥱</div>
+                <h3 class="font-semibold text-base mb-1 text-white">You posted. Crickets.</h3>
+                <p class="text-sm text-stone-400 leading-relaxed">Your launch tweet got 12 likes. Your subreddit post got auto-removed. You don't know which channel to try next.</p>
+            </div>
+            <div class="reveal p-5 rounded-2xl card" style="transition-delay: .1s">
+                <div class="text-2xl mb-2">🌀</div>
+                <h3 class="font-semibold text-base mb-1 text-white">Marketing tax is real.</h3>
+                <p class="text-sm text-stone-400 leading-relaxed">Two hours scrolling X, one hour writing a comment, half a day "doing growth." You'd rather be building.</p>
+            </div>
+            <div class="reveal p-5 rounded-2xl card" style="transition-delay: .2s">
+                <div class="text-2xl mb-2">🤖</div>
+                <h3 class="font-semibold text-base mb-1 text-white">AI slop fatigue.</h3>
+                <p class="text-sm text-stone-400 leading-relaxed">Generic ChatGPT replies kill trust. You need posts that sound like <em>you</em> — not like the 47th SaaS launching that day.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── HOW IT WORKS ───────────── -->
+<section id="how" class="relative border-t border-[#222] overflow-hidden">
+    <div aria-hidden="true" class="absolute inset-0 -z-10">
+        <div class="aurora-blob animate-aurora-slow" style="width:480px;height:480px;top:80px;left:-160px;background:radial-gradient(circle at center,rgba(224,92,42,0.16),transparent 70%);"></div>
+    </div>
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">How it works</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight max-w-3xl text-white">
+                The agent does the marketing. <span class="accent">You ship the product.</span>
+            </h2>
+        </div>
+
+        <div class="mt-14 grid grid-cols-1 gap-8">
+            <!-- Step 1 -->
+            <div class="reveal flex gap-5">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full text-white flex items-center justify-center font-semibold gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">1</div>
+                <div>
+                    <h3 class="font-semibold text-lg mb-1.5 text-white">Tell it about your product</h3>
+                    <p class="text-sm text-stone-400 leading-relaxed">One form. Product, pitch, audience, stage. The agent remembers — every section uses this context without asking again.</p>
+                </div>
+            </div>
+            <!-- Step 2 -->
+            <div class="reveal flex gap-5" style="transition-delay: .1s">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full text-white flex items-center justify-center font-semibold gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">2</div>
+                <div>
+                    <h3 class="font-semibold text-lg mb-1.5 text-white">It maps your buyers</h3>
+                    <p class="text-sm text-stone-400 leading-relaxed">Personas, watering holes, distribution channels, competitors. Built from your pitch with real receipts — TAM estimates, subreddit member counts, channel benchmarks.</p>
+                </div>
+            </div>
+            <!-- Step 3 -->
+            <div class="reveal flex gap-5" style="transition-delay: .2s">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full text-white flex items-center justify-center font-semibold gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">3</div>
+                <div>
+                    <h3 class="font-semibold text-lg mb-1.5 text-white">It finds the right accounts to engage with</h3>
+                    <p class="text-sm text-stone-400 leading-relaxed">A stealth browser extension scans X, LinkedIn, and Reddit for creators and communities that match your buyers. Every account is scored on authority, niche match, posting cadence, and engagement on mature posts — so you see who actually matters at a glance.</p>
+                </div>
+            </div>
+            <!-- Step 4 -->
+            <div class="reveal flex gap-5" style="transition-delay: .3s">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full text-white flex items-center justify-center font-semibold gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">4</div>
+                <div>
+                    <h3 class="font-semibold text-lg mb-1.5 text-white">It drafts in your voice</h3>
+                    <p class="text-sm text-stone-400 leading-relaxed">Voice profile calibrated by a 7-question quiz. Posts that sound like you, not like AI. You press Send. The pipeline updates itself.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FEATURES GRID ───────────── -->
+<section id="features" class="border-t border-[#222]">
+    <div class="max-w-6xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">What's inside</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight max-w-3xl text-white">
+                Every tool a founder needs to reach 1,000 — <span class="accent">in one place.</span>
+            </h2>
+        </div>
+
+        <div class="mt-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div class="reveal p-6 rounded-2xl card">
+                <div class="w-9 h-9 rounded-xl chip text-amber-300 flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                </div>
+                <h3 class="font-semibold text-base mb-1 text-white">Account Finder</h3>
+                <p class="text-sm text-stone-400 leading-relaxed">Stealth-scan X, LinkedIn, and Reddit for the exact creators and communities your buyers follow. Every account scored on authority, niche match, recency, and engagement on mature posts.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl card" style="transition-delay: .05s">
+                <div class="w-9 h-9 rounded-xl chip text-amber-300 flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                </div>
+                <h3 class="font-semibold text-base mb-1 text-white">Posts Tracker + AI replies</h3>
+                <p class="text-sm text-stone-400 leading-relaxed">New posts from every tracked account land in your feed the moment they go up. Flip <b class="text-stone-200">Auto-reply</b> on for an account and the AI drafts a platform-tuned, voice-matched response under each post — you review, edit, approve, and it publishes.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl card" style="transition-delay: .1s">
+                <div class="w-9 h-9 rounded-xl chip text-amber-300 flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+                </div>
+                <h3 class="font-semibold text-base mb-1 text-white">Content Engine</h3>
+                <p class="text-sm text-stone-400 leading-relaxed">Voice-matched drafts across X, LinkedIn, Reddit, and Threads. Voice profile saved once — every post sounds like you, not like AI.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl card" style="transition-delay: .15s">
+                <div class="w-9 h-9 rounded-xl chip text-amber-300 flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="22"/><path d="M2 12h20"/></svg>
+                </div>
+                <h3 class="font-semibold text-base mb-1 text-white">Distribution Lab</h3>
+                <p class="text-sm text-stone-400 leading-relaxed">Find the channels where your buyers already are — launchpads, subreddits, newsletters, communities. Ranked by fit, with channel-specific drafts.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl card" style="transition-delay: .2s">
+                <div class="w-9 h-9 rounded-xl chip text-amber-300 flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                </div>
+                <h3 class="font-semibold text-base mb-1 text-white">Launch Strategy</h3>
+                <p class="text-sm text-stone-400 leading-relaxed">A 2026-era roadmap: wedge, compounding loops, first-72-hours plan, risk register. No more cargo-culting Y Combinator playbooks from 2018.</p>
+            </div>
+            <div class="reveal p-6 rounded-2xl card" style="transition-delay: .25s">
+                <div class="w-9 h-9 rounded-xl chip text-amber-300 flex items-center justify-center mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <h3 class="font-semibold text-base mb-1 text-white">Competitor Analysis</h3>
+                <p class="text-sm text-stone-400 leading-relaxed">Reverse-engineer what's working for the winners in your space: positioning, pricing, tech stack, community behavior. Their moves become your map.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── WORKFLOW DIAGRAM ───────────── -->
+<section class="relative border-t border-[#222] overflow-hidden">
+    <div aria-hidden="true" class="absolute inset-0 -z-10">
+        <div class="aurora-blob animate-aurora" style="width:560px;height:560px;bottom:-160px;right:-120px;background:radial-gradient(circle at center,rgba(255,195,91,0.14),transparent 70%);"></div>
+    </div>
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal text-center max-w-2xl mx-auto mb-16">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">The workflow</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight text-white">
+                One dashboard. <span class="accent">Full control.</span>
+            </h2>
+        </div>
+
+        <div class="space-y-8">
+            <div class="reveal grid grid-cols-1 md:grid-cols-[60px_1fr] gap-8 items-start">
+                <div class="w-14 h-14 rounded-full text-white flex items-center justify-center font-bold text-lg shrink-0 mt-1 gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">1</div>
+                <div class="card rounded-2xl p-8">
+                    <h3 class="font-semibold text-xl mb-2 text-white">Scan &amp; Score</h3>
+                    <p class="text-stone-400 leading-relaxed">The extension scans X, LinkedIn, and Reddit for accounts matching your niche. Every result is scored on authority, niche alignment, and posting frequency. You see the best matches first.</p>
+                </div>
+            </div>
+            <div class="reveal grid grid-cols-1 md:grid-cols-[60px_1fr] gap-8 items-start" style="transition-delay: .1s">
+                <div class="w-14 h-14 rounded-full text-white flex items-center justify-center font-bold text-lg shrink-0 mt-1 gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">2</div>
+                <div class="card rounded-2xl p-8">
+                    <h3 class="font-semibold text-xl mb-2 text-white">Track &amp; Watch</h3>
+                    <p class="text-stone-400 leading-relaxed">One click to track an account. New posts land in your dashboard the moment they publish. You stay in one place — no tab-hopping, no notifications spam.</p>
+                </div>
+            </div>
+            <div class="reveal grid grid-cols-1 md:grid-cols-[60px_1fr] gap-8 items-start" style="transition-delay: .2s">
+                <div class="w-14 h-14 rounded-full text-white flex items-center justify-center font-bold text-lg shrink-0 mt-1 gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">3</div>
+                <div class="card rounded-2xl p-8">
+                    <h3 class="font-semibold text-xl mb-2 text-white">Draft in Your Voice</h3>
+                    <p class="text-stone-400 leading-relaxed">The AI drafts a reply tuned to the platform and your voice — no ChatGPT slop. You edit, tweak, or approve as-is. Full human-in-the-loop control.</p>
+                </div>
+            </div>
+            <div class="reveal grid grid-cols-1 md:grid-cols-[60px_1fr] gap-8 items-start" style="transition-delay: .3s">
+                <div class="w-14 h-14 rounded-full text-white flex items-center justify-center font-bold text-lg shrink-0 mt-1 gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">4</div>
+                <div class="card rounded-2xl p-8">
+                    <h3 class="font-semibold text-xl mb-2 text-white">Post &amp; Track Results</h3>
+                    <p class="text-stone-400 leading-relaxed">Hit Approve, the extension publishes. Your pipeline updates automatically. See engagement metrics, replies, and which accounts convert into users.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── OUTCOME / METRICS ───────────── -->
+<section class="relative border-t border-[#222] overflow-hidden">
+    <div aria-hidden="true" class="absolute inset-0 -z-10">
+        <div class="aurora-blob animate-aurora-slow" style="width:760px;height:440px;top:50%;left:50%;transform:translate(-50%,-50%);background:radial-gradient(ellipse at center,rgba(224,92,42,0.18),transparent 70%);"></div>
+    </div>
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">What changes</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight max-w-3xl text-white">
+                The path from zero to 1,000 <span class="accent">stops being a guess.</span>
+            </h2>
+        </div>
+
+        <div class="mt-14 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="reveal card rounded-2xl p-6">
+                <div class="text-4xl md:text-5xl font-semibold tracking-tight grad-text">100s</div>
+                <div class="text-sm text-stone-400 mt-2 leading-snug">Of scored accounts surfaced per scan — every one ranked by how well they match your buyer.</div>
+            </div>
+            <div class="reveal card rounded-2xl p-6" style="transition-delay: .1s">
+                <div class="text-4xl md:text-5xl font-semibold tracking-tight grad-text">~30s</div>
+                <div class="text-sm text-stone-400 mt-2 leading-snug">From spotting a tracked account's post to a draft reply in your voice — ready to send.</div>
+            </div>
+            <div class="reveal card rounded-2xl p-6" style="transition-delay: .2s">
+                <div class="text-4xl md:text-5xl font-semibold tracking-tight grad-text">3</div>
+                <div class="text-sm text-stone-400 mt-2 leading-snug">Platforms unified into one finder — X, LinkedIn, Reddit.</div>
+            </div>
+            <div class="reveal card rounded-2xl p-6" style="transition-delay: .3s">
+                <div class="text-4xl md:text-5xl font-semibold tracking-tight grad-text">0</div>
+                <div class="text-sm text-stone-400 mt-2 leading-snug">API keys required to start. The extension does the heavy lifting locally.</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── AGENT POSITIONING ───────────── -->
+<section class="border-t border-[#222]">
+    <div class="max-w-4xl mx-auto px-6 py-20 md:py-28 text-center">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">The shift</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-[1.12] text-white">
+                Not a tool you check.<br/>
+                <span class="accent">An agent that ships work for you.</span>
+            </h2>
+            <p class="text-base text-stone-400 mt-6 max-w-2xl mx-auto leading-relaxed">
+                The old playbook: open ten tabs, hop between dashboards, copy-paste into ChatGPT, paste back, edit, ship. The new one: the agent watches, drafts, and queues. You approve.
+            </p>
+            <div class="mt-12 grid grid-cols-2 md:grid-cols-3 gap-3 text-left">
+                <div class="p-4 rounded-xl card reveal">
+                    <div class="text-xs text-stone-400 mb-1">It does</div>
+                    <ul class="text-sm space-y-1 text-stone-300">
+                        <li>· Map your buyers</li>
+                        <li>· Scan LinkedIn, X, Reddit</li>
+                        <li>· Score and rank every account</li>
+                        <li>· Watch tracked accounts' posts</li>
+                        <li>· Draft replies in your voice</li>
+                        <li>· Track the pipeline</li>
+                    </ul>
+                </div>
+                <div class="p-4 rounded-xl card reveal" style="transition-delay: .1s">
+                    <div class="text-xs text-stone-400 mb-1">You do</div>
+                    <ul class="text-sm space-y-1 text-stone-300">
+                        <li>· Approve drafts</li>
+                        <li>· Press Send</li>
+                        <li>· Build the product</li>
+                    </ul>
+                </div>
+                <div class="p-4 rounded-xl card reveal hidden md:block" style="transition-delay: .2s">
+                    <div class="text-xs text-stone-400 mb-1">It never does</div>
+                    <ul class="text-sm space-y-1 text-stone-300">
+                        <li>· Auto-post on your account</li>
+                        <li>· Spam DMs</li>
+                        <li>· Sound like ChatGPT</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── PRICING ───────────── -->
+<section id="pricing" class="border-t border-[#222]">
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal text-center mb-14">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">Pricing</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight text-white">
+                Honest. Two plans. <span class="accent">Cancel anytime.</span>
+            </h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+            <!-- Free -->
+            <div class="reveal p-7 rounded-2xl card">
+                <div class="text-xs uppercase tracking-widest text-stone-500 mb-2">Solo</div>
+                <div class="flex items-baseline gap-1">
+                    <span class="text-4xl font-semibold text-white">$0</span>
+                    <span class="text-sm text-stone-500">/ forever</span>
+                </div>
+                <p class="text-sm text-stone-400 mt-2 leading-relaxed">For your first product. Bring your own Gemini API key.</p>
+                <ul class="text-sm space-y-2 mt-6 text-stone-300">
+                    <li class="flex gap-2"><span class="text-amber-300">✓</span> Browser extension + radar</li>
+                    <li class="flex gap-2"><span class="text-amber-300">✓</span> Up to 25 tracked accounts</li>
+                    <li class="flex gap-2"><span class="text-amber-300">✓</span> All AI sections (your API key)</li>
+                    <li class="flex gap-2"><span class="text-amber-300">✓</span> One active project</li>
+                </ul>
+                <a href="#cta" class="btn-secondary mt-7 block text-center px-5 py-2.5 rounded-xl text-sm font-medium">
+                    Start free
+                </a>
+            </div>
+
+            <!-- Pro -->
+            <div class="reveal p-7 rounded-2xl grad-border relative" style="transition-delay: .1s">
+                <div class="absolute -top-2.5 left-7 px-2.5 py-0.5 text-white text-[10px] font-semibold tracking-wider uppercase rounded-md gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">Most popular</div>
+                <div class="text-xs uppercase tracking-widest text-stone-500 mb-2">Founder</div>
+                <div class="flex items-baseline gap-1">
+                    <span class="text-4xl font-semibold text-white">$29</span>
+                    <span class="text-sm text-stone-500">/ month</span>
+                </div>
+                <p class="text-sm text-stone-400 mt-2 leading-relaxed">For founders shipping seriously. We provide the AI capacity.</p>
+                <ul class="text-sm space-y-2 mt-6 text-stone-300">
+                    <li class="flex gap-2"><span class="text-amber-300">✓</span> Everything in Solo</li>
+                    <li class="flex gap-2"><span class="text-amber-300">✓</span> Unlimited tracked accounts</li>
+                    <li class="flex gap-2"><span class="text-amber-300">✓</span> No API key needed (managed)</li>
+                    <li class="flex gap-2"><span class="text-amber-300">✓</span> Multi-project switching</li>
+                    <li class="flex gap-2"><span class="text-amber-300">✓</span> Priority Gemini capacity</li>
+                </ul>
+                <a href="#cta" class="btn-primary mt-7 block text-center px-5 py-2.5 rounded-xl text-sm font-semibold">
+                    Go Founder
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FAQ ───────────── -->
+<section id="faq" class="border-t border-[#222]">
+    <div class="max-w-3xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">FAQ</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight text-white">Questions, answered.</h2>
+        </div>
+        <div class="mt-12 space-y-3">
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>Will this get my X / LinkedIn account banned?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">No. The agent uses a stealth browser extension that mimics human browsing — natural scrolling, randomised timing, session breaks, captcha detection. It never auto-posts on your behalf. You always press Send.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>Where does my data live?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">Everything is stored locally in your browser. The only data leaving your machine is the prompts you send to the Gemini API for content generation — same as if you were using ChatGPT yourself.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>Do I need a Gemini API key?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">On the Solo plan, yes — free at <a href="https://aistudio.google.com/app/apikey" class="text-amber-300 underline underline-offset-2 hover:text-amber-200">aistudio.google.com/app/apikey</a>. On the Founder plan we provide managed capacity, no key required.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>Does it actually sound like me?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">A 7-question Voice Match quiz calibrates a voice profile across six dimensions — authority, energy, vulnerability, provocation, specificity, intimacy — plus rhythm and hook architecture. You can paste a writing sample for the AI to fine-tune against. The output is dramatically closer to your voice than a one-shot ChatGPT reply.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>What if I'm not technical?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">You install the extension and fill in one form about your product. That's the technical bar. The agent does the rest.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>How is this different from ChatGPT or Copy.ai?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">ChatGPT writes content on demand. Viraholic tells you who to write to — it scans LinkedIn, X, and Reddit and surfaces the exact accounts your buyers follow, scored and ranked. It also knows your voice, your product, your audience, your strategy, and your competitors. Everything stays in context.</p>
+            </details>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FINAL CTA ───────────── -->
+<section id="cta" class="relative border-t border-[#222] overflow-hidden">
+    <div aria-hidden="true" class="absolute inset-0 -z-10">
+        <div class="aurora-blob animate-aurora" style="width:620px;height:620px;bottom:-240px;left:50%;transform:translateX(-50%);background:radial-gradient(circle at center,rgba(224,92,42,0.28),transparent 70%);"></div>
+        <div class="aurora-blob animate-aurora-slow" style="width:420px;height:420px;top:-120px;right:10%;background:radial-gradient(circle at center,rgba(255,195,91,0.18),transparent 70%);"></div>
+    </div>
+    <div class="max-w-3xl mx-auto px-6 py-24 md:py-32 text-center">
+        <div class="reveal">
+            <h2 class="text-3xl md:text-5xl font-semibold leading-[1.12] text-white">
+                Your first 1,000 users <span class="accent">are waiting.</span>
+            </h2>
+            <p class="text-base md:text-lg text-stone-400 mt-5 max-w-xl mx-auto leading-relaxed">
+                Install the extension. Set up your project in 60 seconds. Let the agent take it from there.
+            </p>
+            <div class="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <a href="#" class="group btn-primary inline-flex items-center gap-2 px-7 py-3.5 rounded-xl text-sm font-semibold">
+                    Get the extension
+                    <svg class="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </a>
+                <a href="#" class="btn-secondary inline-flex items-center gap-2 px-6 py-3.5 rounded-xl text-sm font-medium">
+                    Open the dashboard
+                </a>
+            </div>
+            <p class="text-xs text-stone-500 mt-6">No credit card on Solo · Cancel anytime on Founder</p>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FOOTER ───────────── -->
+<footer class="border-t border-[#222]">
+    <div class="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-md text-white flex items-center justify-center" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+            </div>
+            <span class="font-semibold text-sm text-white">Viraholic</span>
+            <span class="text-xs text-stone-500 ml-2">© 2026 · Built for founders</span>
+        </div>
+        <div class="flex items-center gap-6 text-xs text-stone-500">
+            <a href="#how" class="hover:text-white transition-colors">How it works</a>
+            <a href="#features" class="hover:text-white transition-colors">Features</a>
+            <a href="#pricing" class="hover:text-white transition-colors">Pricing</a>
+            <a href="#faq" class="hover:text-white transition-colors">FAQ</a>
+        </div>
+    </div>
+</footer>
+
+<!-- Tiny reveal-on-scroll script — no framework -->
+<script>
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

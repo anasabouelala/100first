@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 
 // ─── The single source of truth for product/project info ──────────────
 export interface ProjectConfig {
-  productName: string;        // e.g. "Answerly"
+  productName: string;        // e.g. "Viraholic"
   pitch: string;              // one-paragraph elevator pitch
   category: string;           // "B2B SaaS" | "DevTool" | "Consumer SaaS" | etc.
   targetAudience: string;     // who pays (used by Persona, Strategy, Distribution)

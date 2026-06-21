@@ -13,7 +13,10 @@ import { AppMode } from '../types';
 // VOICE ARCHITECTURE — Defaults, Presets, Catalogues
 // ────────────────────────────────────────────────────────────────────
 export const DEFAULT_VOICE_MIX: VoiceMix = {
-  authority: 60, energy: 50, vulnerability: 50, provocation: 50, specificity: 75, intimacy: 60, rhythm: 'punchy'
+  authority: 60, energy: 50, vulnerability: 50, provocation: 50, specificity: 75, intimacy: 60,
+  // New axes — defaults tuned for a confident-but-warm baseline.
+  humor: 50, warmth: 60, optimism: 65,
+  rhythm: 'punchy'
 };
 export const DEFAULT_HOOK: HookArchitecture = {
   patternInterrupt: 'shocking_number', tensionMechanism: 'curiosity_gap', promisePayoff: 'what_to_avoid'
@@ -27,100 +30,213 @@ export const DEFAULT_PERSPECTIVE: PerspectiveInjector = {
   uniqueAngle: '', contrarian: '', forbiddenTakes: '', receipts: ''
 };
 
+// Personas mirrored from the reference Voice Studio. Trait values, hook ids,
+// amplifiers and closer ids all line up so the dropdown chips below render
+// the same picks the reference does. (Internal field names keep our existing
+// camelCase since prompts elsewhere reference them.)
+// `example` is a 2–3 line sample post written IN that voice — surfaced via
+// the chip's hover tooltip so users see what the preset sounds like before
+// they apply it.
 export const VOICE_PRESETS: Array<{
-  id: string; name: string; emoji: string; tagline: string;
+  id: string; name: string; emoji: string; tagline: string; example: string;
   voiceMix: VoiceMix; hook: HookArchitecture; viral: ViralPhysics; closer: CloserStrategy;
 }> = [
   {
-    id: 'brutal_founder', name: 'Brutal Founder', emoji: '🔥', tagline: 'No fluff. Receipts only. Will offend SaaS bros.',
-    voiceMix: { authority: 85, energy: 75, vulnerability: 30, provocation: 85, specificity: 95, intimacy: 70, rhythm: 'staccato' },
-    hook: { patternInterrupt: 'forbidden_statement', tensionMechanism: 'status_threat', promisePayoff: 'what_to_avoid' },
-    viral: { statusCurrency: true, inGroupSignaling: true, tribalFraming: true, fortuneCookieClose: true, loopOpener: false, concessionMove: false, baitAndSwitch: false, forbiddenSpecificity: true },
+    id: 'brutal_founder', name: 'Brutal Founder', emoji: '🔥',
+    tagline: "Blunt, high-energy, numbers-first. Picks fights, drops receipts, zero fluff.",
+    example: "I built a $0 MRR app for 11 months.\nFix wasn't another feature. Fix was killing 4 of them.\nYour product is too big. Cut it.",
+    voiceMix: { authority: 70, energy: 80, provocation: 88, specificity: 86, humor: 55, warmth: 28, optimism: 45, vulnerability: 30, intimacy: 55, rhythm: 'staccato' },
+    hook: { patternInterrupt: 'spicy_claim', tensionMechanism: 'pain_mirror', promisePayoff: 'what_to_do' },
+    viral: { statusCurrency: false, inGroupSignaling: false, tribalFraming: false, fortuneCookieClose: false, loopOpener: false, concessionMove: true, baitAndSwitch: true, forbiddenSpecificity: true },
     closer: 'punchline'
   },
   {
-    id: 'wise_mentor', name: 'Wise Mentor', emoji: '🧘', tagline: 'Calm authority. Frameworks over hype. Long-game thinking.',
-    voiceMix: { authority: 80, energy: 25, vulnerability: 60, provocation: 35, specificity: 70, intimacy: 65, rhythm: 'contemplative' },
-    hook: { patternInterrupt: 'precise_moment', tensionMechanism: 'cognitive_dissonance', promisePayoff: 'who_to_become' },
-    viral: { statusCurrency: true, inGroupSignaling: false, tribalFraming: false, fortuneCookieClose: true, loopOpener: false, concessionMove: true, baitAndSwitch: false, forbiddenSpecificity: false },
-    closer: 'soft_proof'
+    id: 'wise_mentor', name: 'Wise Mentor', emoji: '🦉',
+    tagline: 'Calm, generous, quietly authoritative. Teaches through reflection, not hype.',
+    example: "The best growth advice I ever got came from a founder who'd failed three times. He said: 'Stop optimising for the launch. Optimise for month six.'\nIt took me a year to understand what he meant.",
+    voiceMix: { authority: 78, energy: 28, provocation: 22, specificity: 62, humor: 35, warmth: 82, optimism: 75, vulnerability: 55, intimacy: 70, rhythm: 'contemplative' },
+    hook: { patternInterrupt: 'fortune_cookie', tensionMechanism: 'gentle_question', promisePayoff: 'what_to_think' },
+    viral: { statusCurrency: true, inGroupSignaling: true, tribalFraming: true, fortuneCookieClose: true, loopOpener: false, concessionMove: false, baitAndSwitch: false, forbiddenSpecificity: false },
+    closer: 'soft_landing'
   },
   {
-    id: 'sharp_contrarian', name: 'Sharp Contrarian', emoji: '🎭', tagline: 'Flips conventional wisdom. Bait then switch. Earned credibility.',
-    voiceMix: { authority: 75, energy: 60, vulnerability: 40, provocation: 90, specificity: 85, intimacy: 55, rhythm: 'punchy' },
-    hook: { patternInterrupt: 'forbidden_statement', tensionMechanism: 'cognitive_dissonance', promisePayoff: 'what_to_avoid' },
-    viral: { statusCurrency: true, inGroupSignaling: true, tribalFraming: true, fortuneCookieClose: true, loopOpener: false, concessionMove: false, baitAndSwitch: true, forbiddenSpecificity: true },
+    id: 'sharp_contrarian', name: 'Sharp Contrarian', emoji: '🐍',
+    tagline: 'Witty and combative. Reverses conventional wisdom and defends it hard.',
+    example: "Everyone says 'talk to your users'. Wrong. Most of your users have no idea what they want — they'll tell you to build a faster horse.\nTalk to the ones who churned. They know.",
+    voiceMix: { authority: 80, energy: 72, provocation: 95, specificity: 76, humor: 68, warmth: 22, optimism: 35, vulnerability: 35, intimacy: 50, rhythm: 'punchy' },
+    hook: { patternInterrupt: 'contrarian_take', tensionMechanism: 'status_threat', promisePayoff: 'what_to_unlearn' },
+    viral: { statusCurrency: false, inGroupSignaling: false, tribalFraming: false, fortuneCookieClose: false, loopOpener: false, concessionMove: true, baitAndSwitch: true, forbiddenSpecificity: false },
     closer: 'reverse_cta'
   },
   {
-    id: 'vulnerable_storyteller', name: 'Vulnerable Storyteller', emoji: '📖', tagline: 'Confession-led. Failure as teacher. Permission to feel.',
-    voiceMix: { authority: 50, energy: 40, vulnerability: 95, provocation: 30, specificity: 80, intimacy: 90, rhythm: 'flowing' },
+    id: 'vulnerable_storyteller', name: 'Vulnerable Storyteller', emoji: '🪞',
+    tagline: "Raw and warm. Confesses, mirrors the reader's pain, tells the human story.",
+    example: "I cried in my car after my fourth failed launch.\nNot a single signup in 48 hours. Not one.\nIf you're shipping into silence right now — I see you. It doesn't mean you're not good. It means the noise is loud.",
+    voiceMix: { authority: 22, energy: 36, provocation: 32, specificity: 82, humor: 42, warmth: 85, optimism: 55, vulnerability: 90, intimacy: 88, rhythm: 'flowing' },
     hook: { patternInterrupt: 'taboo_confession', tensionMechanism: 'pain_mirror', promisePayoff: 'what_to_feel' },
-    viral: { statusCurrency: false, inGroupSignaling: false, tribalFraming: false, fortuneCookieClose: true, loopOpener: false, concessionMove: true, baitAndSwitch: false, forbiddenSpecificity: false },
-    closer: 'open_question'
+    viral: { statusCurrency: false, inGroupSignaling: false, tribalFraming: false, fortuneCookieClose: false, loopOpener: false, concessionMove: false, baitAndSwitch: false, forbiddenSpecificity: true },
+    closer: 'open_invitation'
   },
   {
-    id: 'data_sniper', name: 'Data Sniper', emoji: '🎯', tagline: 'Numbers-first. Surgical insights. Zero adjectives.',
-    voiceMix: { authority: 90, energy: 45, vulnerability: 20, provocation: 60, specificity: 100, intimacy: 40, rhythm: 'staccato' },
-    hook: { patternInterrupt: 'shocking_number', tensionMechanism: 'curiosity_gap', promisePayoff: 'what_to_learn' },
-    viral: { statusCurrency: true, inGroupSignaling: true, tribalFraming: false, fortuneCookieClose: false, loopOpener: false, concessionMove: false, baitAndSwitch: false, forbiddenSpecificity: true },
+    id: 'data_sniper', name: 'Data Sniper', emoji: '🎯',
+    tagline: 'Cold, precise, evidence-led. Every claim backed by a number.',
+    example: "47% of trial signups never log in a second time.\nWe ran 5 onboarding variants on 2,800 users. Only one moved D2 retention — and it wasn't a tour. It was an email at minute 23.\nThe ROI was 6.4x.",
+    voiceMix: { authority: 72, energy: 55, provocation: 58, specificity: 96, humor: 28, warmth: 30, optimism: 50, vulnerability: 20, intimacy: 40, rhythm: 'punchy' },
+    hook: { patternInterrupt: 'surprising_number', tensionMechanism: 'curiosity_gap', promisePayoff: 'what_to_measure' },
+    viral: { statusCurrency: false, inGroupSignaling: false, tribalFraming: false, fortuneCookieClose: false, loopOpener: true, concessionMove: false, baitAndSwitch: false, forbiddenSpecificity: true },
+    closer: 'soft_landing'
+  },
+  {
+    id: 'the_insider', name: 'The Insider', emoji: '🏛',
+    tagline: "Knows the game from inside. Tribal, in-the-know, says what others won't.",
+    example: "Funny how every YC batch talks about 'PMF' but nobody mentions the real metric the partners track: invite-to-paid in 14 days.\nThat's the number that moves your next-round mark. Not MRR.",
+    voiceMix: { authority: 86, energy: 48, provocation: 52, specificity: 84, humor: 50, warmth: 55, optimism: 60, vulnerability: 35, intimacy: 65, rhythm: 'flowing' },
+    hook: { patternInterrupt: 'inside_baseball', tensionMechanism: 'curiosity_gap', promisePayoff: 'what_to_know' },
+    viral: { statusCurrency: true, inGroupSignaling: true, tribalFraming: true, fortuneCookieClose: false, loopOpener: true, concessionMove: false, baitAndSwitch: false, forbiddenSpecificity: false },
+    closer: 'open_invitation'
+  },
+  {
+    id: 'class_clown', name: 'Class Clown', emoji: '🃏',
+    tagline: 'Funny first. Playful, warm, optimistic — lands the point with a joke.',
+    example: "My Stripe dashboard at 3am: a single $9 charge.\nMe, in a hoodie, whispering: 'this is the start of an empire.'\nIt was a refund attempt. The empire is broke.",
+    voiceMix: { authority: 45, energy: 82, provocation: 60, specificity: 58, humor: 95, warmth: 70, optimism: 72, vulnerability: 55, intimacy: 70, rhythm: 'punchy' },
+    hook: { patternInterrupt: 'spicy_claim', tensionMechanism: 'curiosity_gap', promisePayoff: 'what_to_feel' },
+    viral: { statusCurrency: false, inGroupSignaling: false, tribalFraming: false, fortuneCookieClose: true, loopOpener: false, concessionMove: true, baitAndSwitch: true, forbiddenSpecificity: false },
     closer: 'punchline'
-  },
-  {
-    id: 'the_insider', name: 'The Insider', emoji: '🕵️', tagline: 'Forbidden knowledge. "What they don\'t tell you" energy.',
-    voiceMix: { authority: 80, energy: 55, vulnerability: 50, provocation: 75, specificity: 85, intimacy: 75, rhythm: 'punchy' },
-    hook: { patternInterrupt: 'unexpected_name', tensionMechanism: 'forbidden_knowledge', promisePayoff: 'who_to_become' },
-    viral: { statusCurrency: true, inGroupSignaling: true, tribalFraming: true, fortuneCookieClose: false, loopOpener: true, concessionMove: false, baitAndSwitch: false, forbiddenSpecificity: true },
-    closer: 'open_loop'
   }
 ];
 
+// HOOK SLOTS — option lists mirrored from the reference Voice Studio.
+// Slot 1 — Open with a …
 const PATTERN_INTERRUPTS: Array<{ id: HookArchitecture['patternInterrupt']; label: string; example: string }> = [
-  { id: 'shocking_number',   label: 'Shocking number',   example: '"$2,847 in 6 hours."' },
-  { id: 'taboo_confession',  label: 'Taboo confession',  example: '"I lied to my first 100 users."' },
-  { id: 'precise_moment',    label: 'Precise moment',    example: '"On Tuesday at 3:14am..."' },
-  { id: 'self_indictment',   label: 'Self-indictment',   example: '"I built the wrong feature for 18 months."' },
-  { id: 'forbidden_statement', label: 'Forbidden statement', example: '"PMF is a lie sold by VCs."' },
-  { id: 'unexpected_name',   label: 'Unexpected name',   example: '"Stripe rejected us 4 times."' },
+  { id: 'taboo_confession',    label: 'Taboo confession',    example: 'Admit the thing nobody says out loud.' },
+  { id: 'spicy_claim',         label: 'Spicy claim',         example: 'A statement that picks a fight.' },
+  { id: 'contrarian_take',     label: 'Contrarian take',     example: 'Reverse the conventional wisdom.' },
+  { id: 'surprising_number',   label: 'Surprising number',   example: 'Lead with a stat that breaks expectations.' },
+  { id: 'fortune_cookie',      label: 'Fortune cookie',      example: 'A tiny truth dressed as wisdom.' },
+  { id: 'inside_baseball',     label: 'Inside baseball',     example: "Speak the tribe's language from sentence one." },
+  // Legacy ids — hidden from the dropdown but kept on the type so persisted
+  // profiles render. New profiles default to the merged-in equivalents above.
+  { id: 'shocking_number',     label: 'Shocking number',     example: '(legacy → surprising_number)' },
+  { id: 'precise_moment',      label: 'Precise moment',      example: '(legacy)' },
+  { id: 'self_indictment',     label: 'Self-indictment',     example: '(legacy → taboo_confession)' },
+  { id: 'forbidden_statement', label: 'Forbidden statement', example: '(legacy → spicy_claim)' },
+  { id: 'unexpected_name',     label: 'Unexpected name',     example: '(legacy → inside_baseball)' },
 ];
+// Slot 2 — , pull readers in by …
 const TENSION_MECHANISMS: Array<{ id: HookArchitecture['tensionMechanism']; label: string; desc: string }> = [
-  { id: 'curiosity_gap',         label: 'Curiosity gap',         desc: 'Question they can\'t guess the answer to' },
-  { id: 'cognitive_dissonance',  label: 'Cognitive dissonance',  desc: 'Two facts that shouldn\'t both be true' },
-  { id: 'pain_mirror',           label: 'Pain mirror',           desc: 'Name a frustration they\'ve felt' },
-  { id: 'status_threat',         label: 'Status threat',         desc: '"You\'re losing credibility doing X"' },
-  { id: 'forbidden_knowledge',   label: 'Forbidden knowledge',   desc: '"They don\'t want you to know..."' },
+  { id: 'pain_mirror',           label: 'pain mirror',       desc: "Name the reader's exact frustration." },
+  { id: 'curiosity_gap',         label: 'curiosity gap',     desc: 'Tease information they need to keep reading.' },
+  { id: 'status_quo',            label: 'status quo attack', desc: "Tear down what they've been told." },
+  { id: 'gentle_question',       label: 'gentle question',   desc: "Ask the question they're afraid to ask themselves." },
+  // Legacy ids
+  { id: 'cognitive_dissonance',  label: 'cognitive dissonance', desc: '(legacy → status_quo)' },
+  { id: 'status_threat',         label: 'status threat',     desc: '(legacy → status_quo)' },
+  { id: 'forbidden_knowledge',   label: 'forbidden knowledge', desc: '(legacy → curiosity_gap)' },
 ];
+// Slot 3 — , and promise them …
 const PROMISE_PAYOFFS: Array<{ id: HookArchitecture['promisePayoff']; label: string; desc: string }> = [
-  { id: 'what_to_learn',  label: 'What to learn',  desc: 'A clear takeaway' },
-  { id: 'what_to_avoid',  label: 'What to avoid',  desc: 'A specific mistake to dodge' },
-  { id: 'who_to_become',  label: 'Who to become',  desc: 'Identity transformation' },
-  { id: 'what_to_feel',   label: 'What to feel',   desc: 'Relief, validation, vindication' },
+  { id: 'what_to_feel',    label: 'what to feel',    desc: 'Lead them toward an emotional payoff.' },
+  { id: 'what_to_do',      label: 'what to do',      desc: 'Promise a concrete next action.' },
+  { id: 'what_to_think',   label: 'what to think',   desc: 'Reframe how they see the topic.' },
+  { id: 'what_to_unlearn', label: 'what to unlearn', desc: 'Show them what to throw away.' },
+  { id: 'what_to_measure', label: 'what to measure', desc: 'Promise a metric they should track.' },
+  { id: 'what_to_know',    label: 'what to know',    desc: "Promise an insider truth they're missing." },
+  // Legacy
+  { id: 'what_to_learn',   label: 'what to learn',   desc: '(legacy → what_to_know)' },
+  { id: 'what_to_avoid',   label: 'what to avoid',   desc: '(legacy → what_to_unlearn)' },
+  { id: 'who_to_become',   label: 'who to become',   desc: '(legacy → what_to_think)' },
 ];
-const VIRAL_TOGGLES: Array<{ key: keyof ViralPhysics; label: string; desc: string }> = [
-  { key: 'statusCurrency',       label: 'Status currency',       desc: 'A shareable insight that makes the reader look smart' },
-  { key: 'inGroupSignaling',     label: 'In-group signaling',    desc: 'Insider vocabulary your tribe will recognize' },
-  { key: 'tribalFraming',        label: 'Tribal framing',        desc: '"Us vs them" opposition (use sparingly)' },
-  { key: 'fortuneCookieClose',   label: 'Fortune cookie close',  desc: 'Quotable, screenshot-worthy final line' },
-  { key: 'loopOpener',           label: 'Loop opener',           desc: 'Cliffhanger that forces a DM/reply' },
-  { key: 'concessionMove',       label: 'Concession move',       desc: 'Admit something against your interest' },
-  { key: 'baitAndSwitch',        label: 'Bait & switch',         desc: 'Agree first, then flip the take' },
-  { key: 'forbiddenSpecificity', label: 'Forbidden specificity', desc: 'Name the exact tool/dollar amount/competitor' },
+// Visible (non-legacy) hook options, used by the chip dropdowns.
+const HOOK_VISIBLE = {
+  open:    new Set(['taboo_confession','spicy_claim','contrarian_take','surprising_number','fortune_cookie','inside_baseball']),
+  pull:    new Set(['pain_mirror','curiosity_gap','status_quo','gentle_question']),
+  promise: new Set(['what_to_feel','what_to_do','what_to_think','what_to_unlearn','what_to_measure','what_to_know']),
+};
+
+// AMPLIFIERS — the reference exposes 5 merged levers. We keep our 8 internal
+// ViralPhysics flags (so the rest of the codebase + prompts don't churn) and
+// map each visible lever to a set of backing flags. Toggling a lever flips
+// every flag in its set; "on" = at least one flag in the set is true.
+const AMPLIFIER_GROUPS: Array<{ id: string; label: string; desc: string; keys: Array<keyof ViralPhysics> }> = [
+  { id: 'tribal_voice',          label: 'Tribal voice',          desc: "Speak the in-group's language, signal belonging, define an us-vs-them. (status + insider + tribal, merged)", keys: ['statusCurrency', 'inGroupSignaling', 'tribalFraming'] },
+  { id: 'setup_reversal',        label: 'Setup-reversal',        desc: 'Set up an expectation, then flip it — concede the obvious counter and dismantle it. (concession + bait-switch, merged)', keys: ['concessionMove', 'baitAndSwitch'] },
+  { id: 'fortune_cookie_close',  label: 'Fortune cookie close',  desc: 'End on a quotable, condensed truth.', keys: ['fortuneCookieClose'] },
+  { id: 'loop_opener',           label: 'Loop opener',           desc: 'Open a curiosity loop the post must close.', keys: ['loopOpener'] },
+  { id: 'forbidden_specificity', label: 'Forbidden specificity', desc: 'Use the number, name, or detail others would soften.', keys: ['forbiddenSpecificity'] },
 ];
+
+// CLOSER — option list mirrored from the reference. Old ids are accepted via
+// CLOSER_MIGRATE on load so persisted profiles still work.
 const CLOSERS: Array<{ id: CloserStrategy; label: string; desc: string }> = [
-  { id: 'open_question', label: 'Open question', desc: 'Specific, answerable (not "thoughts?")' },
-  { id: 'punchline',     label: 'Punchline',     desc: 'Quotable one-liner' },
-  { id: 'reverse_cta',   label: 'Reverse CTA',   desc: '"Don\'t X if Y" — counterintuitive' },
-  { id: 'soft_proof',    label: 'Soft proof',    desc: 'Casual mention of a result/number' },
-  { id: 'open_loop',     label: 'Open loop',     desc: 'Tease the next post' },
+  { id: 'open_invitation', label: 'Open invitation', desc: 'A specific, answerable question OR a teased next post (not "thoughts?").' },
+  { id: 'punchline',       label: 'Punchline',       desc: 'Quotable one-liner. Mic-drop.' },
+  { id: 'reverse_cta',     label: 'Reverse CTA',     desc: '"Don\'t X if Y" — counterintuitive.' },
+  { id: 'soft_landing',    label: 'Soft landing',    desc: 'One reflective sentence, no ask. Let it breathe.' },
+  // Legacy ids kept so old profiles render; not shown in the picker by default.
+  { id: 'open_question',   label: 'Open question',   desc: '(legacy → open_invitation)' },
+  { id: 'soft_proof',      label: 'Soft proof',      desc: '(legacy → soft_landing)' },
+  { id: 'open_loop',       label: 'Open loop',       desc: '(legacy → open_invitation)' },
 ];
+const CLOSER_VISIBLE = new Set<CloserStrategy>(['open_invitation', 'punchline', 'reverse_cta', 'soft_landing']);
+// Auto-rewrite legacy closer ids to the new ones at load/render time.
+export const CLOSER_MIGRATE: Partial<Record<CloserStrategy, CloserStrategy>> = {
+  open_question: 'open_invitation',
+  open_loop:     'open_invitation',
+  soft_proof:    'soft_landing'
+};
+// 7 polygon axes shown in the panel. (`vulnerability` and `intimacy` stay on
+// VoiceMix for backward compat with persisted profiles + AI prompts, but they
+// don't appear as vertices on the chart any more — the screenshot's design.)
 const VOICE_DIMENSIONS: Array<{ key: keyof Omit<VoiceMix, 'rhythm'>; label: string; low: string; high: string }> = [
-  { key: 'authority',      label: 'Authority',      low: 'humble student',  high: 'unquestionable expert' },
-  { key: 'energy',         label: 'Energy',         low: 'zen contemplative', high: 'manic urgency' },
-  { key: 'vulnerability',  label: 'Vulnerability',  low: 'guarded armor',    high: 'bare soul' },
-  { key: 'provocation',    label: 'Provocation',    low: 'polite consensus', high: 'controversial heat' },
-  { key: 'specificity',    label: 'Specificity',    low: 'vague poetry',     high: 'numbers & names' },
-  { key: 'intimacy',       label: 'Intimacy',       low: 'corporate distant', high: 'DM to a friend' },
+  { key: 'authority',   label: 'Authority',   low: 'humble student',    high: 'unquestionable expert' },
+  { key: 'energy',      label: 'Energy',      low: 'zen contemplative', high: 'electric urgency' },
+  { key: 'provocation', label: 'Provocation', low: 'agreeable',         high: 'sharp & controversial' },
+  { key: 'specificity', label: 'Specificity', low: 'poetic & vague',    high: 'forensic & numeric' },
+  { key: 'humor',       label: 'Humor',       low: 'serious',           high: 'playfully witty' },
+  { key: 'warmth',      label: 'Warmth',      low: 'clinical',          high: 'hearth-warm' },
+  { key: 'optimism',    label: 'Optimism',    low: 'gritty realist',    high: 'evangelist' },
 ];
+
+// Adjective tag rendered next to each axis. Mirrors the reference Voice Studio
+// 5-tier system: thresholds at 18, 38, 58, 80, 101 → 5 buckets of descriptors.
+// (The same tier text is also injected into the AI calibration prompt so the
+// model's wording targets the right end of each axis.)
+const AXIS_TAGS: Record<keyof Omit<VoiceMix, 'rhythm'>, [number, string][]> = {
+  authority:     [[18,'bare soul'], [38,'vulnerable'], [58,'balanced'],     [80,'confident'],       [101,'authority']],
+  energy:        [[20,'still'],      [40,'calm'],      [65,'balanced'],     [85,'lively'],          [101,'electric']],
+  provocation:   [[20,'agreeable'],  [40,'gentle'],    [65,'balanced'],     [85,'sharp'],           [101,'incendiary']],
+  specificity:   [[20,'abstract'],   [40,'general'],   [65,'concrete'],     [85,'numbers & names'], [101,'forensic']],
+  humor:         [[20,'serious'],    [40,'dry'],       [65,'witty'],        [85,'playful'],         [101,'comedic']],
+  warmth:        [[20,'clinical'],   [40,'neutral'],   [65,'friendly'],     [85,'warm'],            [101,'embracing']],
+  optimism:      [[20,'skeptical'],  [40,'cautious'],  [65,'balanced'],     [85,'hopeful'],         [101,'evangelist']],
+  // Legacy axes — not rendered as polygon vertices, but kept so persisted
+  // profiles + AI prompt schemas stay valid.
+  vulnerability: [[25,'guarded'],    [50,'reserved'],  [75,'open'],         [101,'bare']],
+  intimacy:      [[25,'corporate'],  [50,'formal'],    [75,'familiar'],     [101,'intimate']],
+};
+const axisTag = (key: keyof Omit<VoiceMix, 'rhythm'>, value: number): string => {
+  const tags = AXIS_TAGS[key];
+  if (!tags) return '';
+  for (const [bound, label] of tags) {
+    if (value < bound) return label;
+  }
+  return tags[tags.length - 1][1];
+};
+
+// Per-axis description shown in the section info tooltips (matches the
+// reference's TRAITS desc strings verbatim).
+const AXIS_DESC: Record<keyof Omit<VoiceMix, 'rhythm'>, string> = {
+  authority:     "How sure of yourself you sound. Low = vulnerable & uncertain. High = confident, you're the expert.",
+  energy:        "The pace and intensity. Low = calm & measured. High = electric, urgent, high-octane.",
+  provocation:   "How much you push back. Low = agreeable & safe. High = contrarian, picks fights.",
+  specificity:   "How concrete you get. Low = abstract & general. High = exact names, numbers, details.",
+  humor:         "How playful you are. Low = dead serious. High = jokes, wit, comedic timing.",
+  warmth:        "How you treat the reader. Low = clinical & detached. High = warm, personal, embracing.",
+  optimism:      "Your outlook. Low = skeptical & cynical. High = hopeful, evangelical.",
+  vulnerability: "(legacy) Inverse of authority — high vulnerability ≈ low authority.",
+  intimacy:      "(legacy) Folded into warmth on the polygon."
+};
 
 type OriginType = 'answer' | 'rephrase' | 'build_in_public' | 'fresh';
 
@@ -165,6 +281,8 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
     const [targetPlatforms, setTargetPlatforms] = useState<string[]>(['X', 'LinkedIn']);
     const [format, setFormat] = useState<ContentEngineParams['format']>('single');
     const [ctaType, setCtaType] = useState<ContentEngineParams['cta']>('soft');
+    // Voice picker popover (in the Voice section).
+    const [voicePickerOpen, setVoicePickerOpen] = useState(false);
 
     // ─── Voice profile — read from the shared hook ───
     // All voice/hook/viral/closer/variants/perspective/style live in
@@ -546,7 +664,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                             </div>
                         </Section>
 
-                        {/* Voice summary — linked to Content Parameters view */}
+                        {/* Voice summary — linked to Voice Studio */}
                         <Section
                             title="Voice"
                             subtitle={
@@ -566,13 +684,105 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                 ) : null
                             }
                         >
+                            {/* ── Voice picker ──
+                                Prominent control so users always know which
+                                voice the engine is about to generate with —
+                                and can swap it in one click without leaving
+                                this screen. Lists built-in presets AND saved
+                                voices side by side. Same vp.applySavedProfile
+                                / vp.applyPreset that Voice Studio writes to. */}
+                            {(() => {
+                                const activeName = activePreset
+                                    ? VOICE_PRESETS.find(p => p.id === activePreset)?.name || 'Preset'
+                                    : (vp.aiSuggestionReason?.startsWith('Saved profile · ')
+                                        ? vp.aiSuggestionReason.replace('Saved profile · ', '')
+                                        : 'Custom profile');
+                                const activeEmoji = activePreset
+                                    ? VOICE_PRESETS.find(p => p.id === activePreset)?.emoji || '🎙️'
+                                    : '🎙️';
+                                return (
+                                    <div className="relative mb-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setVoicePickerOpen(o => !o)}
+                                            aria-haspopup="listbox"
+                                            aria-expanded={voicePickerOpen}
+                                            title="Pick which voice the engine generates with."
+                                            className="w-full inline-flex items-center gap-2.5 pl-2.5 pr-3 h-12 rounded-xl bg-white border border-gray-200 hover:border-gray-300 shadow-sm transition-colors text-gray-800"
+                                        >
+                                            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-50 text-violet-600 ring-1 ring-violet-100 flex-shrink-0" aria-hidden="true">
+                                                <Sparkles size={14} />
+                                            </span>
+                                            <span className="flex flex-col items-start leading-tight text-left flex-1 min-w-0">
+                                                <span className="text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">Voice for generation</span>
+                                                <span className="text-[13px] font-bold leading-none mt-0.5 text-gray-900 truncate">{activeEmoji} {activeName}</span>
+                                            </span>
+                                            <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 border border-gray-200">Change</span>
+                                            <span className={`text-[10px] text-gray-400 transition-transform ${voicePickerOpen ? 'rotate-180' : ''}`} aria-hidden="true">▾</span>
+                                        </button>
+                                        {voicePickerOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setVoicePickerOpen(false)} />
+                                                <div className="absolute left-0 right-0 top-full mt-2 z-50 max-h-[60vh] overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl p-4 animate-fade-in">
+                                                    {/* Built-in archetypes */}
+                                                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">Built-in archetypes</div>
+                                                    <div className="grid grid-cols-1 gap-1.5 mb-3">
+                                                        {VOICE_PRESETS.map(p => {
+                                                            const isActive = activePreset === p.id;
+                                                            return (
+                                                                <button
+                                                                    key={p.id}
+                                                                    type="button"
+                                                                    onClick={() => { vp.applyPreset(p.id); setVoicePickerOpen(false); }}
+                                                                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-left border transition-colors ${isActive ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-700 border-gray-200 hover:border-violet-300 hover:bg-violet-50'}`}
+                                                                >
+                                                                    <span className="flex items-center gap-2 min-w-0">
+                                                                        <span>{p.emoji}</span>
+                                                                        <span className="text-[12px] font-bold truncate">{p.name}</span>
+                                                                    </span>
+                                                                    {isActive && <Check size={12} className="text-white flex-shrink-0" />}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    {/* Saved voices */}
+                                                    {vp.library.length > 0 && (
+                                                        <>
+                                                            <div className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2 mt-3">Your saved voices</div>
+                                                            <div className="grid grid-cols-1 gap-1.5">
+                                                                {vp.library.map(s => (
+                                                                    <button
+                                                                        key={s.id}
+                                                                        type="button"
+                                                                        onClick={() => { vp.applySavedProfile(s.id); setVoicePickerOpen(false); }}
+                                                                        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-left bg-white text-gray-700 border border-gray-200 hover:border-violet-300 hover:bg-violet-50 transition-colors"
+                                                                        title={s.note || s.name}
+                                                                    >
+                                                                        <span className="flex items-center gap-2 min-w-0">
+                                                                            <span>🔖</span>
+                                                                            <span className="text-[12px] font-bold truncate">{s.name}</span>
+                                                                        </span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                    <p className="text-[10px] text-gray-400 mt-3 pt-3 border-t border-gray-100 leading-relaxed">
+                                                        Need finer control? <button type="button" onClick={() => { setVoicePickerOpen(false); onOpenParameters && onOpenParameters(); }} className="text-gray-700 underline underline-offset-2 hover:text-gray-900">Open Voice Studio</button> for dials, hooks, perspective, comment defaults.
+                                                    </p>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                             <p className="text-[12px] text-gray-500 leading-relaxed">
                                 Voice mix, hook, viral physics, closer and perspective are managed in{' '}
                                 <button
                                     type="button"
                                     onClick={onOpenParameters}
                                     className="text-gray-900 underline underline-offset-2 hover:text-gray-700 transition-colors"
-                                >Content parameters</button>.
+                                >Voice Studio</button>.
                                 Changes there apply to the next generation automatically.
                             </p>
                         </Section>
@@ -826,20 +1036,20 @@ export const VoiceArchitectureSection: React.FC<{
                 </div>
             )}
 
-            {/* QUICK PRESETS — chips, no eyebrow label */}
+            {/* QUICK PRESETS — chips. Hover any chip to read a sample post
+                written in that voice (the `example` field on each preset). */}
             <div>
                 <div className="flex flex-wrap gap-2">
                     {VOICE_PRESETS.map(p => (
-                        <button key={p.id} type="button" onClick={() => applyPreset(p.id)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${
-                                activePreset === p.id
-                                  ? 'border-gray-900 bg-gray-900 text-white'
-                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
-                            }`}>
-                            <span>{p.emoji}</span> {p.name}
-                        </button>
+                        <PresetChip
+                            key={p.id}
+                            preset={p}
+                            active={activePreset === p.id}
+                            onApply={() => applyPreset(p.id)}
+                        />
                     ))}
                 </div>
+                <p className="text-[11px] text-gray-400 mt-2">Hover any chip to see an example post in that voice.</p>
             </div>
 
             {/* INTERACTIVE POLYGON */}
@@ -847,19 +1057,19 @@ export const VoiceArchitectureSection: React.FC<{
                 <div className="lg:col-span-3 flex flex-col items-center">
                     <InteractivePolygon mix={voiceMix} onChange={(patch) => customizeVoice(patch)} />
                     <p className="text-[11px] text-gray-400 mt-2 text-center">
-                        Drag a vertex to adjust. Click an axis to snap.
+                        Each spoke is a trait (0–100). Drag any dot toward the edge for more, toward the center for less. Click an axis name to snap.
                     </p>
                 </div>
-                <div className="lg:col-span-2 space-y-1.5">
+                <div className="lg:col-span-2 space-y-3">
                     {VOICE_DIMENSIONS.map(dim => (
                         <PolygonValueRow key={dim.key} label={dim.label} value={voiceMix[dim.key]}
-                            low={dim.low} high={dim.high} />
+                            tag={axisTag(dim.key, voiceMix[dim.key])} />
                     ))}
                 </div>
             </div>
 
             {/* Rhythm */}
-            <SubSection title="Rhythm" hint="How sentences move.">
+            <SubSection title="Rhythm" hint="How sentences move." info="Sets the pacing of your writing — from short punchy bursts to long flowing momentum. Affects how every post reads aloud.">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {([
                         { id: 'staccato', label: 'Staccato', desc: 'Short. Bursts.' },
@@ -885,7 +1095,7 @@ export const VoiceArchitectureSection: React.FC<{
                 pieces as an editable English sentence. Each bracketed phrase
                 opens a dropdown chooser on click. Reads like prose, edits
                 like a form. */}
-            <SubSection title="Hook" hint="The first three lines decide everything.">
+            <SubSection title="Hook" hint="The first three lines decide everything." info="The first 3 lines decide whether anyone keeps reading. Build your opener: how it starts, what pulls the reader in, and what it promises. Click each chip to swap it.">
                 <HookSentence hook={hook} onChange={customizeHook} />
             </SubSection>
 
@@ -893,33 +1103,29 @@ export const VoiceArchitectureSection: React.FC<{
                 One bulb per amplifier: bright = active, dim = inactive. Hover
                 for the description. Click to toggle. Replaces the heavy
                 2-col grid of card-style toggles. */}
-            <SubSection title="Amplifiers" hint="Psychological levers — tap a bulb to activate.">
+            <SubSection title="Amplifiers" hint="Persuasion levers — tap a bulb to activate." info="Optional techniques layered into every post — tribal language, setup-and-reversal, curiosity loops, etc. Tap a bulb to turn one on. Use sparingly: 1–3 is plenty.">
                 <AmplifierBulbs viral={viral} toggle={toggleViral} />
             </SubSection>
 
             {/* Closer */}
-            <SubSection title="Closer" hint="How the post lands.">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                    {CLOSERS.map(c => (
-                        <button key={c.id} type="button" onClick={() => setCloser(c.id)}
-                            className={`p-2.5 rounded-xl text-left text-xs border transition-all ${
-                                closer === c.id
-                                  ? 'bg-gray-900 text-white border-gray-900'
-                                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                            }`}>
-                            <div className="font-medium">{c.label}</div>
-                            <div className={`text-[10px] mt-0.5 ${closer === c.id ? 'text-white/60' : 'text-gray-400'}`}>{c.desc}</div>
-                        </button>
-                    ))}
-                </div>
-            </SubSection>
-
-            {/* Variants */}
-            <SubSection title="Variants per platform" hint={`${variants} angle${variants > 1 ? 's' : ''} — same voice, different attack.`}>
-                <div className="flex items-center gap-4">
-                    <input type="range" min={1} max={5} value={variants} onChange={e => setVariants(parseInt(e.target.value))}
-                        className="flex-1 accent-gray-900" />
-                    <span className="text-xl font-medium text-gray-900 w-8 text-right">{variants}</span>
+            <SubSection title="Closer" hint="How the post lands." info="The last line is what people remember and act on. Pick a landing: an open question, a quotable punchline, a counterintuitive CTA, or a quiet reflective close.">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {CLOSERS.filter(c => CLOSER_VISIBLE.has(c.id)).map(c => {
+                        // Treat a legacy persisted closer as its migrated equivalent for the active highlight.
+                        const effective = (CLOSER_MIGRATE[closer] || closer) as CloserStrategy;
+                        const selected = effective === c.id;
+                        return (
+                            <button key={c.id} type="button" onClick={() => setCloser(c.id)}
+                                className={`p-2.5 rounded-xl text-left text-xs border transition-all ${
+                                    selected
+                                      ? 'bg-gray-900 text-white border-gray-900'
+                                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                                }`}>
+                                <div className="font-medium">{c.label}</div>
+                                <div className={`text-[10px] mt-0.5 ${selected ? 'text-white/60' : 'text-gray-400'}`}>{c.desc}</div>
+                            </button>
+                        );
+                    })}
                 </div>
             </SubSection>
 
@@ -927,12 +1133,70 @@ export const VoiceArchitectureSection: React.FC<{
                 Renders all four perspective fields as a single prose paragraph
                 with click-to-edit inline blanks. Feels like a character sheet
                 you read, not 4 generic textareas to fill. */}
-            <SubSection title="Perspective" hint="Reads like prose — click any blank to edit. Saved automatically.">
+            <SubSection title="Perspective" hint="Reads like prose — click any blank to edit. Saved automatically." info="The lens behind the voice: your identity, the thing people get wrong, your proof/receipts, and what you'd never say. The AI writes from this point of view. Click any blank to fill it.">
                 <PerspectiveParagraph perspective={perspective} setPerspective={setPerspective} />
+            </SubSection>
+
+            {/* Variants — last, since it's a generation-time knob rather than a
+                voice trait. Mirrors the reference's "Voice → then Generate" flow. */}
+            <SubSection title="Variants per platform" hint={`${variants} angle${variants > 1 ? 's' : ''} — same voice, different attack.`} info="How many different versions of each post the engine generates so you can pick the best one. Same voice, different angles.">
+                <div className="flex items-center gap-4">
+                    <input type="range" min={1} max={5} value={variants} onChange={e => setVariants(parseInt(e.target.value))}
+                        className="flex-1 accent-gray-900" />
+                    <span className="text-xl font-medium text-gray-900 w-8 text-right">{variants}</span>
+                </div>
             </SubSection>
         </div>
     </Section>
 );
+
+// ────────────────────────────────────────────────────────────────────
+// PRESET CHIP — voice preset chip with a rich hover tooltip showing a
+// sample post in that voice. The tooltip is a positioned div (not the
+// native `title`) so we can render multi-line whitespace, the tagline,
+// and a "Click to apply" hint with proper styling.
+// ────────────────────────────────────────────────────────────────────
+const PresetChip: React.FC<{
+    preset: { id: string; name: string; emoji: string; tagline: string; example: string };
+    active: boolean;
+    onApply: () => void;
+}> = ({ preset, active, onApply }) => {
+    const [hover, setHover] = React.useState(false);
+    return (
+        <span
+            className="relative inline-block"
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+        >
+            <button
+                type="button"
+                onClick={onApply}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${
+                    active
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+                }`}
+            >
+                <span>{preset.emoji}</span> {preset.name}
+            </button>
+            {hover && (
+                <div
+                    role="tooltip"
+                    className="absolute left-0 top-full mt-2 z-40 w-80 max-w-[20rem] p-3 bg-gray-900 text-white rounded-xl shadow-2xl pointer-events-none animate-fade-in"
+                >
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-amber-300 mb-1.5">
+                        <span>{preset.emoji}</span> Example in this voice
+                    </div>
+                    <p className="text-[11px] text-white/60 mb-2 italic">{preset.tagline}</p>
+                    <pre className="text-[12px] text-white/90 whitespace-pre-wrap leading-relaxed font-sans">{preset.example}</pre>
+                    <div className="mt-2 pt-2 border-t border-white/10 text-[10px] uppercase tracking-widest text-white/40">
+                        Click chip to apply
+                    </div>
+                </div>
+            )}
+        </span>
+    );
+};
 
 // ────────────────────────────────────────────────────────────────────
 // HOOK SENTENCE — the Hook section as an editable English sentence.
@@ -954,21 +1218,21 @@ const HookSentence: React.FC<{
                 <span>Open with a</span>
                 <HookPill
                     label={patternLabel}
-                    options={PATTERN_INTERRUPTS.map(o => ({ id: o.id, label: o.label, hint: o.example }))}
+                    options={PATTERN_INTERRUPTS.filter(o => HOOK_VISIBLE.open.has(o.id)).map(o => ({ id: o.id, label: o.label, hint: o.example }))}
                     value={hook.patternInterrupt}
                     onSelect={(v) => onChange({ patternInterrupt: v as HookArchitecture['patternInterrupt'] })}
                 />
                 <span>, pull readers in by</span>
                 <HookPill
                     label={tensionLabel.toLowerCase()}
-                    options={TENSION_MECHANISMS.map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
+                    options={TENSION_MECHANISMS.filter(o => HOOK_VISIBLE.pull.has(o.id)).map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
                     value={hook.tensionMechanism}
                     onSelect={(v) => onChange({ tensionMechanism: v as HookArchitecture['tensionMechanism'] })}
                 />
                 <span>, and promise them</span>
                 <HookPill
                     label={payoffLabel.toLowerCase()}
-                    options={PROMISE_PAYOFFS.map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
+                    options={PROMISE_PAYOFFS.filter(o => HOOK_VISIBLE.promise.has(o.id)).map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
                     value={hook.promisePayoff}
                     onSelect={(v) => onChange({ promisePayoff: v as HookArchitecture['promisePayoff'] })}
                 />
@@ -1037,28 +1301,41 @@ const HookPill: React.FC<{
 };
 
 // ────────────────────────────────────────────────────────────────────
-// AMPLIFIER BULBS — 8 amplifiers rendered as illuminated lightbulbs.
-// On = saturated amber + halo; off = dim grey. Tooltip on hover.
+// AMPLIFIER BULBS — 5 merged levers (reference Voice Studio set), each
+// backed by 1–3 underlying ViralPhysics flags so prompts / generators
+// elsewhere in the codebase keep working unchanged. Toggling a lever
+// flips every backing flag; a lever shows "on" when ANY backing flag is on.
 // ────────────────────────────────────────────────────────────────────
 const AmplifierBulbs: React.FC<{
     viral: ViralPhysics;
     toggle: (key: keyof ViralPhysics) => void;
 }> = ({ viral, toggle }) => {
-    const activeCount = VIRAL_TOGGLES.filter(t => viral[t.key]).length;
+    const isGroupOn = (g: typeof AMPLIFIER_GROUPS[number]) => g.keys.some(k => viral[k]);
+    const handleGroupClick = (g: typeof AMPLIFIER_GROUPS[number]) => {
+        const currentlyOn = isGroupOn(g);
+        // Flip ALL backing flags to the desired state. We toggle each key whose
+        // current state doesn't already match the target, so the consumer's
+        // toggle() always sees a real change per flag.
+        for (const k of g.keys) {
+            const has = !!viral[k];
+            if (currentlyOn && has) toggle(k);
+            else if (!currentlyOn && !has) toggle(k);
+        }
+    };
+    const activeCount = AMPLIFIER_GROUPS.filter(isGroupOn).length;
     return (
         <div className="space-y-3">
             <div className="flex flex-wrap gap-3 p-5 bg-gradient-to-b from-gray-50 to-white border border-gray-200 rounded-2xl">
-                {VIRAL_TOGGLES.map(t => {
-                    const on = viral[t.key];
+                {AMPLIFIER_GROUPS.map(g => {
+                    const on = isGroupOn(g);
                     return (
                         <button
-                            key={t.key}
+                            key={g.id}
                             type="button"
-                            onClick={() => toggle(t.key)}
-                            title={`${t.label} — ${t.desc}`}
-                            className="group flex flex-col items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/60 transition-colors min-w-[88px]"
+                            onClick={() => handleGroupClick(g)}
+                            title={`${g.label} — ${g.desc}`}
+                            className="group flex flex-col items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/60 transition-colors min-w-[110px]"
                         >
-                            {/* The bulb */}
                             <div className="relative w-10 h-10 flex items-center justify-center">
                                 {on && (
                                     <span className="absolute inset-0 rounded-full bg-amber-300/60 blur-md animate-pulse"></span>
@@ -1071,17 +1348,15 @@ const AmplifierBulbs: React.FC<{
                                     <Zap size={14} className={on ? 'text-amber-900' : 'text-gray-400'} fill={on ? 'currentColor' : 'none'} />
                                 </div>
                             </div>
-                            <span className={`text-[10px] font-bold leading-tight text-center max-w-[88px] ${on ? 'text-gray-900' : 'text-gray-400'}`}>
-                                {t.label}
+                            <span className={`text-[10px] font-bold leading-tight text-center max-w-[110px] ${on ? 'text-gray-900' : 'text-gray-400'}`}>
+                                {g.label}
                             </span>
                         </button>
                     );
                 })}
             </div>
             <p className="text-[11px] text-gray-400">
-                {activeCount === 0
-                    ? 'No amplifiers active — output will lean neutral.'
-                    : `${activeCount} amplifier${activeCount > 1 ? 's' : ''} on — hover any bulb to read what it does.`}
+                <b>{activeCount}</b> amplifier{activeCount === 1 ? '' : 's'} on — hover any bulb to read what it does. Use sparingly: 1–3 is plenty.
             </p>
         </div>
     );
@@ -1392,15 +1667,22 @@ const InteractivePolygon: React.FC<{ mix: VoiceMix; onChange: (patch: Partial<Vo
 };
 
 // Live values panel next to polygon — minimal row, no box
-const PolygonValueRow: React.FC<{ label: string; value: number; low: string; high: string }> = ({ label, value, low, high }) => {
-    const descriptor = value < 25 ? low : value > 75 ? high : 'balanced';
+// Mirrors the screenshot mock: label, adjective pill, a filled bar, numeric value.
+const PolygonValueRow: React.FC<{ label: string; value: number; tag: string }> = ({ label, value, tag }) => {
+    const pct = Math.max(0, Math.min(100, value));
     return (
-        <div className="flex items-center justify-between gap-2 py-1 border-b border-gray-100 last:border-b-0">
-            <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs font-medium text-gray-900">{label}</span>
-                <span className="text-[10px] text-gray-400 truncate">{descriptor}</span>
+        <div className="flex items-center gap-3 py-1">
+            <div className="flex items-center gap-2 w-32 flex-shrink-0">
+                <span className="text-sm font-semibold text-gray-900">{label}</span>
+                <span className="px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-600 text-[10px] font-medium">{tag}</span>
             </div>
-            <span className="text-xs font-mono text-gray-700 flex-shrink-0">{value}</span>
+            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                    className="h-full bg-gray-900 rounded-full transition-all"
+                    style={{ width: `${pct}%` }}
+                />
+            </div>
+            <span className="w-8 text-right text-sm font-semibold text-gray-700 tabular-nums">{value}</span>
         </div>
     );
 };

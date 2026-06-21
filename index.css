@@ -1,4 +1,4 @@
-/* LaunchVelocity Styles */
+/* Viraholic Styles */
 :root {
   --brand-primary: #3b82f6;
   --brand-secondary: #6366f1;
@@ -6,6 +6,20 @@
   --obsidian-base: #ffffff;
   --obsidian-glass: rgba(255, 255, 255, 0.7);
   --obsidian-border: rgba(0, 0, 0, 0.08);
+}
+
+/* The app is mounted under DaisyUI's `business` theme, which is a DARK theme
+   and sets `color-scheme: dark`. That made bare <input>/<select>/<textarea>
+   (the ones without an explicit bg + text colour, e.g. the Account Finder
+   "Add an account" field) render with a dark UA background while their text
+   inherited the dark body colour — i.e. black-on-black. Force a light colour
+   scheme app-wide and give unstyled fields sane light defaults. */
+:root { color-scheme: light; }
+input, select, textarea { color-scheme: light; }
+input:not([class*="bg-"]):not([type="checkbox"]):not([type="radio"]),
+textarea:not([class*="bg-"]) {
+  background-color: #ffffff;
+  color: #1e293b;
 }
 
 body {

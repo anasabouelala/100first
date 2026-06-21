@@ -7,7 +7,7 @@ import { GitHubPulse } from '../types';
 export const fetchRepoPulse = async (owner: string, repo: string, token?: string, since?: string, until?: string): Promise<GitHubPulse> => {
     const headers: HeadersInit = {
         'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'LaunchVelocity-App'
+        'User-Agent': 'Viraholic-App'
     };
     if (token) {
         headers['Authorization'] = `token ${token}`;

@@ -1,5 +1,5 @@
 /**
- * Answerly Lead Intelligence Engine v5.0
+ * Viraholic Lead Intelligence Engine v5.0
  * ULTIMATE 18-LAYER DETERMINISTIC PIPELINE
  * 
  * Transforms noisy social data into ranked buying opportunities

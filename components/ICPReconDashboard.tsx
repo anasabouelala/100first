@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
     ArrowLeft, ArrowUpRight, Loader2, Play, Clock, CheckCircle2, 
     AlertCircle, Search, Zap, Flame, TrendingUp, Users, Target,
-    BarChart2, RefreshCw, ExternalLink, Trash2
+    BarChart2, RefreshCw, ExternalLink, Trash2, Sparkles
 } from 'lucide-react';
 import { ICPReconCampaign, ICPTrackingKeyword } from '../types';
+import { filterProfilesWithAI } from '../services/geminiService';
 
 interface KeywordStat {
     query: string;
@@ -58,6 +59,7 @@ export const ICPReconDashboard: React.FC<ICPReconDashboardProps> = ({ campaign, 
     const [kwStats, setKwStats] = useState<Record<string, KeywordStat>>({});
     const [queueLen, setQueueLen] = useState(0);
     const [activeTab, setActiveTab] = useState<'keywords' | 'prospects'>('keywords');
+    const [isAIAuditing, setIsAIAuditing] = useState(false);
 
     useEffect(() => {
         const fetchAll = () => {
@@ -105,6 +107,55 @@ export const ICPReconDashboard: React.FC<ICPReconDashboardProps> = ({ campaign, 
     const done = keywordRows.filter(r => r.status === 'done').length;
     const queuedCount = keywordRows.filter(r => r.status === 'queued').length;
     const progress = queries.length > 0 ? Math.round((done / queries.length) * 100) : 0;
+
+    const handleAILeadAudit = async () => {
+        if (prospects.length === 0) return;
+        setIsAIAuditing(true);
+        try {
+            const { validProfiles } = await filterProfilesWithAI(prospects, campaign);
+            
+            // Map results back to prospects
+            setProspects(prev => prev.map(p => {
+                // Find match by handle or URL
+                const audit = validProfiles.find(v => v.handle === p.handle || v.url === p.url || v.handle === p.url?.split('/').pop());
+                if (audit) {
+                    return {
+                        ...p,
+                        aiValidated: true,
+                        relevance: audit.relevanceScore,
+                        aiReasoning: audit.reasoning,
+                        isTarget: audit.isTarget
+                    };
+                }
+                return p;
+            }).sort((a, b) => (b.relevance || 0) - (a.relevance || 0)));
+
+            // Update chrome storage as well so it persists
+            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                chrome.storage.local.get(['pipeline_leads'], (res) => {
+                    const allLeads: any[] = res.pipeline_leads || [];
+                    const updatedAll = allLeads.map(l => {
+                        const match = validProfiles.find(v => v.handle === l.handle || v.url === l.url);
+                        if (match) {
+                            return {
+                                ...l,
+                                aiValidated: true,
+                                relevance: match.relevanceScore,
+                                aiReasoning: match.reasoning,
+                                isTarget: match.isTarget
+                            };
+                        }
+                        return l;
+                    });
+                    chrome.storage.local.set({ pipeline_leads: updatedAll });
+                });
+            }
+        } catch (e) {
+            console.error("AI Lead Audit failed", e);
+        } finally {
+            setIsAIAuditing(false);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-[#f5f5f7] text-slate-900 font-sans">
@@ -202,13 +253,26 @@ export const ICPReconDashboard: React.FC<ICPReconDashboardProps> = ({ campaign, 
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 w-fit">
-                    {(['keywords', 'prospects'] as const).map(tab => (
-                        <button key={tab} onClick={() => setActiveTab(tab)}
-                            className={`px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'}`}>
-                            {tab === 'keywords' ? `Keywords (${queries.length})` : `Prospects (${prospects.length})`}
+                <div className="flex items-center justify-between">
+                    <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 w-fit">
+                        {(['keywords', 'prospects'] as const).map(tab => (
+                            <button key={tab} onClick={() => setActiveTab(tab)}
+                                className={`px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'}`}>
+                                {tab === 'keywords' ? `Keywords (${queries.length})` : `Prospects (${prospects.length})`}
+                            </button>
+                        ))}
+                    </div>
+
+                    {activeTab === 'prospects' && prospects.length > 0 && (
+                        <button 
+                            onClick={handleAILeadAudit}
+                            disabled={isAIAuditing}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+                        >
+                            {isAIAuditing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                            {isAIAuditing ? 'Auditing Leads...' : 'AI Verify & Score Leads'}
                         </button>
-                    ))}
+                    )}
                 </div>
 
                 {activeTab === 'keywords' ? (
@@ -292,7 +356,15 @@ export const ICPReconDashboard: React.FC<ICPReconDashboardProps> = ({ campaign, 
                                                 {p.interactionType === 'Comment' ? '💬 Comment' : '📣 Post'}
                                             </span>
                                         </div>
-                                        <p className="text-[11px] text-slate-500 font-medium mt-1 line-clamp-2">{p.postText || p.why}</p>
+                                        {p.aiReasoning ? (
+                                            <div className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                                                <p className="text-[10px] text-indigo-700 font-bold leading-relaxed italic">
+                                                    “{p.aiReasoning}”
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-[11px] text-slate-500 font-medium mt-1 line-clamp-2">{p.postText || p.why}</p>
+                                        )}
                                         {p.tags?.[0] && <p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest mt-1">Keyword: {p.tags[0]}</p>}
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">

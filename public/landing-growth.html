@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Viraholic — While everyone spams cold DMs, you live in their head. 10× growth on LinkedIn &amp; X.</title>
+<meta name="description" content="The autonomous growth agent for LinkedIn and X. It finds the posts your ideal customers are about to engage with and drafts a sharp reply in your voice. You approve in one tap and become the name they think of first." />
+<meta property="og:title" content="While everyone spams cold DMs, you live in their head." />
+<meta property="og:description" content="The agent finds the right discussions, drafts the right content in your voice, and helps you ship the volume that compounds into 10× growth on LinkedIn and X." />
+<meta name="theme-color" content="#181818" />
+
+<!-- Exact superx.so type system: Inter (body + headings) + Instrument Serif (italic accents) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+    darkMode: 'class',
+    theme: {
+        extend: {
+            fontFamily: {
+                sans: ['Inter', 'sans-serif'],
+                serif: ['"Instrument Serif"', 'serif'],
+            },
+            animation: {
+                'fade-up': 'fadeUp 0.7s cubic-bezier(0.16,1,0.3,1) forwards',
+                'ping-slow': 'ping 2.4s cubic-bezier(0,0,0.2,1) infinite',
+                'aurora': 'aurora 18s ease-in-out infinite',
+                'aurora-slow': 'aurora 26s ease-in-out infinite',
+            },
+            keyframes: {
+                fadeUp: { '0%': { opacity: '0', transform: 'translateY(14px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                aurora: {
+                    '0%, 100%': { transform: 'translate3d(0,0,0) scale(1)' },
+                    '33%': { transform: 'translate3d(4%,-6%,0) scale(1.12)' },
+                    '66%': { transform: 'translate3d(-5%,4%,0) scale(0.94)' },
+                },
+            }
+        }
+    }
+}
+</script>
+<style>
+    /* ── Exact superx.so tokens (read from their CSS bundle) ── */
+    :root {
+        --bg:#181818;             /* body background */
+        --surface:#1c1c1c;        /* card base */
+        --surface-2:#222222;      /* raised */
+        --border:#2a2a2a;
+        --border-strong:#3f3f3f;
+        --text:#e2e2e2;           /* body text */
+        --muted:#a8a29e;          /* stone-400 */
+        --orange:#e05c2a;
+        --orange-light:#fc8a65;
+        --gold:#ffc35b;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+        font-family: 'Inter', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background-color: var(--bg);
+        color: var(--text);
+    }
+    h1, h2, h3, h4 { font-family: 'Inter', sans-serif; letter-spacing: -0.02em; color: #fff; }
+
+    :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 8px; }
+
+    /* Instrument Serif italic accent — the signature superx headline treatment */
+    .accent {
+        font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400;
+        letter-spacing: 0; font-size: 1.08em;
+        background: linear-gradient(100deg, #ffd089 0%, #fc8a65 55%, #e05c2a 100%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .grad-text {
+        background: linear-gradient(120deg, #ffc35b 0%, #fc8a65 55%, #e05c2a 100%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+
+    .hl { background: linear-gradient(180deg, transparent 58%, rgba(255,195,91,0.40) 58%); padding: 0 .08em; }
+    .hl-amber { background: linear-gradient(180deg, transparent 58%, rgba(252,138,101,0.40) 58%); padding: 0 .08em; }
+
+    .dot-bg { background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px); background-size: 22px 22px; }
+    .grid-bg {
+        background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+        background-size: 40px 40px;
+    }
+    .count { font-variant-numeric: tabular-nums; }
+
+    .aurora-blob { position: absolute; border-radius: 9999px; filter: blur(80px); pointer-events: none; }
+
+    .card {
+        background: linear-gradient(180deg, #222 0%, #191919 100%);
+        border: 1px solid var(--border);
+        transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease, background .25s ease;
+    }
+    .card:hover { border-color: var(--border-strong); box-shadow: 0 0 0 1px rgba(255,195,91,0.12), 0 24px 60px -30px rgba(224,92,42,0.45); }
+
+    .glass {
+        background: rgba(28,28,28,0.62); border: 1px solid var(--border);
+        backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+    }
+
+    .grad-border { position: relative; background: rgba(224,92,42,0.06); border: 1px solid transparent; }
+    .grad-border::before {
+        content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+        background: linear-gradient(140deg, #ffc35b, #e05c2a);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+    }
+
+    .chip { background: #222; border: 1px solid #2f2f2f; }
+
+    .btn-primary {
+        background: linear-gradient(180deg, #fc8a65 0%, #e05c2a 100%); color: #fff;
+        box-shadow: 0 10px 30px -10px rgba(224,92,42,0.6), inset 0 1px 0 rgba(255,255,255,0.18);
+        transition: box-shadow .2s ease, transform .2s ease, filter .2s ease;
+    }
+    .btn-primary:hover { box-shadow: 0 16px 44px -10px rgba(224,92,42,0.75), inset 0 1px 0 rgba(255,255,255,0.22); filter: brightness(1.05); }
+    .btn-primary:active { transform: scale(0.985); }
+
+    .btn-secondary {
+        background: #1c1c1c; border: 1px solid var(--border); color: var(--text);
+        transition: border-color .2s ease, background .2s ease, transform .2s ease;
+    }
+    .btn-secondary:hover { border-color: var(--border-strong); background: #232323; }
+    .btn-secondary:active { transform: scale(0.985); }
+
+    .gold-glow { box-shadow: 0 0 8px rgba(255,195,91,0.4); }
+
+    .reveal { opacity: 0; transform: translateY(16px); transition: opacity .8s ease-out, transform .8s ease-out; }
+    .reveal.in { opacity: 1; transform: translateY(0); }
+    @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .reveal { opacity: 1; transform: none; transition: none; }
+        .animate-fade-up, .animate-ping-slow, .animate-aurora, .animate-aurora-slow { animation: none !important; }
+        *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+    }
+</style>
+<style>
+/* ===== Light "liquid-glass" recolour — matches the white/indigo dashboard.
+        Page chrome + content flip light; product-UI mockups stay as cohesive
+        dark "preview" insets (internals re-asserted readable). No HTML changed. ===== */
+body { color:#334155 !important; background-color:#eef2f7 !important;
+  background-image:
+    radial-gradient(60rem 60rem at 12% -8%, rgba(99,102,241,0.20), transparent 60%),
+    radial-gradient(50rem 50rem at 110% 10%, rgba(13,148,136,0.16), transparent 55%),
+    radial-gradient(48rem 48rem at 85% 110%, rgba(225,29,72,0.12), transparent 55%),
+    linear-gradient(180deg,#f3f5fb 0%,#e9edf6 100%) !important; }
+h1,h2,h3,h4 { color:#0f172a !important; }
+:focus-visible { outline-color:#4f46e5 !important; }
+::selection { background:rgba(99,102,241,0.25) !important; color:#0f172a !important; }
+
+.accent { background:linear-gradient(100deg,#3b82f6,#6366f1 55%,#4f46e5) !important; -webkit-background-clip:text !important; background-clip:text !important; color:transparent !important; }
+.grad-text { background:linear-gradient(120deg,#6366f1,#3b82f6 55%,#4f46e5) !important; -webkit-background-clip:text !important; background-clip:text !important; color:transparent !important; }
+.card { background:rgba(255,255,255,0.72) !important; border:1px solid rgba(255,255,255,0.6) !important; box-shadow:0 8px 32px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.6) !important; backdrop-filter:blur(18px) saturate(160%); -webkit-backdrop-filter:blur(18px) saturate(160%); }
+.card:hover { border-color:rgba(99,102,241,0.45) !important; box-shadow:0 0 0 1px rgba(99,102,241,0.12), 0 24px 60px -30px rgba(79,70,229,0.40) !important; }
+.glass { background:rgba(255,255,255,0.70) !important; border:1px solid rgba(255,255,255,0.6) !important; }
+.grad-border { background:rgba(99,102,241,0.06) !important; }
+.grad-border::before { background:linear-gradient(140deg,#6366f1,#3b82f6) !important; }
+.chip { background:rgba(255,255,255,0.7) !important; border:1px solid rgba(15,23,42,0.10) !important; }
+.btn-primary { background:linear-gradient(180deg,#6366f1,#3b82f6) !important; color:#fff !important; box-shadow:0 10px 30px -10px rgba(79,70,229,0.5), inset 0 1px 0 rgba(255,255,255,0.25) !important; }
+.btn-primary * { color:#fff !important; }
+/* darker (not brighter) hover for the primary CTAs */
+.btn-primary:hover { background:linear-gradient(180deg,#4f46e5,#2563eb) !important; filter:none !important; box-shadow:0 16px 44px -10px rgba(79,70,229,0.7), inset 0 1px 0 rgba(255,255,255,0.25) !important; }
+.btn-secondary { background:rgba(255,255,255,0.7) !important; border:1px solid rgba(15,23,42,0.12) !important; color:#334155 !important; }
+.btn-secondary:hover { background:rgba(255,255,255,0.95) !important; border-color:rgba(79,70,229,0.4) !important; }
+
+/* ── Auth modal lives on a white card; the global .text-white→dark rule was
+      making the dark "Sign in" submit button render dark-text-on-dark
+      (invisible). Re-assert white text inside the modal and give the submit
+      an on-brand indigo with a clear darker hover. ── */
+#auth-modal .text-white { color:#fff !important; }
+#auth-modal [data-auth-submit] { background-color:#4f46e5 !important; color:#fff !important; }
+#auth-modal [data-auth-submit]:hover:not(:disabled) { background-color:#3730a3 !important; }
+#auth-modal [data-auth-submit] * { color:#fff !important; }
+/* nav "Sign in" — keep it readable with a soft hover surface */
+nav [data-auth="signin"]:hover { background-color:rgba(15,23,42,0.05) !important; color:#0f172a !important; }
+.gold-glow { box-shadow:0 0 10px rgba(99,102,241,0.4) !important; }
+.grid-bg { background-image:linear-gradient(rgba(15,23,42,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(15,23,42,0.05) 1px,transparent 1px) !important; }
+.dot-bg { background-image:radial-gradient(rgba(15,23,42,0.07) 1px,transparent 1px) !important; }
+.hl { background:linear-gradient(180deg,transparent 58%,rgba(99,102,241,0.30) 58%) !important; }
+
+.text-white { color:#0f172a !important; }
+.hover\:text-white:hover { color:#0f172a !important; }
+.text-stone-100 { color:#1e293b !important; }
+.text-stone-200 { color:#334155 !important; }
+.text-stone-300 { color:#475569 !important; }
+.text-stone-400 { color:#64748b !important; }
+.text-stone-500 { color:#94a3b8 !important; }
+.text-stone-600 { color:#94a3b8 !important; }
+.text-amber-300, [class*="text-amber-300"] { color:#4f46e5 !important; }
+.text-amber-200 { color:#4338ca !important; }
+.text-amber-400 { color:#b45309 !important; }
+.text-emerald-300, .text-emerald-200, .text-emerald-400 { color:#047857 !important; }
+.text-rose-300, .text-rose-200, .text-rose-400 { color:#be123c !important; }
+.text-orange-300, .text-orange-400 { color:#c2410c !important; }
+.text-sky-300, .text-sky-400 { color:#0369a1 !important; }
+
+[style*="background"][style*="#fc8a65"] { background:linear-gradient(180deg,#6366f1,#3b82f6) !important; }
+[style*="background"][style*="#fc8a65"], [style*="background"][style*="#fc8a65"] * { color:#fff !important; }
+[style*="color:#ffc35b"] { color:#4f46e5 !important; }
+[style*="color:#fc8a65"] { color:#3b82f6 !important; }
+[style*="color:#e05c2a"] { color:#6366f1 !important; }
+:not(.aurora-blob)[style*="255,195,91"] { background:rgba(99,102,241,0.08) !important; border-color:rgba(99,102,241,0.25) !important; }
+.aurora-blob[style*="224,92,42"]   { background:radial-gradient(circle at center,rgba(99,102,241,0.20),transparent 70%) !important; }
+.aurora-blob[style*="255,195,91"]  { background:radial-gradient(circle at center,rgba(13,148,136,0.16),transparent 70%) !important; }
+.aurora-blob[style*="252,138,101"] { background:radial-gradient(circle at center,rgba(225,29,72,0.12),transparent 70%) !important; }
+
+/* chart bars / accents → indigo for coherence */
+.bg-orange-500 { background-color:#6366f1 !important; }
+.bg-orange-600 { background-color:#4f46e5 !important; }
+.bg-amber-300, [class*="bg-amber-400"] { background-color:#818cf8 !important; }
+
+/* page borders → light */
+.border-\[\#222\], .border-\[\#2a2a2a\], .border-\[\#2f2f2f\], .border-\[\#3a3a3a\] { border-color:rgba(15,23,42,0.10) !important; }
+.bg-\[\#181818\]\/75 { background-color:rgba(255,255,255,0.78) !important; }
+.bg-\[\#181818\] { background-color:transparent !important; }
+.bg-\[\#222\] { background-color:rgba(15,23,42,0.05) !important; }
+
+/* ── Product-UI mockups & stat insets → render as LIGHT glass panels so the
+      "screens from the app" match the rest of the (light) page. Scoped to the
+      dark-token containers so real page chrome is untouched. ── */
+[class*="bg-[#141414]"] { background-color:rgba(255,255,255,0.78) !important; border-color:rgba(15,23,42,0.10) !important; box-shadow:0 8px 32px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.7) !important; backdrop-filter:blur(14px) saturate(150%); -webkit-backdrop-filter:blur(14px) saturate(150%); }
+[class*="bg-[#1c1c1c]"] { background-color:#ffffff !important; border-color:rgba(15,23,42,0.10) !important; }
+/* the 1px gap colour that draws the proof-bar dividers */
+.bg-\[\#2a2a2a\] { background-color:rgba(15,23,42,0.08) !important; }
+
+/* text → dark, scoped inside the insets */
+[class*="bg-[#141414]"] .text-white, [class*="bg-[#1c1c1c]"] .text-white { color:#0f172a !important; }
+[class*="bg-[#141414]"] .text-white\/70, [class*="bg-[#1c1c1c]"] .text-white\/70,
+[class*="bg-[#141414]"] .text-white\/60, [class*="bg-[#1c1c1c]"] .text-white\/60 { color:#64748b !important; }
+[class*="bg-[#141414]"] .text-white\/50, [class*="bg-[#141414]"] .text-white\/40 { color:#94a3b8 !important; }
+[class*="bg-[#141414]"] .text-stone-100, [class*="bg-[#1c1c1c]"] .text-stone-100,
+[class*="bg-[#141414]"] .text-stone-200, [class*="bg-[#1c1c1c]"] .text-stone-200,
+[class*="bg-[#141414]"] .text-stone-300, [class*="bg-[#1c1c1c]"] .text-stone-300 { color:#334155 !important; }
+[class*="bg-[#141414]"] .text-stone-400, [class*="bg-[#1c1c1c]"] .text-stone-400,
+[class*="bg-[#141414]"] .text-stone-500, [class*="bg-[#1c1c1c]"] .text-stone-500 { color:#64748b !important; }
+[class*="bg-[#141414]"] .text-gray-200, [class*="bg-[#1c1c1c]"] .text-gray-200 { color:#475569 !important; }
+
+/* white-alpha fills/borders → slate-on-light */
+[class*="bg-[#141414]"] .bg-white\/10, [class*="bg-[#1c1c1c]"] .bg-white\/10,
+[class*="bg-[#141414]"] .bg-white\/5,  [class*="bg-[#1c1c1c]"] .bg-white\/5,
+[class*="bg-[#141414]"] .bg-white\/\[0\.06\], [class*="bg-[#1c1c1c]"] .bg-white\/\[0\.06\] { background-color:rgba(15,23,42,0.04) !important; }
+[class*="bg-[#141414]"] .border-white\/10, [class*="bg-[#1c1c1c]"] .border-white\/10,
+[class*="bg-[#141414]"] .border-white\/15, [class*="bg-[#1c1c1c]"] .border-white\/15,
+[class*="bg-[#141414]"] .border-white\/20, [class*="bg-[#1c1c1c]"] .border-white\/20 { border-color:rgba(15,23,42,0.10) !important; }
+[class*="bg-[#141414]"] .hover\:bg-white\/5:hover, [class*="bg-[#1c1c1c]"] .hover\:bg-white\/5:hover { background-color:rgba(15,23,42,0.05) !important; }
+
+/* dark token borders inside insets → light */
+[class*="bg-[#141414]"] [class*="border-[#"], [class*="bg-[#1c1c1c]"] [class*="border-[#"] { border-color:rgba(15,23,42,0.10) !important; }
+
+/* coloured accent text → darker, readable on white */
+[class*="bg-[#141414]"] .text-emerald-200, [class*="bg-[#1c1c1c]"] .text-emerald-200,
+[class*="bg-[#141414]"] .text-emerald-300, [class*="bg-[#1c1c1c]"] .text-emerald-300,
+[class*="bg-[#141414]"] .text-emerald-400, [class*="bg-[#1c1c1c]"] .text-emerald-400 { color:#047857 !important; }
+[class*="bg-[#141414]"] .text-rose-200, [class*="bg-[#1c1c1c]"] .text-rose-200,
+[class*="bg-[#141414]"] .text-rose-300, [class*="bg-[#1c1c1c]"] .text-rose-300,
+[class*="bg-[#141414]"] .text-rose-400, [class*="bg-[#1c1c1c]"] .text-rose-400 { color:#be123c !important; }
+[class*="bg-[#141414]"] .text-amber-200, [class*="bg-[#1c1c1c]"] .text-amber-200,
+[class*="bg-[#141414]"] [class*="text-amber-300"], [class*="bg-[#1c1c1c]"] [class*="text-amber-300"],
+[class*="bg-[#141414]"] .text-amber-400, [class*="bg-[#1c1c1c]"] .text-amber-400 { color:#b45309 !important; }
+[class*="bg-[#141414]"] .text-sky-300, [class*="bg-[#1c1c1c]"] .text-sky-300,
+[class*="bg-[#141414]"] .text-sky-400, [class*="bg-[#1c1c1c]"] .text-sky-400 { color:#0369a1 !important; }
+[class*="bg-[#141414]"] .text-orange-300, [class*="bg-[#1c1c1c]"] .text-orange-300,
+[class*="bg-[#141414]"] .text-orange-400, [class*="bg-[#1c1c1c]"] .text-orange-400 { color:#c2410c !important; }
+
+/* Content-Engine active tab was white-on-dark → flip to dark pill, white label */
+[class*="bg-[#141414]"] .bg-white { background-color:#0f172a !important; }
+[class*="bg-[#141414]"] .text-\[\#141414\] { color:#fff !important; }
+[class*="bg-[#141414]"] .bg-orange-500, [class*="bg-[#1c1c1c]"] .bg-orange-500 { background-color:#6366f1 !important; }
+</style>
+</head>
+<body class="bg-[#181818] text-stone-300 antialiased selection:bg-orange-500/30 selection:text-white">
+
+<!-- ───────────── NAV ───────────── -->
+<nav class="sticky top-0 z-40 backdrop-blur-xl bg-[#181818]/75 border-b border-[#222]">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <a href="#top" class="flex items-center gap-2" aria-label="Viraholic home">
+        <div class="w-7 h-7 rounded-lg text-white flex items-center justify-center gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+        </div>
+        <span class="font-semibold text-base text-white tracking-tight">Viraholic</span>
+    </a>
+    <div class="hidden md:flex items-center gap-7 text-sm text-stone-400">
+        <a href="#features" class="hover:text-white transition-colors">Features</a>
+        <a href="#how-it-works" class="hover:text-white transition-colors">How it works</a>
+        <a href="#equation" class="hover:text-white transition-colors">The equation</a>
+        <a href="#pricing" class="hover:text-white transition-colors">Pricing</a>
+        <a href="#faq" class="hover:text-white transition-colors">FAQ</a>
+        <a href="mentors.html" class="text-amber-300/90 hover:text-amber-200 transition-colors">Ask a mentor</a>
+    </div>
+    <div class="flex items-center gap-2">
+        <button type="button" data-auth="signin" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-stone-400 hover:text-white rounded-xl text-sm font-medium transition-colors">
+            Sign in
+        </button>
+        <button type="button" data-auth="signup" class="btn-primary inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold" data-auth-label-default="Start growing" data-auth-label-signed-in="Open dashboard">
+            <span data-auth-label>Start growing</span> <span class="opacity-80">→</span>
+        </button>
+    </div>
+  </div>
+</nav>
+
+<!-- ───────────── HERO ───────────── -->
+<section id="top" class="relative text-white overflow-hidden">
+    <div class="absolute inset-0 dot-bg opacity-70"></div>
+    <div aria-hidden="true" class="absolute inset-0 -z-0">
+        <div class="aurora-blob animate-aurora" style="width:640px;height:640px;top:-160px;left:50%;transform:translateX(-50%);background:radial-gradient(circle at center,rgba(224,92,42,0.30),transparent 70%);"></div>
+        <div class="aurora-blob animate-aurora-slow" style="width:360px;height:360px;top:160px;left:-80px;background:radial-gradient(circle at center,rgba(255,195,91,0.16),transparent 70%);"></div>
+    </div>
+    <div class="max-w-5xl mx-auto px-6 pt-16 md:pt-24 pb-20 md:pb-28 relative text-center">
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass text-xs mb-8 animate-fade-up">
+            <span class="relative flex h-2 w-2">
+                <span class="absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75 animate-ping-slow"></span>
+                <span class="relative inline-flex h-2 w-2 rounded-full bg-amber-300 gold-glow"></span>
+            </span>
+            <span class="text-stone-300 font-medium">The autonomous growth agent for LinkedIn &amp; X</span>
+        </div>
+
+        <h1 class="text-4xl md:text-6xl lg:text-7xl font-semibold leading-[1.04] tracking-tight max-w-4xl mx-auto text-white animate-fade-up" style="animation-delay: 80ms; animation-fill-mode: backwards;">
+            While everyone spams cold DMs, <span class="accent">you live in their head.</span>
+        </h1>
+
+        <p class="text-2xl md:text-4xl lg:text-5xl text-stone-500 mt-5 animate-fade-up font-semibold tracking-tight" style="animation-delay: 140ms; animation-fill-mode: backwards;">
+            10× growth on LinkedIn &amp; X.
+        </p>
+
+        <p class="text-base md:text-xl text-stone-400 mt-7 max-w-2xl mx-auto leading-relaxed animate-fade-up" style="animation-delay: 200ms; animation-fill-mode: backwards;">
+            The agent finds the posts your <span class="text-white font-medium">ideal customers</span> are about to engage with and drafts a sharp reply <span class="text-white font-medium">in your voice.</span> You approve, they notice — and you become <span class="text-white font-medium">the name they think of first.</span>
+        </p>
+
+        <div class="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-up" style="animation-delay: 260ms; animation-fill-mode: backwards;">
+            <button type="button" data-auth="signup" data-auth-label-default="Try for free" data-auth-label-signed-in="Open dashboard" class="btn-primary inline-flex items-center gap-2 px-7 py-3.5 rounded-xl text-sm font-semibold">
+                <span data-auth-label>Try for free</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </button>
+            <a href="#features" class="btn-secondary inline-flex items-center gap-2 px-6 py-3.5 rounded-xl text-sm font-medium">
+                See how it works
+            </a>
+        </div>
+        <p class="text-xs text-stone-500 mt-5 animate-fade-up" style="animation-delay: 320ms; animation-fill-mode: backwards;">
+            7-day free trial · Nothing posts without your tap · Cancel anytime
+        </p>
+
+        <!-- proof bar -->
+        <div class="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-px bg-[#2a2a2a] rounded-2xl overflow-hidden border border-[#2a2a2a] animate-fade-up" style="animation-delay: 400ms; animation-fill-mode: backwards;">
+            <div class="bg-[#1c1c1c] px-5 py-6"><div class="text-2xl md:text-3xl font-semibold count grad-text">8–12×</div><div class="text-[11px] text-stone-400 mt-1 leading-snug">more replies than a cold DM gets you</div></div>
+            <div class="bg-[#1c1c1c] px-5 py-6"><div class="text-2xl md:text-3xl font-semibold count grad-text">10 min</div><div class="text-[11px] text-stone-400 mt-1 leading-snug">a day. Not the two hours this used to take</div></div>
+            <div class="bg-[#1c1c1c] px-5 py-6"><div class="text-2xl md:text-3xl font-semibold count grad-text">2 platforms</div><div class="text-[11px] text-stone-400 mt-1 leading-snug">LinkedIn &amp; X — one dashboard</div></div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FEATURES (right after hero) ───────────── -->
+<section id="features" class="border-t border-[#222] relative">
+    <div class="absolute inset-0 grid-bg opacity-60 [mask-image:linear-gradient(180deg,white,transparent)]"></div>
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28 relative">
+        <div class="reveal text-center max-w-2xl mx-auto">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">What you actually get</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight text-white">
+                Three parts. <span class="accent">One loop.</span>
+            </h2>
+            <p class="text-base text-stone-400 mt-5 leading-relaxed">The agent finds the right discussions, drafts a sharp reply in your voice, and queues it for your approval. Each card below is one piece of that loop — with a peek at the real UI.</p>
+        </div>
+
+        <!-- FEATURE 1 — Account Finder -->
+        <div class="reveal mt-14 grid md:grid-cols-2 gap-5 items-stretch">
+            <div class="p-7 rounded-2xl card">
+                <div class="flex items-center gap-2.5 mb-3">
+                    <div class="w-10 h-10 rounded-xl chip text-amber-300 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
+                    <span class="text-[11px] font-black uppercase tracking-widest text-stone-500">01 · Find the rooms</span>
+                </div>
+                <h3 class="font-semibold text-2xl mb-2 text-white">Account Finder</h3>
+                <p class="text-[15px] text-stone-300 leading-relaxed">Type your niche and pick a country. It returns the exact LinkedIn creators and X accounts your buyers already follow — ranked by <b class="text-white">Influence</b>, not raw follower count.</p>
+            </div>
+            <!-- ── visual mock: Account Finder ── one of the dashboard's most
+                 distinctive screens. Each row carries the same KPIs the user
+                 actually sees in-app: Influence number + tier, plus the new
+                 "your ppl" RAS pill and the urgency-coded Spotlight Window. -->
+            <div class="p-5 rounded-2xl bg-[#141414] border border-[#2a2a2a] text-white relative overflow-hidden">
+                <div class="absolute -top-12 -right-10 w-44 h-44 bg-orange-600/20 rounded-full blur-2xl" aria-hidden="true"></div>
+                <!-- filter chips matching the real Country + Engagement controls -->
+                <div class="flex items-center gap-1.5 mb-4 relative flex-wrap">
+                    <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-md bg-white/10 border border-white/15 text-white">🇺🇸 United States</span>
+                    <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-md bg-white/10 border border-white/15 text-white">B2B SaaS</span>
+                    <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-md bg-rose-500/15 border border-rose-400/30 text-rose-200">Real signal</span>
+                </div>
+                <!-- rows -->
+                <div class="space-y-2 relative">
+                    <div class="flex items-start gap-3 p-3 rounded-xl bg-white/[0.06] border border-white/10">
+                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-xs font-bold flex-shrink-0">PR</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[13px] font-semibold truncate">Patrick R. <span class="text-sky-400 text-[10px] align-middle">✓</span></div>
+                            <div class="flex items-center gap-1.5 text-[10px] text-white/70 mt-1 flex-wrap">
+                                <span>@patrickr · 48K</span>
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 font-bold">🎯 12.4K your ppl</span>
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-500/15 border border-rose-400/30 text-rose-200 font-bold">⏱ 22m window</span>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-base font-black text-rose-400 tabular-nums">92</div>
+                            <div class="text-[9px] uppercase tracking-widest text-rose-300/80 font-black">Heavyweight</div>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3 p-3 rounded-xl bg-white/[0.06] border border-white/10">
+                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-xs font-bold flex-shrink-0">AL</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[13px] font-semibold truncate">April L.</div>
+                            <div class="flex items-center gap-1.5 text-[10px] text-white/70 mt-1 flex-wrap">
+                                <span>@aprilops · 22K</span>
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 font-bold">🎯 7.1K your ppl</span>
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/30 text-amber-200 font-bold">⏱ 48m window</span>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-base font-black text-orange-400 tabular-nums">76</div>
+                            <div class="text-[9px] uppercase tracking-widest text-orange-300/80 font-black">Strong</div>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3 p-3 rounded-xl bg-white/[0.06] border border-white/10">
+                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-stone-500 to-stone-600 flex items-center justify-center text-xs font-bold flex-shrink-0">DM</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[13px] font-semibold truncate">Dan M.</div>
+                            <div class="flex items-center gap-1.5 text-[10px] text-white/70 mt-1 flex-wrap">
+                                <span>@danmrkt · 15K</span>
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 font-bold">🎯 3.2K your ppl</span>
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-500/15 border border-gray-400/30 text-gray-200 font-bold">⏱ 95m window</span>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-base font-black text-amber-400 tabular-nums">61</div>
+                            <div class="text-[9px] uppercase tracking-widest text-amber-300/80 font-black">Solid</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FEATURE 2 — Feed Watcher -->
+        <div class="reveal mt-5 grid md:grid-cols-2 gap-5 items-stretch">
+            <!-- ── visual mock: Tracked-posts card ── mirrors the real
+                 dashboard's post-card: avatar + handle + time + status pills,
+                 profile-fit badge, post body, drafted reply with voice tag,
+                 approve / edit / skip row. Matches the Posts Tracker pixel-
+                 for-pixel so the visitor sees what they'd actually use. -->
+            <div class="md:order-1 order-2 p-5 rounded-2xl bg-[#141414] border border-[#2a2a2a] relative overflow-hidden">
+                <div class="text-[10px] font-black uppercase tracking-widest text-emerald-300 mb-3 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true"></span> Draft ready · 24s ago</div>
+                <!-- the post card -->
+                <div class="rounded-xl bg-[#1c1c1c] border border-[#2f2f2f] p-3.5">
+                    <!-- header -->
+                    <div class="flex items-start gap-2.5 mb-3">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">PR</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[12px] font-semibold text-white leading-tight">Patrick R.</div>
+                            <div class="flex items-center gap-1 text-[10px] text-stone-400 mt-0.5 flex-wrap">
+                                <span>LinkedIn · 3m</span>
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-500/15 text-sky-300 border border-sky-400/30 font-bold">Tracked</span>
+                            </div>
+                        </div>
+                        <!-- Profile-fit badge -->
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-[15px] font-extrabold text-emerald-400 tabular-nums leading-none">84<span class="text-[10px] font-bold opacity-70">%</span></div>
+                            <div class="text-[8px] uppercase tracking-widest text-emerald-300 font-bold mt-0.5">Strong fit</div>
+                        </div>
+                    </div>
+                    <p class="text-[12px] text-stone-300 leading-relaxed mb-3 border-l-2 border-[#3a3a3a] pl-2.5">Stop charging per seat. Charge per outcome. Here's the math nobody on Twitter wants to do…</p>
+                    <!-- drafted reply -->
+                    <div class="rounded-lg p-3 mb-3" style="background:rgba(255,195,91,0.07);border:1px solid rgba(255,195,91,0.20)">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="text-[9px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-1">✨ Your draft</div>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[#1c1c1c] border border-amber-400/30 text-amber-200">Voice · Operator</span>
+                        </div>
+                        <p class="text-[11.5px] text-stone-200 leading-relaxed">Ran outcome-based on a 40-seat account last quarter — close rate jumped 18%, but rev-rec got messy. How are you handling the deferred-rev side?</p>
+                    </div>
+                    <!-- actions -->
+                    <div class="flex items-center gap-1.5">
+                        <button class="text-[10.5px] font-bold px-3 py-1.5 rounded-lg btn-primary">Approve &amp; post</button>
+                        <button class="text-[10.5px] font-bold px-2.5 py-1.5 rounded-lg border border-[#3a3a3a] text-stone-300 hover:bg-white/5 transition-colors">Edit</button>
+                        <button class="text-[10.5px] font-bold px-2.5 py-1.5 rounded-lg text-stone-500 hover:text-stone-300 transition-colors ml-auto">Skip</button>
+                    </div>
+                </div>
+            </div>
+            <div class="md:order-2 order-1 p-7 rounded-2xl card">
+                <div class="flex items-center gap-2.5 mb-3">
+                    <div class="w-10 h-10 rounded-xl chip text-amber-300 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+                    <span class="text-[11px] font-black uppercase tracking-widest text-stone-500">02 · Catch the moment</span>
+                </div>
+                <h3 class="font-semibold text-2xl mb-2 text-white">Feed Watcher</h3>
+                <p class="text-[15px] text-stone-300 leading-relaxed">Watches your tracked accounts in the background — tab closed, browser quiet — and drafts a sharp reply within seconds of each new post. <b class="text-white">Approve in one tap.</b></p>
+            </div>
+        </div>
+
+        <!-- FEATURE 3 — Content Engine -->
+        <div class="reveal mt-5 grid md:grid-cols-2 gap-5 items-stretch">
+            <div class="p-7 rounded-2xl grad-border">
+                <div class="flex items-center gap-2.5 mb-3">
+                    <div class="w-10 h-10 rounded-xl text-white flex items-center justify-center gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+                    <span class="text-[11px] font-black uppercase tracking-widest text-amber-300">03 · Write the words</span>
+                </div>
+                <h3 class="font-semibold text-2xl mb-2 text-white">Content Engine</h3>
+                <p class="text-[15px] text-stone-300 leading-relaxed">Pick a voice archetype, dial in the hook and the tension, and it drafts both <b class="text-white">posts and replies</b> — tight for X, longer for LinkedIn. Built for daily volume that still reads like a human wrote it.</p>
+            </div>
+            <!-- ── visual mock: Content Engine draft ── shows a real
+                 generated post output the user gets when they hit "Generate":
+                 platform tabs, hook label, the actual draft, footer chips
+                 with voice + length budget. -->
+            <div class="p-5 rounded-2xl bg-[#141414] border border-[#2a2a2a]">
+                <!-- platform tabs -->
+                <div class="flex items-center justify-between mb-3 pb-3 border-b border-[#2a2a2a]">
+                    <div class="flex items-center gap-1">
+                        <button class="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-white text-[#141414]">𝕏 X</button>
+                        <button class="text-[10px] font-bold px-2.5 py-1.5 rounded-lg text-stone-400 hover:bg-white/5">LinkedIn</button>
+                    </div>
+                    <span class="text-[9px] font-bold uppercase tracking-wider text-emerald-400">● Draft 1 of 3</span>
+                </div>
+                <!-- hook label -->
+                <div class="text-[9px] font-black uppercase tracking-widest text-amber-300 mb-2 flex items-center gap-1">
+                    Hook · shocking number → forbidden specificity
+                </div>
+                <!-- the draft -->
+                <div class="rounded-xl p-4 mb-3" style="background:rgba(255,195,91,0.06);border:1px solid rgba(255,195,91,0.18)">
+                    <p class="text-[13px] text-stone-100 leading-relaxed">
+                        Closed $1.2M ARR in 11 months with zero ads.<br/><br/>
+                        Not a thread. Just the 3 things that worked:<br/>
+                        — Replied under big posts daily<br/>
+                        — Built one repeatable voice<br/>
+                        — Showed receipts, not opinions<br/><br/>
+                        That's it. That's the playbook.
+                    </p>
+                    <div class="mt-3 pt-3 border-t border-amber-400/20 flex items-center justify-between text-[10px] text-stone-400">
+                        <span><b class="text-stone-200 tabular-nums">238</b> / 280 chars</span>
+                        <span class="inline-flex items-center gap-1 text-emerald-400 font-bold">↗ Predicted: high engagement</span>
+                    </div>
+                </div>
+                <!-- footer chips -->
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[10px] font-bold px-2 py-1 rounded-md bg-amber-500/15 text-amber-200 border border-amber-400/30">Voice · Brutal Founder</span>
+                    <span class="text-[10px] font-bold px-2 py-1 rounded-md bg-white/5 text-stone-300 border border-white/10">Closer · soft proof</span>
+                    <span class="text-[10px] font-bold px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">Tight format</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<!-- ───────────── WHAT TO EXPECT ───────────── -->
+<section id="how-it-works" class="border-t border-[#222] relative overflow-hidden">
+    <div class="absolute -top-24 right-0 w-[420px] h-[420px] bg-orange-500/10 rounded-full blur-3xl"></div>
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28 relative">
+        <div class="reveal text-center max-w-2xl mx-auto">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">What to expect</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight text-white">
+                Here's how it actually <span class="accent">works for you.</span>
+            </h2>
+            <p class="text-base text-stone-400 mt-5 leading-relaxed">Think of it like a research assistant that never sleeps. It watches LinkedIn and X for the exact posts your ideal customers are about to interact with, writes a smart reply in your voice, then waits for your one-tap approval. Below is the full picture: how the loop works, and what a realistic first 6 weeks look like.</p>
+        </div>
+
+        <!-- ── DIAGRAM: THE LOOP ── -->
+        <div class="reveal mt-12 p-7 md:p-9 rounded-3xl card">
+            <div class="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-7 text-center">The daily loop · how the agent earns you visibility</div>
+            <!-- 5-track grid on md+: card | arrow | card | arrow | card. -->
+            <div class="grid grid-cols-1 md:[grid-template-columns:1fr_auto_1fr_auto_1fr] gap-4 md:gap-3 items-stretch">
+                <!-- STEP 1 -->
+                <div class="p-5 rounded-2xl bg-[#1c1c1c] border border-[#2a2a2a] flex flex-col">
+                    <div class="w-9 h-9 rounded-xl text-white flex items-center justify-center mb-3 font-bold gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">1</div>
+                    <h4 class="font-semibold text-base mb-1.5 text-white">You pick your niche</h4>
+                    <p class="text-[13px] text-stone-400 leading-relaxed">Type what you sell and who you sell to. Pick a country. The agent maps the LinkedIn creators and X accounts your ideal customers already follow.</p>
+                </div>
+                <!-- arrow (md+ only) -->
+                <div class="hidden md:flex items-center justify-center text-stone-600 px-1" aria-hidden="true">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                </div>
+                <!-- STEP 2 -->
+                <div class="p-5 rounded-2xl bg-[#1c1c1c] border border-[#2a2a2a] flex flex-col">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-300 flex items-center justify-center mb-3 font-bold">2</div>
+                    <h4 class="font-semibold text-base mb-1.5 text-white">It catches the post</h4>
+                    <p class="text-[13px] text-stone-400 leading-relaxed">When a tracked account posts, the agent reads it and drafts a sharp reply in <em>your</em> voice. Tight for X, longer for LinkedIn. Queued in seconds.</p>
+                </div>
+                <!-- arrow (md+ only) -->
+                <div class="hidden md:flex items-center justify-center text-stone-600 px-1" aria-hidden="true">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                </div>
+                <!-- STEP 3 -->
+                <div class="p-5 rounded-2xl grad-border flex flex-col">
+                    <div class="w-9 h-9 rounded-xl text-white flex items-center justify-center mb-3 font-bold gold-glow" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">3</div>
+                    <h4 class="font-semibold text-base mb-1.5 text-white">You tap approve</h4>
+                    <p class="text-[13px] text-stone-300 leading-relaxed">Open the dashboard for ten minutes a day. Skim the queue, edit a word, approve the rest. The reply posts under your name.</p>
+                </div>
+            </div>
+
+            <!-- Loop curve -->
+            <div class="mt-6 pt-6 border-t border-[#2a2a2a] flex items-center justify-center gap-3 text-[11px] text-stone-400">
+                <svg class="w-4 h-4 text-amber-400 animate-spin" style="animation-duration:6s" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span>This loop runs every day. Each useful reply is a quiet "remember me" to people who would never see your cold DM.</span>
+            </div>
+        </div>
+
+        <!-- ── REALISTIC 6-WEEK PROJECTION ── -->
+        <div class="reveal mt-10">
+            <div class="text-center max-w-xl mx-auto">
+                <h3 class="text-2xl md:text-3xl font-semibold leading-tight text-white">What a realistic first 6 weeks looks like.</h3>
+                <p class="text-[13px] text-stone-400 mt-3 leading-relaxed">No hockey-stick fantasy. These are modest numbers from how the loop actually compounds when you approve a daily queue. Faster if you already have an audience, slower if you're starting cold.</p>
+            </div>
+        </div>
+
+        <!-- ── THREE PROGRESS CHARTS ── -->
+        <div class="reveal mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Chart 1: Replies posted / week -->
+            <div class="p-5 rounded-2xl card">
+                <div class="flex items-baseline justify-between mb-1">
+                    <h4 class="text-sm font-bold text-white">Useful replies posted</h4>
+                    <span class="text-[10px] uppercase tracking-widest font-bold text-stone-500">per week</span>
+                </div>
+                <p class="text-[11px] text-stone-400 mb-4">Every reply queued, edited, approved by you.</p>
+                <div class="flex items-end justify-between gap-1.5 h-24">
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-[#3a3a3a]" style="height:22%"></div><div class="text-[9px] text-stone-500 mt-1.5">W1</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-[#4a4a4a]" style="height:38%"></div><div class="text-[9px] text-stone-500 mt-1.5">W2</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-amber-400/60" style="height:55%"></div><div class="text-[9px] text-stone-500 mt-1.5">W3</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-amber-400/80" style="height:70%"></div><div class="text-[9px] text-stone-500 mt-1.5">W4</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-orange-500" style="height:80%"></div><div class="text-[9px] text-stone-500 mt-1.5">W5</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-orange-600" style="height:90%"></div><div class="text-[9px] text-stone-500 mt-1.5">W6</div></div>
+                </div>
+                <div class="flex items-baseline justify-between mt-3 pt-3 border-t border-[#2a2a2a]">
+                    <span class="text-[10px] text-stone-500 uppercase tracking-widest font-bold">W1 → W6</span>
+                    <span class="text-sm font-black text-white tabular-nums">8 → 31</span>
+                </div>
+            </div>
+
+            <!-- Chart 2: Profile visits / week -->
+            <div class="p-5 rounded-2xl card">
+                <div class="flex items-baseline justify-between mb-1">
+                    <h4 class="text-sm font-bold text-white">Profile visits</h4>
+                    <span class="text-[10px] uppercase tracking-widest font-bold text-stone-500">per week</span>
+                </div>
+                <p class="text-[11px] text-stone-400 mb-4">People clicking through to see "who is this".</p>
+                <!-- line chart via SVG -->
+                <svg viewBox="0 0 240 96" class="w-full h-24" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="visitGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#fc8a65" stop-opacity="0.35"/>
+                            <stop offset="100%" stop-color="#fc8a65" stop-opacity="0"/>
+                        </linearGradient>
+                    </defs>
+                    <polyline points="0,82 48,76 96,64 144,46 192,32 240,14" fill="none" stroke="#fc8a65" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <polygon points="0,82 48,76 96,64 144,46 192,32 240,14 240,96 0,96" fill="url(#visitGrad)"/>
+                    <circle cx="0" cy="82" r="3" fill="#fc8a65"/><circle cx="48" cy="76" r="3" fill="#fc8a65"/><circle cx="96" cy="64" r="3" fill="#fc8a65"/><circle cx="144" cy="46" r="3" fill="#fc8a65"/><circle cx="192" cy="32" r="3" fill="#fc8a65"/><circle cx="240" cy="14" r="4" fill="#fc8a65" stroke="#181818" stroke-width="2"/>
+                </svg>
+                <div class="flex justify-between mt-1 text-[9px] text-stone-500 font-bold">
+                    <span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span><span>W6</span>
+                </div>
+                <div class="flex items-baseline justify-between mt-3 pt-3 border-t border-[#2a2a2a]">
+                    <span class="text-[10px] text-stone-500 uppercase tracking-widest font-bold">W1 → W6</span>
+                    <span class="text-sm font-black text-white tabular-nums">12 → 68</span>
+                </div>
+            </div>
+
+            <!-- Chart 3: Inbound conversations -->
+            <div class="p-5 rounded-2xl grad-border">
+                <div class="flex items-baseline justify-between mb-1">
+                    <h4 class="text-sm font-bold text-white">Inbound conversations</h4>
+                    <span class="text-[10px] uppercase tracking-widest font-bold text-amber-300">per week</span>
+                </div>
+                <p class="text-[11px] text-stone-400 mb-4">DMs and replies <em>you didn't start</em>.</p>
+                <div class="flex items-end justify-between gap-1.5 h-24">
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-[#3a3a3a]" style="height:4%"></div><div class="text-[9px] text-stone-500 mt-1.5">W1</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-[#3a3a3a]" style="height:4%"></div><div class="text-[9px] text-stone-500 mt-1.5">W2</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-amber-400/60" style="height:20%"></div><div class="text-[9px] text-stone-500 mt-1.5">W3</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-amber-400/80" style="height:40%"></div><div class="text-[9px] text-stone-500 mt-1.5">W4</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-orange-500" style="height:75%"></div><div class="text-[9px] text-stone-500 mt-1.5">W5</div></div>
+                    <div class="flex-1 flex flex-col items-center"><div class="w-full rounded-t bg-orange-600" style="height:100%"></div><div class="text-[9px] text-stone-500 mt-1.5">W6</div></div>
+                </div>
+                <div class="flex items-baseline justify-between mt-3 pt-3 border-t border-amber-400/20">
+                    <span class="text-[10px] text-amber-300 uppercase tracking-widest font-bold">W1 → W6</span>
+                    <span class="text-sm font-black text-amber-300 tabular-nums">0 → 5</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── THE PATTERN (timeline, adaptable framing) ── -->
+        <div class="reveal mt-10 p-7 md:p-9 rounded-3xl card">
+            <div class="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-5">The pattern · what most users see</div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <div class="flex items-center gap-2 mb-2"><span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-stone-300">Weeks 1–2</span><span class="text-[11px] font-bold text-stone-400">Quiet build</span></div>
+                    <p class="text-[13px] text-stone-400 leading-relaxed">You approve a daily queue in ten minutes. Replies go out under the right posts. Nothing visible changes — but the foundation is going down.</p>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 mb-2"><span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/30 text-amber-200">Weeks 3–4</span><span class="text-[11px] font-bold text-amber-300">First recognition</span></div>
+                    <p class="text-[13px] text-stone-400 leading-relaxed">Profile visits start climbing. A few people reply back. Somebody writes some version of <em>"I keep seeing your comments."</em> Your name is registering.</p>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 mb-2"><span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-200">Weeks 5–6</span><span class="text-[11px] font-bold text-emerald-300">Inbound starts</span></div>
+                    <p class="text-[13px] text-stone-400 leading-relaxed">A real conversation lands in your DMs — one you didn't start. Then another. Recognition has compounded into "the specialist worth talking to."</p>
+                </div>
+            </div>
+            <p class="text-[12px] text-stone-400 mt-6 pt-5 border-t border-[#2a2a2a] leading-relaxed">Your exact numbers won't match these. The <b class="text-white">shape</b> usually does: a few weeks of quiet work, then recognition starts compounding, then inbound shows up. The only variable you control is whether you actually open the dashboard and approve the queue.</p>
+        </div>
+
+        <p class="reveal text-center text-[11px] text-stone-500 mt-8 max-w-2xl mx-auto">These projections are based on early-user data from our beta. We're keeping the bar deliberately modest — your real timeline depends on your niche, your offer, and how often you tap approve. The 30-Day Visibility Guarantee has your back either way.</p>
+    </div>
+</section>
+
+<!-- ───────────── THE GROWTH EQUATION ───────────── -->
+<section id="equation" class="border-t border-[#222]">
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal text-center max-w-2xl mx-auto">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">The growth equation</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight text-white">
+                Three multipliers. <span class="accent">10× growth.</span>
+            </h2>
+            <p class="text-base text-stone-400 mt-5 leading-relaxed">Growth on LinkedIn and X isn't luck — it's a formula. Get the three multipliers right and compounding does the rest. Drop any one to zero and the whole thing collapses. The agent is built to lock all three.</p>
+        </div>
+
+        <!-- ── THE EQUATION CARD ── -->
+        <div class="reveal mt-14">
+            <div class="max-w-4xl mx-auto p-7 md:p-10 rounded-3xl bg-[#141414] border border-[#2a2a2a] text-white relative overflow-hidden">
+                <div class="aurora-blob animate-aurora" style="width:288px;height:288px;top:-80px;left:-64px;background:radial-gradient(circle at center,rgba(224,92,42,0.30),transparent 70%);"></div>
+                <div class="aurora-blob animate-aurora-slow" style="width:288px;height:288px;bottom:-80px;right:-64px;background:radial-gradient(circle at center,rgba(255,195,91,0.20),transparent 70%);"></div>
+                <div class="relative">
+                    <!-- the equation itself -->
+                    <div class="text-center text-xl md:text-3xl lg:text-4xl leading-snug font-medium">
+                        <span class="font-semibold" style="color:#ffc35b">Right Discussions</span>
+                        <span class="text-white/40 mx-1.5 md:mx-2">×</span>
+                        <span class="font-semibold" style="color:#fc8a65">Right Content</span>
+                        <span class="text-white/40 mx-1.5 md:mx-2">×</span>
+                        <span class="font-semibold" style="color:#e05c2a">High Volume</span>
+                    </div>
+                    <div class="text-center text-2xl md:text-4xl mt-4 font-semibold">
+                        <span class="text-white/50">=</span>
+                        <span class="ml-2 grad-text">10× growth on LinkedIn &amp; X</span>
+                    </div>
+
+                    <!-- the three multipliers explained -->
+                    <div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="p-5 rounded-2xl bg-white/5 border border-white/10">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
+                                <div class="text-[10px] font-black uppercase tracking-widest text-amber-300">× Right Discussions</div>
+                            </div>
+                            <p class="text-[13px] text-white/70 leading-relaxed">The exact LinkedIn posts and X threads your ideal customers are reading and replying to right now. Show up in the wrong rooms and even perfect replies disappear. <b class="text-white">Account Finder</b> hands you the list.</p>
+                        </div>
+                        <div class="p-5 rounded-2xl bg-white/5 border border-white/10">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-7 h-7 rounded-lg bg-orange-500/20 text-orange-300 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg></div>
+                                <div class="text-[10px] font-black uppercase tracking-widest text-orange-300">× Right Content</div>
+                            </div>
+                            <p class="text-[13px] text-white/70 leading-relaxed">Replies and posts that read like a sharp specialist — not a bot. Generic AI replies kill trust and torch your positioning. <b class="text-white">Content Engine</b> drafts in your voice, per platform, every time.</p>
+                        </div>
+                        <div class="p-5 rounded-2xl bg-white/5 border border-white/10">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-300 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg></div>
+                                <div class="text-[10px] font-black uppercase tracking-widest text-rose-300">× High Volume</div>
+                            </div>
+                            <p class="text-[13px] text-white/70 leading-relaxed">Showing up every single day, not when you have energy. Sporadic posters get ignored by the algorithm. <b class="text-white">Feed Watcher</b> queues drafts the moment posts go live so you can keep cadence in ten minutes a day.</p>
+                        </div>
+                    </div>
+
+                    <p class="text-center text-[13px] text-white/60 mt-10 max-w-2xl mx-auto leading-relaxed">
+                        These aren't add, they're <b class="text-white">multiply</b>. Right discussions with bad content = ignored. Right content posted twice a month = ignored. The agent is the one tool that locks all three at once.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FOR / NOT FOR ───────────── -->
+<section class="border-t border-[#222]">
+    <div class="max-w-4xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal text-center max-w-2xl mx-auto">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">Real talk</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight text-white">Who this is for.</h2>
+        </div>
+        <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="reveal p-6 rounded-2xl grad-border">
+                <div class="text-sm font-bold text-amber-300 mb-4 uppercase tracking-wider">✓ This is you if…</div>
+                <ul class="space-y-2.5 text-sm text-stone-300">
+                    <li class="flex gap-2"><span class="text-amber-400">→</span> You're a founder, creator, or consultant who needs inbound leads — and doesn't have two hours a day to chase them.</li>
+                    <li class="flex gap-2"><span class="text-amber-400">→</span> Your cold outreach is getting filtered, and you know being seen as <em>the specialist</em> in your niche would fix it.</li>
+                    <li class="flex gap-2"><span class="text-amber-400">→</span> You'd happily show up every day if it took 10 minutes instead of eating your morning.</li>
+                    <li class="flex gap-2"><span class="text-amber-400">→</span> You want every word to sound like <em>you</em> — and the final say before anything goes out under your name.</li>
+                </ul>
+            </div>
+            <div class="reveal p-6 rounded-2xl card" style="transition-delay:.1s">
+                <div class="text-sm font-bold text-stone-500 mb-4 uppercase tracking-wider">✕ Skip it if…</div>
+                <ul class="space-y-2.5 text-sm text-stone-400">
+                    <li class="flex gap-2"><span class="text-stone-600">→</span> You want a bot to mass-blast cold DMs and "🔥🔥🔥". That's the exact thing that stopped working.</li>
+                    <li class="flex gap-2"><span class="text-stone-600">→</span> You want zero involvement. It won't post a word without your tap — and never will.</li>
+                    <li class="flex gap-2"><span class="text-stone-600">→</span> You think one viral post is the answer. It isn't. This is built on showing up daily, not getting lucky once.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── PRICING ───────────── -->
+<section id="pricing" class="border-t border-[#222]">
+    <div class="max-w-5xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal text-center mb-12">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">Get started</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight text-white">
+                Start for free. <span class="accent">No card. No catch.</span>
+            </h2>
+            <p class="text-base text-stone-400 mt-5 max-w-xl mx-auto leading-relaxed">Create your account and run the full agent free — Account Finder, voice-matched drafts, Feed Watcher. Two minutes to set up, and <b class="text-white">nothing posts without your tap</b>.</p>
+        </div>
+
+        <div class="reveal max-w-2xl mx-auto p-8 md:p-10 rounded-3xl grad-border text-center relative">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full chip text-xs font-semibold mb-5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span> Free to start
+            </div>
+            <div class="flex items-baseline justify-center gap-1.5">
+                <span class="text-5xl md:text-6xl font-semibold text-white">$0</span>
+                <span class="text-sm text-stone-500">to get going</span>
+            </div>
+            <ul class="text-sm space-y-2.5 mt-7 text-stone-300 max-w-sm mx-auto text-left">
+                <li class="flex gap-2.5"><span class="text-amber-300">✓</span> Full dashboard + Account Finder</li>
+                <li class="flex gap-2.5"><span class="text-amber-300">✓</span> Voice-matched replies &amp; posts</li>
+                <li class="flex gap-2.5"><span class="text-amber-300">✓</span> Feed Watcher automation</li>
+                <li class="flex gap-2.5"><span class="text-amber-300">✓</span> One-tap approval — nothing auto-posts</li>
+            </ul>
+            <button type="button" data-auth="signup" data-auth-label-default="Start for free" data-auth-label-signed-in="Open dashboard" class="btn-primary mt-8 inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-sm font-semibold">
+                <span data-auth-label>Start for free</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </button>
+            <p class="text-[11px] text-stone-500 mt-3">No credit card required · Cancel anytime</p>
+        </div>
+
+        <!-- guarantee -->
+        <div class="reveal mt-10 max-w-3xl mx-auto p-7 rounded-2xl grad-border">
+            <div class="flex items-start gap-4">
+                <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-300 flex items-center justify-center"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+                <div>
+                    <h3 class="text-xl font-semibold text-white">The 30-Day Visibility Guarantee</h3>
+                    <p class="text-sm text-stone-300 leading-relaxed mt-2">
+                        Start your 7-day free trial, then run Growth or Scale for 30 days. Approve your queue most days. If your visibility hasn't measurably moved — impressions, profile visits, replies, all tracked in your dashboard — email us and we refund every cent. <b class="text-white">No questions. No forms. No "fill out this survey."</b> We can promise that because showing up usefully, daily, in the right rooms has never <em>not</em> worked. The only way it fails is not showing up — and that's the one part we took off your plate.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FAQ ───────────── -->
+<section id="faq" class="border-t border-[#222]">
+    <div class="max-w-3xl mx-auto px-6 py-20 md:py-28">
+        <div class="reveal">
+            <span class="text-xs tracking-[0.2em] uppercase text-amber-300/80">FAQ</span>
+            <h2 class="text-3xl md:text-5xl font-semibold mt-3 leading-tight text-white">The objections, handled.</h2>
+        </div>
+        <div class="mt-12 space-y-3">
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>How is this different from a cold-DM tool?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">Polar opposite. Cold tools shove you into strangers' inboxes and burn your reputation at a 1–3% reply rate. This makes you <em>known</em> first — useful replies and posts in the rooms your buyers already watch — so people reply because they recognize you. Inbound by reputation, not outbound by interruption.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>Will this get my LinkedIn or X account banned?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">No. The agent never mass-blasts and never auto-posts: every draft waits for your one-tap approval, then publishes one at a time at a human pace. That's the exact pattern the platforms reward — useful replies on real conversations — and the opposite of what triggers a ban.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>How fast will I see visibility move?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">Impressions move in week one — a reply under a big post puts you in front of its whole audience instantly. Profile visits and follows build over the first 2–4 active weeks. Inbound DMs are the lagging indicator and ride on your offer. The dashboard tracks all of it, and the 30-day Visibility Guarantee backs it.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>Does it really sound like me — or like ChatGPT?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">Like you. A short Voice Match quiz calibrates tone, energy, vulnerability, specificity, and rhythm — and you can paste a writing sample to fine-tune. Every draft is editable before it posts. Generic AI replies kill the trust that makes visibility convert, so sounding human is the whole design.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>Do I lose control? Does it post on its own?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">Never without you. The agent finds, drafts, and queues. Nothing publishes until you read it and tap Approve — and you can edit any word first. Human-in-the-loop is the whole point.</p>
+            </details>
+            <details class="group rounded-xl card px-5 reveal">
+                <summary class="cursor-pointer list-none flex items-center justify-between text-base font-medium text-white py-5">
+                    <span>What's the catch with the free trial?</span>
+                    <span class="ml-4 text-stone-500 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <p class="text-sm text-stone-400 pb-5 leading-relaxed">None. Every plan starts with a 7-day free trial and <b>no credit card</b> — try it, and only pick a plan if it's working. Starter ($19) covers one platform with your own free Gemini key; Growth ($39) unlocks both LinkedIn &amp; X and manages the AI for you; Scale ($99) adds multiple brand profiles and the highest caps. Cancel anytime.</p>
+            </details>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FINAL CTA ───────────── -->
+<section id="cta" class="border-t border-[#222] relative overflow-hidden">
+    <div aria-hidden="true" class="absolute inset-0 -z-0">
+        <div class="aurora-blob animate-aurora" style="width:600px;height:600px;bottom:-240px;left:50%;transform:translateX(-50%);background:radial-gradient(circle at center,rgba(224,92,42,0.26),transparent 70%);"></div>
+    </div>
+    <div class="max-w-3xl mx-auto px-6 py-20 md:py-28 text-center relative">
+        <div class="reveal">
+            <h2 class="text-3xl md:text-5xl font-semibold leading-[1.1] text-white">
+                Cold DMs get filtered.<br/>
+                <span class="accent">Specialist positioning gets you the inbound.</span>
+            </h2>
+            <p class="text-base md:text-lg text-stone-400 mt-6 max-w-xl mx-auto leading-relaxed">
+                The founders pulling leads on LinkedIn and X aren't sending more DMs. They're impossible to ignore — because they show up usefully, every day, in the exact rooms their buyers already live in. Now you can too, in 10 minutes a day, in your own voice, with a guarantee.
+            </p>
+            <div class="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button type="button" data-auth="signup" data-auth-label-default="Try for free" data-auth-label-signed-in="Open dashboard" class="btn-primary inline-flex items-center gap-2 px-7 py-3.5 rounded-xl text-sm font-semibold">
+                    <span data-auth-label>Try for free</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </button>
+                <a href="#how-it-works" class="btn-secondary inline-flex items-center gap-2 px-6 py-3.5 rounded-xl text-sm font-medium">
+                    See how it works
+                </a>
+            </div>
+            <p class="text-xs text-stone-500 mt-6">7-day free trial · No credit card · 30-Day Visibility Guarantee on Growth &amp; Scale</p>
+        </div>
+    </div>
+</section>
+
+<!-- ───────────── FOOTER ───────────── -->
+<footer class="border-t border-[#222]">
+    <div class="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-md text-white flex items-center justify-center" style="background:linear-gradient(180deg,#fc8a65,#e05c2a)">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+            </div>
+            <span class="font-semibold text-sm text-white">Viraholic</span>
+            <span class="text-xs text-stone-500 ml-2">© 2026 · Grow on LinkedIn &amp; X</span>
+        </div>
+        <div class="flex items-center gap-6 text-xs text-stone-500">
+            <a href="#features" class="hover:text-white transition-colors">Features</a>
+            <a href="#how-it-works" class="hover:text-white transition-colors">How it works</a>
+            <a href="#equation" class="hover:text-white transition-colors">The equation</a>
+            <a href="#pricing" class="hover:text-white transition-colors">Pricing</a>
+            <a href="#faq" class="hover:text-white transition-colors">FAQ</a>
+        </div>
+    </div>
+</footer>
+
+<!-- ───────────── AUTH MODAL ─────────────
+     Hidden by default. Opens when any [data-auth] button is clicked.
+     Toggles between "sign in" and "create account" modes via the tabs. -->
+<div id="auth-modal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4 bg-gray-950/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden" role="document">
+        <!-- header -->
+        <div class="px-7 pt-7 pb-3 flex items-start justify-between">
+            <div>
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="w-7 h-7 rounded-md bg-gray-900 text-white flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg>
+                    </div>
+                    <span class="font-display font-semibold text-base">Viraholic</span>
+                </div>
+                <h3 id="auth-modal-title" class="font-display text-xl font-semibold text-gray-900">Welcome back</h3>
+                <p class="text-[13px] text-gray-500 mt-0.5" data-auth-subtitle>Sign in to open your dashboard.</p>
+            </div>
+            <button type="button" data-auth-close class="text-gray-400 hover:text-gray-700 p-1 -m-1 rounded-md" aria-label="Close">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <!-- tabs -->
+        <div class="px-7 mt-2 grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-xl mx-7" style="margin-left:1.75rem;margin-right:1.75rem;">
+            <button type="button" data-auth-tab="signin" class="px-3 py-2 rounded-lg text-[13px] font-semibold bg-white shadow-sm text-gray-900 transition-colors">Sign in</button>
+            <button type="button" data-auth-tab="signup" class="px-3 py-2 rounded-lg text-[13px] font-semibold text-gray-500 hover:text-gray-800 transition-colors">Create account</button>
+        </div>
+
+        <!-- form -->
+        <form id="auth-form" class="px-7 pt-5 pb-7 space-y-3">
+            <div data-auth-show="signup" class="hidden">
+                <label class="text-[10px] uppercase tracking-widest font-bold text-gray-500">Your name</label>
+                <input type="text" name="fullName" autocomplete="name" placeholder="Maya R." class="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400 transition-colors" />
+            </div>
+            <div>
+                <label class="text-[10px] uppercase tracking-widest font-bold text-gray-500">Email</label>
+                <input type="email" name="email" autocomplete="email" required placeholder="you@company.com" class="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400 transition-colors" />
+            </div>
+            <div>
+                <label class="text-[10px] uppercase tracking-widest font-bold text-gray-500">Password</label>
+                <input type="password" name="password" autocomplete="current-password" required minlength="8" placeholder="At least 8 characters" class="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400 transition-colors" />
+                <button type="button" data-auth-forgot class="text-[11px] text-gray-500 hover:text-gray-900 mt-1.5 underline-offset-2 hover:underline" data-auth-show="signin">Forgot password?</button>
+            </div>
+
+            <!-- error / info -->
+            <div id="auth-feedback" class="hidden text-[12px] leading-relaxed rounded-lg p-3"></div>
+
+            <button type="submit" data-auth-submit class="w-full mt-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 ease-out active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed">
+                <span data-auth-submit-label>Sign in</span>
+                <svg data-auth-spinner class="w-4 h-4 animate-spin hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M22 12a10 10 0 0 1-10 10"/></svg>
+            </button>
+
+            <p class="text-[11px] text-gray-400 text-center pt-1" data-auth-show="signup">By creating an account you agree to be emailed about your trial. No credit card required. Cancel anytime.</p>
+        </form>
+    </div>
+</div>
+
+<!-- ───────────── AUTH SCRIPT ─────────────
+     Initializes Supabase, wires the modal, handles sign-in / sign-up / reset,
+     and on successful auth redirects to the dashboard at "/". -->
+<script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@^2.108.0';
+
+    // Anon key is safe to ship in client code — Row-Level Security on the DB
+    // side is what actually protects user data. Service-role keys must never
+    // appear here.
+    const SUPABASE_URL      = 'https://brrpnoynvidfopdujsce.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJycnBub3ludmlkZm9wZHVqc2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjYzODUsImV4cCI6MjA5NjUwMjM4NX0.89mTbOh0EKV06mMYvhQt4YKL5olbi0G2odymfoSI9E4';
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'lv_supabase_auth' }
+    });
+
+    const modal   = document.getElementById('auth-modal');
+    const form    = document.getElementById('auth-form');
+    const feedback = document.getElementById('auth-feedback');
+    const submitBtn   = form.querySelector('[data-auth-submit]');
+    const submitLabel = form.querySelector('[data-auth-submit-label]');
+    const spinner = form.querySelector('[data-auth-spinner]');
+    const titleEl = document.getElementById('auth-modal-title');
+    const subtitleEl = document.querySelector('[data-auth-subtitle]');
+    const tabBtns = document.querySelectorAll('[data-auth-tab]');
+    let mode = 'signin'; // 'signin' | 'signup'
+
+    function setMode(next) {
+        mode = next;
+        // tab styling
+        tabBtns.forEach(b => {
+            const active = b.dataset.authTab === mode;
+            b.classList.toggle('bg-white', active);
+            b.classList.toggle('shadow-sm', active);
+            b.classList.toggle('text-gray-900', active);
+            b.classList.toggle('text-gray-500', !active);
+        });
+        // titles
+        if (mode === 'signup') {
+            titleEl.textContent = 'Start your 7-day trial';
+            subtitleEl.textContent = 'Create your account — no credit card needed.';
+            submitLabel.textContent = 'Create account';
+        } else {
+            titleEl.textContent = 'Welcome back';
+            subtitleEl.textContent = 'Sign in to open your dashboard.';
+            submitLabel.textContent = 'Sign in';
+        }
+        // show/hide fields keyed to mode
+        document.querySelectorAll('[data-auth-show]').forEach(el => {
+            el.classList.toggle('hidden', el.dataset.authShow !== mode);
+        });
+        // password autocomplete hint follows mode
+        const pw = form.querySelector('input[name="password"]');
+        if (pw) pw.autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
+        // wipe any stale error from the previous mode
+        hideFeedback();
+    }
+
+    function openModal(nextMode = 'signin') {
+        setMode(nextMode);
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        // tiny delay so the focus lands after the open animation
+        setTimeout(() => form.querySelector('input[name="email"]').focus(), 30);
+        // Esc closes
+        document.addEventListener('keydown', escClose);
+    }
+    function closeModal() {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.removeEventListener('keydown', escClose);
+        hideFeedback();
+    }
+    function escClose(e) { if (e.key === 'Escape') closeModal(); }
+
+    // Click-outside-to-close, but ignore clicks that started inside the panel.
+    modal.addEventListener('mousedown', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.querySelectorAll('[data-auth-close]').forEach(el => el.addEventListener('click', closeModal));
+
+    // Tab switching
+    tabBtns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.authTab)));
+
+    // Wire every CTA on the page that has data-auth="signin|signup"
+    document.querySelectorAll('[data-auth]').forEach(el => {
+        el.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            // If the visitor is already signed in, every CTA jumps straight to the dashboard.
+            if (currentSession) { window.location.href = '/'; return; }
+            openModal(el.dataset.auth);
+        });
+    });
+
+    // Feedback helpers
+    function showFeedback(kind, msg) {
+        feedback.textContent = msg;
+        feedback.className = 'text-[12px] leading-relaxed rounded-lg p-3 ' +
+            (kind === 'error' ? 'bg-rose-50 border border-rose-200 text-rose-800'
+                              : 'bg-emerald-50 border border-emerald-200 text-emerald-800');
+    }
+    function hideFeedback() {
+        feedback.className = 'hidden text-[12px] leading-relaxed rounded-lg p-3';
+        feedback.textContent = '';
+    }
+    function setBusy(busy) {
+        submitBtn.disabled = busy;
+        spinner.classList.toggle('hidden', !busy);
+    }
+
+    // Form submit — branches on mode.
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideFeedback();
+        const fd = new FormData(form);
+        const email    = String(fd.get('email')   || '').trim();
+        const password = String(fd.get('password')|| '');
+        const fullName = String(fd.get('fullName')|| '').trim();
+        if (!email || !password) { showFeedback('error', 'Email and password are required.'); return; }
+
+        setBusy(true);
+        try {
+            if (mode === 'signup') {
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: fullName ? { full_name: fullName } : undefined,
+                        emailRedirectTo: window.location.origin + '/'
+                    }
+                });
+                if (error) { showFeedback('error', friendlyError(error.message)); return; }
+                // If email confirmation is on, Supabase returns a user but no session.
+                if (data?.user && !data?.session) {
+                    showFeedback('info', 'Check your inbox to confirm your email — then come back and sign in.');
+                    return;
+                }
+                window.location.href = '/';
+            } else {
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) { showFeedback('error', friendlyError(error.message)); return; }
+                window.location.href = '/';
+            }
+        } catch (err) {
+            console.error('[auth] unexpected', err);
+            showFeedback('error', 'Something went wrong. Please try again in a moment.');
+        } finally {
+            setBusy(false);
+        }
+    });
+
+    // "Forgot password" → sends a recovery email
+    document.querySelector('[data-auth-forgot]').addEventListener('click', async () => {
+        const email = String(new FormData(form).get('email') || '').trim();
+        if (!email) { showFeedback('error', 'Type your email above first, then click "Forgot password".'); return; }
+        setBusy(true);
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.origin + '/'
+            });
+            if (error) { showFeedback('error', friendlyError(error.message)); return; }
+            showFeedback('info', 'Check your inbox for a reset link.');
+        } finally { setBusy(false); }
+    });
+
+    // Map Supabase auth errors to human-friendly text.
+    function friendlyError(raw) {
+        const m = (raw || '').toLowerCase();
+        if (m.includes('invalid login') || m.includes('invalid credentials')) return 'That email and password combination didn’t work.';
+        if (m.includes('user already registered'))                            return 'That email is already registered. Try signing in instead.';
+        if (m.includes('email not confirmed'))                                return 'Confirm your email first — we sent you a link.';
+        if (m.includes('password should be at least'))                        return 'Use a password of at least 8 characters.';
+        if (m.includes('rate'))                                               return 'Too many attempts. Give it a minute and try again.';
+        return raw || 'Authentication failed.';
+    }
+
+    // Track the current session so CTAs can jump straight to the dashboard
+    // when the visitor is already signed in (no point making them log in twice).
+    let currentSession = null;
+    function reflectSessionInCTAs(session) {
+        currentSession = session;
+        const signedIn = !!session;
+        // Swap the label text on any CTA that defined both variants.
+        document.querySelectorAll('[data-auth-label-default]').forEach(btn => {
+            const labelEl = btn.querySelector('[data-auth-label]') || btn;
+            labelEl.textContent = signedIn
+                ? (btn.dataset.authLabelSignedIn || 'Open dashboard')
+                : btn.dataset.authLabelDefault;
+        });
+        // Hide the "Sign in" nav link when already signed in (less clutter).
+        document.querySelectorAll('[data-auth="signin"]').forEach(el => {
+            // Only hide the bare "Sign in" nav link, not the submit-style ones.
+            if (el.tagName === 'BUTTON' && el.textContent.trim() === 'Sign in') {
+                el.classList.toggle('hidden', signedIn);
+            }
+        });
+    }
+    supabase.auth.getSession().then(({ data }) => reflectSessionInCTAs(data.session));
+    supabase.auth.onAuthStateChange((_e, s) => reflectSessionInCTAs(s));
+</script>
+
+<!-- Tiny reveal-on-scroll script — no framework -->
+<script>
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

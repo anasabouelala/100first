@@ -1,5 +1,5 @@
 /**
- * LaunchVelocity Companion · popup
+ * Viraholic Companion · popup
  *
  * Intentionally minimal. The popup is just an entry point into the
  * dashboard — it does not duplicate the dashboard's stats. CWS reviewers

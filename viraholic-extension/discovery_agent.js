@@ -1,5 +1,5 @@
 /**
- * Answerly Discovery Agent v1.0
+ * Viraholic Discovery Agent v1.0
  * ============================================
  * Content script injected on X / LinkedIn / Reddit for stealth account discovery.
  * Performs search result scraping and profile fingerprinting with full biometric simulation.
@@ -277,8 +277,22 @@
                 }
             }
         }
-        // Specific element checks
-        if (document.querySelector('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[title*="captcha" i]')) {
+        // Specific element checks — only a VISIBLE, RENDERED captcha iframe is a
+        // real challenge. X embeds Google's INVISIBLE reCAPTCHA scoring frame
+        // (recaptcha/api2/aframe, 0×0/display:none) on logged-in pages at all
+        // times for bot-scoring; matching it falsely flagged every X scrape as
+        // captcha-blocked. Exclude the invisible aframe + require real size.
+        const captchaIframe = Array.from(document.querySelectorAll(
+            'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[title*="captcha" i]'
+        )).find(f => {
+            const src = f.getAttribute('src') || '';
+            if (/recaptcha\/api2\/aframe/i.test(src)) return false;
+            let r, cs;
+            try { r = f.getBoundingClientRect(); cs = getComputedStyle(f); } catch { return false; }
+            return r.width > 100 && r.height > 100
+                && cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0';
+        });
+        if (captchaIframe) {
             return { blocked: true, type: 'captcha', indicator: 'iframe' };
         }
         if (document.querySelector('[data-testid="LoginForm_Login_Button"]') &&

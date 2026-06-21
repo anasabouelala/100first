@@ -6,8 +6,8 @@ import {
 } from 'lucide-react';
 
 interface Props {
-  mode?: 'first-time' | 'edit';
-  onClose?: () => void;       // only called in 'edit' mode
+  mode?: 'first-time' | 'edit' | 'new';
+  onClose?: () => void;       // only called in 'edit' / 'new' mode
 }
 
 const CATEGORY_PRESETS = [
@@ -24,8 +24,9 @@ const STAGE_OPTIONS: Array<{ value: ProjectConfig['stage']; label: string; desc:
 
 export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) => {
   const { project, setProject } = useProject();
+  // 'new' mode starts blank (replacing current project); 'edit' starts with current values.
   const [form, setForm] = useState<Partial<ProjectConfig>>(
-    project || { stage: 'pre-launch' }
+    mode === 'new' ? { stage: 'pre-launch' } : (project || { stage: 'pre-launch' })
   );
   const [showOptional, setShowOptional] = useState(mode === 'edit');
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -33,6 +34,41 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
   const update = <K extends keyof ProjectConfig>(key: K, value: ProjectConfig[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
     if (errors[key]) setErrors(e => ({ ...e, [key]: false }));
+  };
+
+  // ── Single active project ──────────────────────────────────────────
+  // The app holds exactly ONE project (`project_config_v1`). Creating a new
+  // project REPLACES the active one — so it must start clean. Previously the
+  // new project silently inherited the old one's workspace (tracked accounts,
+  // posts, leads, voice), which made it feel like two projects were bleeding
+  // together. Here we wipe the prior project's working data while preserving
+  // the Supabase auth session, so there's only ever one clean active project.
+  const resetWorkspaceForNewProject = () => {
+    try {
+      const saved: Record<string, string> = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        // keep auth/session keys so the user stays signed in
+        if (/supabase|^sb-|auth/i.test(k)) {
+          const v = localStorage.getItem(k);
+          if (v != null) saved[k] = v;
+        }
+      }
+      localStorage.clear();
+      Object.entries(saved).forEach(([k, v]) => localStorage.setItem(k, v));
+    } catch {}
+    try { sessionStorage.clear(); } catch {}
+    // Clear the extension's tracked accounts / captured posts too, so the new
+    // project's Posts Tracker and Account Finder start empty.
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ action: 'STOP_RECON_MISSION' });
+      }
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.clear();
+      }
+    } catch {}
   };
 
   const handleSubmit = () => {
@@ -49,6 +85,9 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
       setErrors(next);
       return;
     }
+    // A brand-new project replaces the active one — wipe the old workspace
+    // first so nothing from the previous project carries over.
+    if (mode === 'new') resetWorkspaceForNewProject();
     const now = new Date().toISOString();
     setProject({
       productName: form.productName!.trim(),
@@ -61,7 +100,8 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
       stage: form.stage,
       websiteUrl: form.websiteUrl?.trim(),
       primaryGoal: form.primaryGoal?.trim(),
-      createdAt: project?.createdAt || now,
+      // 'new' mode creates a fresh project — don't inherit the old createdAt.
+      createdAt: (mode === 'new' ? now : (project?.createdAt || now)),
       updatedAt: now
     });
     if (onClose) onClose();
@@ -74,8 +114,8 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
   // The form body (shared between modes)
   const body = (
     <>
-      {/* Close (edit mode) */}
-      {mode === 'edit' && onClose && (
+      {/* Close (edit / new mode) */}
+      {mode !== 'first-time' && onClose && (
         <button onClick={onClose}
           className="absolute top-4 right-4 z-10 p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-700 transition-colors">
           <X size={18} />
@@ -83,22 +123,26 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
       )}
 
       {/* Header */}
-      <div className={`${mode === 'edit' ? 'p-8 pb-6' : 'mb-8'}`}>
+      <div className={`${mode !== 'first-time' ? 'p-8 pb-6' : 'mb-8'}`}>
         <div className="flex items-center gap-2 mb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20">
             <Rocket size={20} />
           </div>
           <div className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">
-            {mode === 'edit' ? 'Edit Project' : 'One-time Setup'}
+            {mode === 'edit' ? 'Edit project' : mode === 'new' ? 'New project' : 'One-time setup'}
           </div>
         </div>
         <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight">
-          {mode === 'edit' ? 'Update your project' : 'Tell us about your product'}
+          {mode === 'edit' ? 'Update your project'
+            : mode === 'new' ? 'Set up a new project'
+            : 'Tell us about your product'}
         </h1>
         <p className="text-gray-500 mt-2 leading-relaxed">
           {mode === 'edit'
-            ? 'Changes apply to every section — personas, distribution, strategy, content engine.'
-            : 'Fill this once. Every section — personas, distribution, competitor analysis, strategy, content engine — will use this data instead of asking you again.'}
+            ? 'Changes apply to every section — account finder, feed watcher, content engine.'
+            : mode === 'new'
+              ? 'You can only have one active project at a time, so this replaces your current one — its tracked accounts, posts and voice are cleared, and the new project starts fresh. You stay signed in.'
+              : 'Fill this once. Every section — account finder, feed watcher, content engine — will use this data instead of asking you again.'}
         </p>
 
         {/* Progress */}
@@ -112,7 +156,7 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
       </div>
 
       {/* Required fields */}
-      <div className={`bg-white ${mode === 'edit' ? 'mx-8' : ''} rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5`}>
+      <div className={`bg-white ${mode !== 'first-time' ? 'mx-8' : ''} rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5`}>
         <FieldRow
           icon={<Tag size={14} />}
           label="Product name"
@@ -121,7 +165,7 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
           <input
             value={form.productName || ''}
             onChange={e => update('productName', e.target.value)}
-            placeholder="e.g. Answerly"
+            placeholder="e.g. Viraholic"
             className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-base font-medium transition-colors" />
         </FieldRow>
 
@@ -134,7 +178,7 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
           <textarea
             value={form.pitch || ''}
             onChange={e => update('pitch', e.target.value)}
-            placeholder="e.g. Answerly turns every social platform into a customer-acquisition engine for SaaS founders by surfacing buying-intent conversations across Reddit, X and LinkedIn, then drafting on-brand replies."
+            placeholder="e.g. Viraholic turns every social platform into a customer-acquisition engine for SaaS founders by surfacing buying-intent conversations across Reddit, X and LinkedIn, then drafting on-brand replies."
             rows={3}
             className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-sm leading-relaxed resize-none transition-colors" />
         </FieldRow>
@@ -181,7 +225,7 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
 
       {/* Optional toggle */}
       <button onClick={() => setShowOptional(s => !s)}
-        className={`${mode === 'edit' ? 'mx-8' : ''} mt-4 w-[calc(100%-${mode === 'edit' ? '4rem' : '0'})] mx-auto flex items-center justify-between px-5 py-3 rounded-2xl border border-gray-200 hover:border-gray-300 bg-white transition-all group`}
+        className={`${mode !== 'first-time' ? 'mx-8' : ''} mt-4 w-[calc(100%-${mode === 'edit' ? '4rem' : '0'})] mx-auto flex items-center justify-between px-5 py-3 rounded-2xl border border-gray-200 hover:border-gray-300 bg-white transition-all group`}
         style={mode === 'edit' ? { width: 'calc(100% - 4rem)' } : {}}>
         <span className="flex items-center gap-2">
           <Sparkles size={14} className="text-amber-500" />
@@ -193,7 +237,7 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
 
       {/* Optional fields */}
       {showOptional && (
-        <div className={`bg-white ${mode === 'edit' ? 'mx-8' : ''} rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5 mt-3 animate-fade-in`}>
+        <div className={`bg-white ${mode !== 'first-time' ? 'mx-8' : ''} rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5 mt-3 animate-fade-in`}>
           <FieldRow icon={<Swords size={14} />} label="Unique value / wedge">
             <textarea
               value={form.valueProposition || ''}
@@ -255,7 +299,7 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
 
       {/* Footer CTA */}
       <div className={`${mode === 'edit' ? 'mx-8 mb-8' : ''} mt-6 flex items-center gap-3`}>
-        {mode === 'edit' && onClose && (
+        {mode !== 'first-time' && onClose && (
           <button onClick={onClose}
             className="px-6 py-3 text-gray-500 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
             Cancel
@@ -264,12 +308,12 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
         <button onClick={handleSubmit}
           className="flex-1 flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-primary to-blue-600 text-white font-bold text-base rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:scale-[1.01] active:scale-100 transition-all">
           <Check size={18} />
-          {mode === 'edit' ? 'Save changes' : 'Launch project'}
+          {mode === 'edit' ? 'Save changes' : mode === 'new' ? 'Create project' : 'Launch project'}
         </button>
       </div>
 
-      {/* Footer hint */}
-      {mode !== 'edit' && (
+      {/* Footer hint — only on first-time */}
+      {mode === 'first-time' && (
         <p className="text-[11px] text-gray-400 text-center mt-4 font-medium">
           Everything is stored locally — never sent anywhere except to the AI sections you trigger manually.
         </p>
@@ -277,9 +321,9 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
     </>
   );
 
-  // Wrap in modal (edit) or full-page (first-time) — done inline so
+  // Wrap in modal (edit / new) or full-page (first-time) — done inline so
   // the input components aren't unmounted on every keystroke
-  if (mode === 'edit') {
+  if (mode !== 'first-time') {
     return (
       <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-md animate-fade-in">
         <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl relative">
@@ -343,28 +387,21 @@ export const ProjectSummaryCard: React.FC<{ onEdit: () => void; compact?: boolea
     );
   }
 
+  // Discreet badge — just the project name + stage. Single click to edit.
   return (
-    <div className="bg-gradient-to-br from-primary/5 to-blue-50 rounded-3xl border border-primary/20 p-6 mb-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] font-black tracking-widest uppercase text-primary">Active Project</span>
-            {project.stage && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-primary/20 text-primary">{project.stage}</span>
-            )}
-          </div>
-          <h2 className="text-2xl font-display font-bold text-gray-900">{project.productName}</h2>
-          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{project.pitch}</p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-white border border-gray-200 text-gray-700">{project.category}</span>
-            <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-white border border-gray-200 text-gray-700">For: {project.targetAudience}</span>
-          </div>
-        </div>
-        <button onClick={onEdit}
-          className="flex-shrink-0 px-4 py-2 text-xs font-black tracking-widest uppercase text-primary bg-white border border-primary/20 hover:border-primary rounded-xl transition-all">
-          Edit
-        </button>
-      </div>
-    </div>
+    <button
+      onClick={onEdit}
+      className="group inline-flex items-center gap-2 px-3 py-1.5 mb-6 rounded-full border border-gray-200 bg-white
+                 hover:border-gray-400 hover:shadow-sm
+                 transition-all duration-200 ease-out active:scale-[0.98]"
+      title="Edit project"
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+      <span className="text-xs font-medium text-gray-900">{project.productName}</span>
+      {project.stage && (
+        <span className="text-[10px] text-gray-400">· {project.stage}</span>
+      )}
+      <span className="text-[10px] text-gray-300 group-hover:text-gray-600 transition-colors duration-200">Edit</span>
+    </button>
   );
 };

@@ -1,4 +1,4 @@
-// server.js — LaunchVelocity PH Scout backend
+// server.js — Viraholic PH Scout backend
 import express from 'express';
 import cors from 'cors';
 import Steel from 'steel-sdk';

@@ -16,43 +16,40 @@ export const StrategyView: React.FC<StrategyViewProps> = ({ plan }) => {
   return (
     <div className="space-y-12 animate-fade-in pb-20">
 
-      {/* ═══════════ HERO ═══════════ */}
-      <section className="bg-gradient-to-br from-indigo-950 via-gray-900 to-violet-950 rounded-[2rem] p-8 lg:p-10 text-white relative overflow-hidden">
-        <div className="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full bg-violet-500/15 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-
-        <div className="relative">
-          <div className="flex items-center gap-2 mb-3 text-[10px] font-black tracking-[0.3em] uppercase">
-            <Rocket size={12} className="text-amber-300" />
-            <span className="text-amber-300">Launch roadmap</span>
-            <span className="text-white/30">·</span>
-            <span className="text-white/40">2026 AI-era playbook</span>
+      {/* ═══════════ INTRO ═══════════ */}
+      {/* Page title is provided by the shared glass header in App. This block
+           keeps the substantive intro (target + North Star + pricing) without
+           a competing display-size heading. */}
+      <section className="glass-panel rounded-3xl p-6 lg:p-8">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="bg-violet-100 text-violet-700 p-2 rounded-xl"><Rocket size={16} /></div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-gray-900">
+              Shipping <span className="text-violet-700">{plan.productName}</span> to its first 100 users
+            </div>
+            <p className="text-[13px] text-gray-600 leading-relaxed mt-1">
+              Targeting <span className="font-semibold text-gray-900">{plan.targetAudience}</span>. Built for the post-AI-flood era where compounding loops, AI-native discovery, and founder brand beat the 2020 playbook.
+            </p>
           </div>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold tracking-tight leading-[1.05] mb-3">
-            Ship <span className="bg-gradient-to-r from-amber-300 via-orange-300 to-pink-300 bg-clip-text text-transparent">{plan.productName}</span> to its first 100 users
-          </h1>
-          <p className="text-white/60 text-base md:text-lg leading-relaxed max-w-3xl">
-            Targeting <span className="text-white font-bold">{plan.targetAudience}</span>. Built for the post-AI-flood era where compounding loops, AI-native discovery, and founder brand beat the 2020 playbook.
-          </p>
+        </div>
 
-          {/* North Star + Pricing Thesis row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-8 pt-6 border-t border-white/10">
+        {/* North Star + Pricing Thesis row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 pt-5 border-t border-gray-200">
             {plan.northStarMetric && (
               <div>
-                <div className="text-[10px] font-black tracking-widest uppercase text-amber-300 mb-1">★ North Star Metric</div>
-                <div className="text-2xl font-display font-bold mb-1">{plan.northStarMetric.name}</div>
-                <div className="text-[11px] font-mono text-emerald-400 font-bold mb-2">Target: {plan.northStarMetric.target}</div>
-                <p className="text-xs text-white/50 leading-relaxed italic">{plan.northStarMetric.rationale}</p>
+                <div className="text-[10px] font-black tracking-widest uppercase text-amber-700 mb-1">★ North Star Metric</div>
+                <div className="text-xl font-display font-bold text-gray-900 mb-1">{plan.northStarMetric.name}</div>
+                <div className="text-[11px] font-mono text-emerald-700 font-bold mb-2">Target: {plan.northStarMetric.target}</div>
+                <p className="text-xs text-gray-500 leading-relaxed italic">{plan.northStarMetric.rationale}</p>
               </div>
             )}
             {plan.pricingThesis && (
               <div>
-                <div className="text-[10px] font-black tracking-widest uppercase text-amber-300 mb-1">💰 Pricing Thesis</div>
-                <p className="text-sm text-white/80 leading-relaxed">{plan.pricingThesis}</p>
+                <div className="text-[10px] font-black tracking-widest uppercase text-amber-700 mb-1">💰 Pricing Thesis</div>
+                <p className="text-sm text-gray-700 leading-relaxed">{plan.pricingThesis}</p>
               </div>
             )}
           </div>
-        </div>
       </section>
 
       {/* ═══════════ TL;DR ═══════════ */}
@@ -618,95 +615,78 @@ const TrustLeversSection: React.FC<{ levers: TrustLever[] }> = ({ levers }) => (
 // SECTION 08 — RISK REGISTER (heatmap)
 // ═════════════════════════════════════════════════════════════════════
 const RiskRegisterSection: React.FC<{ risks: LaunchRisk[] }> = ({ risks }) => {
-  // Place risks on impact × probability grid
-  const cellOf = (impact: string, probability: string): [number, number] => {
-    const r = impact === 'High' ? 0 : impact === 'Medium' ? 1 : 2;
-    const c = probability === 'Low' ? 0 : probability === 'Medium' ? 1 : 2;
-    return [r, c];
+  // Severity score = impact × probability. Higher = more urgent to handle.
+  const scoreOf = (r: LaunchRisk) => {
+    const i = r.impact === 'High' ? 3 : r.impact === 'Medium' ? 2 : 1;
+    const p = r.probability === 'High' ? 3 : r.probability === 'Medium' ? 2 : 1;
+    return i * p;
+  };
+  const bandOf = (score: number) => {
+    if (score >= 6) return { label: 'Critical', color: 'rose', bg: 'bg-rose-500', soft: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-700' };
+    if (score >= 4) return { label: 'High',     color: 'amber', bg: 'bg-amber-500', soft: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700' };
+    if (score >= 2) return { label: 'Medium',   color: 'sky',   bg: 'bg-sky-500',   soft: 'bg-sky-50',   border: 'border-sky-200',   text: 'text-sky-700' };
+    return                  { label: 'Low',     color: 'emerald', bg: 'bg-emerald-500', soft: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700' };
   };
 
-  const grid: LaunchRisk[][][] = [[[],[],[]],[[],[],[]],[[],[],[]]];
-  risks.forEach((r, idx) => {
-    const [row, col] = cellOf(r.impact, r.probability);
-    grid[row][col].push({ ...r, _idx: idx } as any);
-  });
+  const ranked = risks
+    .map((r, idx) => ({ r, idx, score: scoreOf(r), band: bandOf(scoreOf(r)) }))
+    .sort((a, b) => b.score - a.score);
 
-  const cellColor = (row: number, col: number) => {
-    const score = (2 - row) + col;  // higher = more dangerous
-    if (score >= 3) return 'bg-rose-50 border-rose-200';
-    if (score >= 2) return 'bg-amber-50 border-amber-200';
-    return 'bg-emerald-50 border-emerald-200';
-  };
+  const counts = ranked.reduce((acc: Record<string, number>, x) => {
+    acc[x.band.label] = (acc[x.band.label] || 0) + 1; return acc;
+  }, {});
 
   return (
     <section>
       <SectionHeader number="10" kicker="What could go wrong" title="The risks (and how to handle them)" accent="#dc2626"
-        intro="Honest list of what could kill your launch. The grid shows how dangerous each risk is. Each risk has a fix you can do this week — not 'monitor closely'." />
+        intro="Sorted from most dangerous to least. Each risk has a fix you can do this week — not 'monitor closely'." />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4">
-        {/* Heatmap */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-[10px] font-black tracking-widest uppercase text-gray-400">Risk heatmap</div>
-            <AlertTriangle size={14} className="text-rose-400" />
-          </div>
-          <div className="relative pl-12 pb-8">
-            {/* Y axis */}
-            <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-[9px] font-black tracking-widest uppercase text-gray-400">
-              <span>High</span><span>Med</span><span>Low</span>
+      {/* Severity strip — quick scan of how many risks at each level */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        {['Critical', 'High', 'Medium', 'Low'].map(lab => {
+          const b = bandOf(lab === 'Critical' ? 9 : lab === 'High' ? 6 : lab === 'Medium' ? 3 : 1);
+          const n = counts[lab] || 0;
+          return (
+            <div key={lab} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${b.border} ${b.soft}`}>
+              <span className={`w-2 h-2 rounded-full ${b.bg}`}></span>
+              <span className={`text-[11px] font-black uppercase tracking-wider ${b.text}`}>{lab}</span>
+              <span className={`text-[11px] font-bold ${b.text}`}>· {n}</span>
             </div>
-            <div className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-full rotate-[-90deg] text-[9px] font-black tracking-widest uppercase text-gray-500 whitespace-nowrap">
-              Impact →
-            </div>
-            {/* Grid */}
-            <div className="grid grid-cols-3 gap-1">
-              {[0, 1, 2].map(row =>
-                [0, 1, 2].map(col => {
-                  const cell = grid[row][col];
-                  return (
-                    <div key={`${row}-${col}`} className={`min-h-[80px] rounded-xl border ${cellColor(row, col)} p-2 flex flex-wrap gap-1`}>
-                      {cell.map((r: any) => (
-                        <div key={r._idx}
-                          className="bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-[9px] font-black tracking-widest uppercase shadow-sm"
-                          title={r.risk}>
-                          R{r._idx + 1}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-            {/* X axis */}
-            <div className="absolute -bottom-2 left-12 right-0 flex justify-between text-[9px] font-black tracking-widest uppercase text-gray-400">
-              <span>Low</span><span>Med</span><span>High</span>
-            </div>
-            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 translate-y-full text-[9px] font-black tracking-widest uppercase text-gray-500">
-              Probability →
-            </div>
-          </div>
-        </div>
-
-        {/* Detailed list */}
-        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-          <div className="text-[10px] font-black tracking-widest uppercase text-gray-400 mb-3">Mitigations</div>
-          <ol className="space-y-3">
-            {risks.map((r, i) => {
-              const sev = r.impact === 'High' ? 'border-l-rose-500' : r.impact === 'Medium' ? 'border-l-amber-500' : 'border-l-emerald-500';
-              return (
-                <li key={i} className={`pl-3 border-l-2 ${sev}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-mono font-black text-gray-400">R{i + 1}</span>
-                    <span className="text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-600">{r.impact}/{r.probability}</span>
-                  </div>
-                  <p className="text-sm font-bold text-gray-800 leading-snug mb-1">{r.risk}</p>
-                  <p className="text-[11px] text-emerald-700 italic leading-snug">→ {r.mitigation}</p>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
+          );
+        })}
       </div>
+
+      {/* Risk list — severity sorted, generous spacing, no squeezed labels */}
+      <ol className="space-y-3">
+        {ranked.map(({ r, idx, band }) => (
+          <li key={idx}
+              className={`bg-white border ${band.border} rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow`}>
+            <div className={`flex items-stretch`}>
+              {/* Severity stripe */}
+              <div className={`w-1.5 flex-shrink-0 ${band.bg}`} />
+              <div className="flex-1 p-4 md:p-5 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${band.text} ${band.soft} border ${band.border}`}>
+                    <AlertTriangle size={11} /> {band.label}
+                  </span>
+                  <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
+                    Impact <b className="text-gray-700">{r.impact}</b>
+                  </span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
+                    Probability <b className="text-gray-700">{r.probability}</b>
+                  </span>
+                </div>
+                <p className="text-[15px] font-semibold text-gray-900 leading-snug mb-2 break-words">{r.risk}</p>
+                <div className="flex items-start gap-2 text-[13px] text-emerald-800 bg-emerald-50/70 border border-emerald-100 rounded-lg px-3 py-2">
+                  <span className="font-black text-emerald-600 mt-0.5">→</span>
+                  <p className="leading-relaxed">{r.mitigation}</p>
+                </div>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 };

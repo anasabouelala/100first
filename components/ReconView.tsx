@@ -19,6 +19,7 @@ export const ReconView: React.FC = () => {
   const [selectedCompetitor, setSelectedCompetitor] = useState<CompetitorData | null>(null);
   const [deepDiveLoading, setDeepDiveLoading] = useState(false);
   const [deepDiveData, setDeepDiveData] = useState<CompetitorDeepDive | null>(null);
+  const [deepDiveError, setDeepDiveError] = useState<string | null>(null);
 
   const handleScan = async () => {
     if (!description.trim()) return;
@@ -38,12 +39,14 @@ export const ReconView: React.FC = () => {
   const handleDeepDive = async (competitor: CompetitorData) => {
     setSelectedCompetitor(competitor);
     setDeepDiveData(null);
+    setDeepDiveError(null);
     setDeepDiveLoading(true);
     try {
       const data = await analyzeCompetitorStrategy(competitor.name, competitor.url);
       setDeepDiveData(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setDeepDiveError(e?.message || 'Deep dive failed. Check the console for details.');
     } finally {
       setDeepDiveLoading(false);
     }
@@ -51,16 +54,12 @@ export const ReconView: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-base-300 pb-4">
-        <div>
-           <h2 className="text-3xl font-display font-bold">Competitor <span className="text-primary">Analysis</span></h2>
-           <p className="text-sm opacity-70 mt-1">Identify competitors and reverse engineer their launch strategies.</p>
-        </div>
-      </div>
+      {/* Page title is provided by the shared glass header in App. */}
 
-      {/* Pre-filled scan card (from project context) */}
+      {/* Pre-filled scan card (from project context) — app-style, matches
+           Account Finder + Posts Tracker. */}
       {!showEdit && project ? (
-        <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
@@ -75,106 +74,133 @@ export const ReconView: React.FC = () => {
               <Edit2 size={11} /> Override
             </button>
           </div>
-          <button onClick={handleScan} disabled={loading || !description}
-            className="btn btn-primary w-full text-white gap-2">
-            {loading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
+          <button
+            onClick={handleScan}
+            disabled={loading || !description}
+            className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold disabled:bg-gray-200 disabled:text-gray-400 transition-all duration-200 ease-out active:scale-[0.98]"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
             {loading ? 'Scanning…' : 'Scan competitors'}
           </button>
         </div>
       ) : (
-        <div className="card bg-base-100 shadow-md">
-          <div className="card-body">
-            <div className="form-control">
-              <label className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-1.5">Override description (this scan only)</label>
-              <div className="join w-full">
-                <input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe your product..."
-                  className="input input-bordered input-primary join-item w-full" />
-                <button onClick={handleScan} disabled={loading || !description}
-                  className="btn btn-primary join-item text-white">
-                  {loading ? <span className="loading loading-spinner"></span> : <Search size={18} />}
-                  Scan
-                </button>
-              </div>
-              {project && (
-                <button onClick={() => { setDescription(project.pitch); setShowEdit(false); }}
-                  className="text-[10px] font-bold tracking-widest uppercase text-gray-400 hover:text-gray-700 mt-2 self-start">
-                  ← Use project description
-                </button>
-              )}
-            </div>
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+          <label className="text-[10px] font-black tracking-widest uppercase text-gray-500 block mb-2">Override description (this scan only)</label>
+          <div className="flex gap-2">
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe your product…"
+              className="flex-1 px-3 py-2.5 rounded-lg border border-gray-200 focus:border-gray-400 text-sm outline-none"
+            />
+            <button
+              onClick={handleScan}
+              disabled={loading || !description}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold disabled:bg-gray-200 disabled:text-gray-400 transition-all duration-200 ease-out active:scale-[0.98]"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+              Scan
+            </button>
           </div>
+          {project && (
+            <button
+              onClick={() => { setDescription(project.pitch); setShowEdit(false); }}
+              className="text-[10px] font-bold tracking-widest uppercase text-gray-400 hover:text-gray-700 mt-3 flex items-center gap-1"
+            >
+              ← Use project description
+            </button>
+          )}
         </div>
       )}
 
       {/* Competitor Grid */}
       {competitors.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-             {competitors.map((comp, idx) => (
-                <div 
-                  key={idx} 
-                  className={`card bg-base-100 shadow-md hover:shadow-xl transition-all cursor-pointer border ${selectedCompetitor?.name === comp.name ? 'border-primary ring-1 ring-primary' : 'border-base-200'}`}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             {competitors.map((comp, idx) => {
+                const threatStyle =
+                  comp.threatLevel === 'High'   ? 'text-rose-700 bg-rose-50 border-rose-200' :
+                  comp.threatLevel === 'Medium' ? 'text-amber-700 bg-amber-50 border-amber-200' :
+                                                  'text-gray-600 bg-gray-100 border-gray-200';
+                const selected = selectedCompetitor?.name === comp.name;
+                return (
+                <div
+                  key={idx}
                   onClick={() => handleDeepDive(comp)}
+                  className={`bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col ${
+                    selected ? 'border-indigo-500 ring-1 ring-indigo-300' : 'border-gray-200 hover:border-gray-300'
+                  }`}
                 >
-                   <div className="card-body p-6">
-                       <div className="flex justify-between items-start">
-                          <div className={`badge ${
-                              comp.threatLevel === 'High' ? 'badge-error' : 
-                              comp.threatLevel === 'Medium' ? 'badge-warning' :
-                              'badge-ghost'
-                          } badge-outline font-bold`}>
-                              {comp.threatLevel} Threat
-                          </div>
-                          <span className="text-xs font-mono opacity-50">{comp.similarityScore}% Match</span>
-                       </div>
-
-                       <h3 className="card-title text-xl mt-2">{comp.name}</h3>
-                       <a href={comp.url} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" className="link link-hover text-xs opacity-60 flex items-center gap-1">
-                          {new URL(comp.url).hostname} <ExternalLink size={10} />
-                       </a>
-
-                       <p className="text-sm opacity-80 py-2 h-16">{comp.tagline}</p>
-
-                       <progress className="progress progress-primary w-full" value={comp.similarityScore} max="100"></progress>
-
-                       <div className="card-actions mt-4">
-                           <button className="btn btn-sm btn-outline btn-primary w-full gap-2">
-                               <Zap size={14} /> Analyze Strategy
-                           </button>
-                       </div>
-                   </div>
+                  <div className="flex justify-between items-start mb-3">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${threatStyle}`}>
+                      {comp.threatLevel} Threat
+                    </span>
+                    <span className="text-[11px] font-mono text-gray-400">{comp.similarityScore}% Match</span>
+                  </div>
+                  <h3 className="font-display text-lg font-semibold text-gray-900 leading-tight">{comp.name}</h3>
+                  <a href={comp.url} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer"
+                     className="text-xs text-gray-500 hover:text-gray-900 flex items-center gap-1 mt-1">
+                    {(() => { try { return new URL(comp.url).hostname; } catch { return comp.url; } })()}
+                    <ExternalLink size={10} />
+                  </a>
+                  <p className="text-sm text-gray-600 mt-3 mb-4 line-clamp-3 leading-relaxed min-h-[3.75rem]">{comp.tagline}</p>
+                  <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden mb-4">
+                    <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, comp.similarityScore)}%` }} />
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeepDive(comp); }}
+                    className="mt-auto w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-indigo-400 text-indigo-700 hover:text-indigo-800 text-xs font-bold transition-colors bg-white"
+                  >
+                    <Zap size={13} /> Analyze strategy
+                  </button>
                 </div>
-             ))}
+                );
+             })}
           </div>
       )}
 
       {/* Deep Dive Panel (Drawer style overlay) */}
       {selectedCompetitor && (
-          <div className="fixed inset-y-0 right-0 w-full md:w-[700px] bg-base-100 shadow-2xl z-50 transform transition-transform duration-300 animate-fade-in border-l border-base-200 flex flex-col">
+          <>
+          <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={() => setSelectedCompetitor(null)} />
+          <div className="fixed inset-y-0 right-0 w-full md:w-[720px] glass-panel z-50 shadow-2xl transform transition-transform duration-300 animate-fade-in flex flex-col">
               {/* Header */}
-              <div className="p-6 border-b border-base-200 bg-base-100 flex justify-between items-start">
+              <div className="p-6 border-b border-gray-200/60 flex justify-between items-start">
                   <div>
-                      <div className="badge badge-primary badge-outline mb-2">Target Acquired</div>
-                      <h3 className="text-3xl font-display font-bold flex items-center gap-2">
+                      <span className="inline-block text-[10px] font-black uppercase tracking-widest text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-md mb-2">Target Acquired</span>
+                      <h3 className="text-3xl font-display font-bold text-gray-900 flex items-center gap-2">
                         {selectedCompetitor.name}
                       </h3>
-                      <p className="text-sm opacity-60 mt-1">Forensic Marketing Analysis</p>
+                      <p className="text-sm text-gray-500 mt-1">Forensic Marketing Analysis</p>
                   </div>
-                  <button onClick={() => setSelectedCompetitor(null)} className="btn btn-circle btn-ghost">
-                     <X size={24} />
+                  <button onClick={() => setSelectedCompetitor(null)} className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors" aria-label="Close">
+                     <X size={20} />
                   </button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
                  {deepDiveLoading ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
-                       <span className="loading loading-ring loading-lg text-primary"></span>
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
+                       <Loader2 size={32} className="text-indigo-500 animate-spin" />
                        <div>
-                          <h4 className="text-lg font-bold">Decoding Strategy...</h4>
-                          <p className="text-sm opacity-60">Extracting timelines, KPIs, and tech stack.</p>
+                          <h4 className="text-base font-semibold text-gray-900">Decoding strategy…</h4>
+                          <p className="text-sm text-gray-500 mt-1">Extracting timelines, KPIs and tech stack.</p>
                        </div>
+                    </div>
+                 ) : deepDiveError ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-4 px-6">
+                       <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center">
+                          <AlertTriangle size={26} className="text-rose-500" />
+                       </div>
+                       <div>
+                          <h4 className="text-base font-semibold text-gray-900">Deep dive failed</h4>
+                          <p className="text-sm text-gray-500 mt-1 max-w-md">{deepDiveError}</p>
+                          <p className="text-[12px] text-gray-400 mt-3">Most common cause: missing or invalid Gemini API key. Open the browser console for the full error.</p>
+                       </div>
+                       <button
+                          onClick={() => handleDeepDive(selectedCompetitor)}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 hover:bg-gray-800 text-white transition-colors">
+                          Try again
+                       </button>
                     </div>
                  ) : deepDiveData ? (
                     <div className="space-y-8">
@@ -308,11 +334,7 @@ export const ReconView: React.FC = () => {
                  ) : null}
               </div>
           </div>
-      )}
-
-      {/* Backdrop */}
-      {selectedCompetitor && (
-          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden" onClick={() => setSelectedCompetitor(null)}></div>
+          </>
       )}
 
     </div>

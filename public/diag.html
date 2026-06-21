@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Extension Diagnostic</title>
+<style>
+body { font-family: monospace; background: #111; color: #0f0; padding: 20px; font-size: 14px; }
+.pass { color: #0f0; } .fail { color: #f44; } .warn { color: #fa0; } .info { color: #0af; }
+h1 { color: #fff; } #log { white-space: pre-wrap; line-height: 1.8; }
+</style>
+</head>
+<body>
+<h1>Viraholic Extension Diagnostic</h1>
+<div id="log"></div>
+<script>
+const log = document.getElementById('log');
+function out(msg, cls) {
+  const d = document.createElement('div');
+  d.className = cls || 'info';
+  d.textContent = msg;
+  log.appendChild(d);
+}
+
+out('=== STEP 1: Check chrome.runtime ===');
+if (typeof chrome === 'undefined' || !chrome.runtime) {
+  out('FAIL: chrome.runtime is undefined. No extension API available.', 'fail');
+  out('  -> This means NO content script is injecting on this page.', 'fail');
+  out('  -> Check: is the extension loaded in chrome://extensions?', 'warn');
+  out('  -> Check: is the extension loaded from the correct folder?', 'warn');
+} else {
+  out('chrome.runtime exists: OK', 'pass');
+  out('chrome.runtime.id: ' + (chrome.runtime.id || 'undefined'), chrome.runtime.id ? 'pass' : 'fail');
+  out('chrome.runtime.sendMessage available: ' + (typeof chrome.runtime.sendMessage === 'function'), 'info');
+}
+
+out('');
+out('=== STEP 2: Check bridge globals ===');
+out('window.__answerly_bridge__: ' + (window.__answerly_bridge__ || 'undefined'), window.__answerly_bridge__ ? 'pass' : 'warn');
+out('window.__answerly_bridge_version__: ' + (window.__answerly_bridge_version__ || 'undefined'), window.__answerly_bridge_version__ ? 'pass' : 'warn');
+out('window.__answerly_bridge_loaded_at__: ' + (window.__answerly_bridge_loaded_at__ || 'undefined'), window.__answerly_bridge_loaded_at__ ? 'pass' : 'warn');
+
+out('');
+out('=== STEP 3: Listen for EXTENSION_BRIDGE_READY handshake ===');
+let handshakeReceived = false;
+window.addEventListener('EXTENSION_BRIDGE_READY', (e) => {
+  handshakeReceived = true;
+  out('HANDSHAKE RECEIVED! Detail: ' + JSON.stringify(e.detail), 'pass');
+});
+
+out('');
+out('=== STEP 4: Check chrome.storage ===');
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+  out('chrome.storage.local available: OK', 'pass');
+  try {
+    chrome.storage.local.get(null, (items) => {
+      if (chrome.runtime.lastError) {
+        out('chrome.storage.local.get error: ' + chrome.runtime.lastError.message, 'fail');
+      } else {
+        const keys = Object.keys(items);
+        out('Storage keys (' + keys.length + '): ' + keys.join(', '), 'pass');
+      }
+    });
+  } catch (e) {
+    out('chrome.storage.local.get threw: ' + e.message, 'fail');
+  }
+} else {
+  out('chrome.storage.local: NOT available', 'fail');
+}
+
+out('');
+out('=== STEP 5: Ping background service worker ===');
+if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+  try {
+    chrome.runtime.sendMessage({ action: 'DISCOVERY_PING' }, (response) => {
+      if (chrome.runtime.lastError) {
+        out('Background ping ERROR: ' + chrome.runtime.lastError.message, 'fail');
+      } else {
+        out('Background ping RESPONSE: ' + JSON.stringify(response), 'pass');
+      }
+    });
+  } catch (e) {
+    out('sendMessage threw: ' + e.message, 'fail');
+  }
+} else {
+  out('Cannot ping background — chrome.runtime.sendMessage not available', 'fail');
+}
+
+out('');
+out('=== STEP 6: Page info ===');
+out('URL: ' + window.location.href, 'info');
+out('Protocol: ' + window.location.protocol, 'info');
+out('UserAgent: ' + navigator.userAgent.substring(0, 80) + '...', 'info');
+
+setTimeout(() => {
+  out('');
+  out('=== STEP 7: Delayed re-check (3s) ===');
+  out('Bridge globals after 3s: __answerly_bridge__ = ' + (window.__answerly_bridge__ || 'undefined'), window.__answerly_bridge__ ? 'pass' : 'fail');
+  out('Handshake received: ' + handshakeReceived, handshakeReceived ? 'pass' : 'fail');
+
+  if (!window.__answerly_bridge__ && !handshakeReceived) {
+    out('');
+    out('=== DIAGNOSIS ===', 'fail');
+    out('The extension content script is NOT running on this page.', 'fail');
+    out('');
+    out('Checklist:', 'warn');
+    out('1. Go to chrome://extensions/', 'warn');
+    out('2. Find "Viraholic Companion" — is it there?', 'warn');
+    out('3. Click "Details" — what folder is it loaded from?', 'warn');
+    out('4. Expected: C:\\Users\\hp\\Downloads\\100first\\viraholic-extension', 'warn');
+    out('5. Click "Errors" — any errors listed?', 'warn');
+    out('6. Try: click Reload button on the extension, then F5 here', 'warn');
+    out('7. Check: is this Chrome profile the one with the extension?', 'warn');
+  } else {
+    out('');
+    out('=== ALL GOOD ===', 'pass');
+    out('Extension bridge is connected and working!', 'pass');
+  }
+}, 3000);
+</script>
+</body>
+</html>

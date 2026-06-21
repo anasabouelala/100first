@@ -834,7 +834,7 @@ const ManualAddForm: React.FC<{
           onChange={e => { setInput(e.target.value); setError(''); }}
           onKeyDown={e => { if (e.key === 'Enter') submit(); }}
           placeholder={placeholder}
-          className="flex-1 min-w-[200px] px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none hover:border-gray-400 focus:border-gray-400 transition-colors"
+          className="flex-1 min-w-[200px] px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-400 outline-none hover:border-gray-400 focus:border-gray-400 transition-colors"
         />
         <button
           onClick={submit}
@@ -1127,7 +1127,7 @@ const ConfigurationPanel: React.FC<any> = ({
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
             <AlertTriangle size={14} className="text-amber-700 mt-0.5 flex-shrink-0" />
             <div className="text-[10px] text-amber-800 leading-relaxed">
-              <span className="font-bold">Extension not installed.</span> Install the Answerly extension to search real accounts.
+              <span className="font-bold">Extension not installed.</span> Install the Viraholic extension to search real accounts.
             </div>
           </div>
         )}
@@ -1583,7 +1583,7 @@ const AccountRow: React.FC<{
               <>
               <button
                 onClick={() => onToggleAutoReply(!autoReply)}
-                className={`h-9 px-3.5 rounded-lg text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 border-2 transition-all whitespace-nowrap shadow-sm ${
+                className={`h-8 px-3.5 rounded-lg text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 border-2 transition-all whitespace-nowrap shadow-sm ${
                   autoReply
                     ? 'bg-violet-600 text-white border-violet-700 hover:bg-violet-700 shadow-violet-300/40'
                     : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 hover:border-violet-400'

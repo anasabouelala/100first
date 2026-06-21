@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "LaunchVelocity Companion",
+  "name": "Viraholic Companion",
   "version": "2.0.0",
   "description": "Smart engagement assistant for LinkedIn and X. Drafts in-context replies on posts you choose to track and waits for your one-tap approval before anything posts.",
   "icons": {
@@ -70,7 +70,7 @@
     }
   ],
   "action": {
-    "default_title": "LaunchVelocity Companion",
+    "default_title": "Viraholic Companion",
     "default_popup": "popup.html"
   }
 }
