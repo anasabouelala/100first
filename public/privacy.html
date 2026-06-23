@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Privacy Policy — Viraholic</title>
+<meta name="description" content="How Viraholic and the Viraholic Companion browser extension handle your data." />
+<meta name="theme-color" content="#eef2f7" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#0f172a; --body:#334155; --muted:#64748b; --line:rgba(15,23,42,0.1); --indigo:#4f46e5; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:'Inter',system-ui,sans-serif; color:var(--body); line-height:1.75; background:linear-gradient(180deg,#f3f5fb,#e9edf6); -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:48rem; margin:0 auto; padding:3.5rem 1.25rem 5rem; }
+  .brand{ display:inline-flex; align-items:center; gap:.5rem; text-decoration:none; margin-bottom:2rem; }
+  .logo{ width:30px; height:30px; border-radius:8px; display:grid; place-items:center; background:linear-gradient(135deg,#6366f1,#3b82f6); }
+  .brand span{ font-weight:700; color:var(--ink); font-size:1.05rem; }
+  h1{ color:var(--ink); font-size:2.1rem; font-weight:800; letter-spacing:-0.02em; margin:.2rem 0 .35rem; }
+  .meta{ color:var(--muted); font-size:.85rem; margin-bottom:2.2rem; }
+  h2{ color:var(--ink); font-size:1.2rem; font-weight:700; margin:2.2rem 0 .6rem; }
+  p,li{ font-size:.96rem; }
+  ul{ padding-inline-start:1.2rem; }
+  li{ margin:.3rem 0; }
+  a{ color:var(--indigo); }
+  .card{ background:rgba(255,255,255,0.7); border:1px solid rgba(255,255,255,0.8); border-radius:1rem; padding:1rem 1.2rem; margin:1.2rem 0; box-shadow:0 8px 30px rgba(15,23,42,0.06); }
+  .foot{ margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--line); font-size:.85rem; color:var(--muted); display:flex; gap:1rem; flex-wrap:wrap; }
+  .foot a{ color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="brand" href="/landing-growth.html">
+    <span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg></span>
+    <span>Viraholic</span>
+  </a>
+  <h1>Privacy Policy</h1>
+  <div class="meta">Last updated: 23 June 2026</div>
+
+  <p>This policy explains what data Viraholic (the web app) and the <strong>Viraholic Companion</strong> browser extension collect, why, and how we handle it. By using Viraholic you agree to this policy.</p>
+
+  <div class="card">
+    <strong>In short:</strong> Viraholic works on <em>your own</em> X (Twitter) and LinkedIn account, using your existing logged-in session. It drafts replies for you to review, and nothing is published without your explicit one-tap approval. We never ask for your social passwords, and we never sell your data.
+  </div>
+
+  <h2>1. Information we collect</h2>
+  <ul>
+    <li><strong>Account information</strong> — your email address and authentication data, managed through our auth provider (Supabase).</li>
+    <li><strong>Content you choose to act on</strong> — posts, profiles, and accounts you track, and the text the extension reads from the feed you are signed in to, so it can draft relevant replies.</li>
+    <li><strong>Drafts and settings</strong> — reply drafts, your saved "voice" configuration, language/dialect preference, and similar settings.</li>
+    <li><strong>Your AI API key</strong>, if you provide one, stored locally so the app can call the AI model.</li>
+    <li><strong>Basic usage data</strong> — limited diagnostic and activity information needed to run the product.</li>
+  </ul>
+
+  <h2>2. How we use your information</h2>
+  <ul>
+    <li>To find relevant conversations and draft replies in your voice.</li>
+    <li>To sync your tracked accounts, drafts, and settings between the extension and your dashboard.</li>
+    <li>To operate, secure, and improve the service.</li>
+  </ul>
+  <p>Text you choose to act on is sent to an <strong>AI provider (Google Gemini / DeepSeek)</strong> to generate drafts. We do not use your content to train our own models.</p>
+
+  <h2>3. Where your data lives</h2>
+  <p>Drafts, tracked items, and settings are stored <strong>locally in your browser</strong> (<code>chrome.storage.local</code> / <code>localStorage</code>) and in your Viraholic account. Authentication is handled by Supabase. AI requests are processed by the AI provider named above.</p>
+
+  <h2>4. The browser extension</h2>
+  <ul>
+    <li>Runs only on <strong>x.com</strong>, <strong>linkedin.com</strong>, and your Viraholic dashboard.</li>
+    <li>Uses your <strong>existing logged-in session</strong> — it never collects your social passwords.</li>
+    <li><strong>Never posts, likes, follows, or messages without your explicit approval.</strong> Drafts are queued for you to review; a dry-run mode lets the agent draft without posting.</li>
+  </ul>
+
+  <h2>5. What we do NOT do</h2>
+  <ul>
+    <li>We do not sell, rent, or share your personal data with advertisers or data brokers.</li>
+    <li>We do not collect data from sites other than those listed above.</li>
+    <li>We do not access your data for any purpose unrelated to operating Viraholic.</li>
+  </ul>
+
+  <h2>6. Data retention &amp; your choices</h2>
+  <p>Your data persists while your account is active. You can clear local data by removing the extension and clearing your dashboard's local storage, revoke your AI API key at any time, and request deletion of your account data by contacting us.</p>
+
+  <h2>7. Security</h2>
+  <p>We use reasonable technical measures to protect your data. No method of transmission or storage is 100% secure, and you use the service at your own risk.</p>
+
+  <h2>8. Children</h2>
+  <p>Viraholic is not directed to anyone under 18 and we do not knowingly collect their data.</p>
+
+  <h2>9. Changes</h2>
+  <p>We may update this policy; material changes will be reflected by the "Last updated" date above.</p>
+
+  <h2>10. Contact</h2>
+  <p>Questions about privacy: <a href="mailto:abouelala93@gmail.com">abouelala93@gmail.com</a></p>
+
+  <div class="foot">
+    <a href="/landing-growth.html">← Back to Viraholic</a>
+    <a href="/terms.html">Terms &amp; Conditions</a>
+  </div>
+</div>
+</body>
+</html>

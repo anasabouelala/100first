@@ -1,5 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+// ─── Output language / dialect for AI content generation ──────────────
+export type OutputLanguage = 'en' | 'ar' | 'ar-SA' | 'ar-AE' | 'fr';
+
+export const LANGUAGE_OPTIONS: { value: OutputLanguage; label: string; note: string }[] = [
+  { value: 'en',    label: 'English',                  note: 'Default' },
+  { value: 'ar',    label: 'العربية الفصحى',           note: 'Classical Arabic' },
+  { value: 'ar-SA', label: 'العربية — لهجة سعودية',    note: 'Saudi dialect' },
+  { value: 'ar-AE', label: 'العربية — لهجة إماراتية',  note: 'Emirati dialect' },
+  { value: 'fr',    label: 'Français',                 note: 'French' },
+];
+
 // ─── The single source of truth for product/project info ──────────────
 export interface ProjectConfig {
   productName: string;        // e.g. "Viraholic"
@@ -14,6 +25,7 @@ export interface ProjectConfig {
   stage?: 'idea' | 'pre-launch' | 'launched' | 'scaling';
   websiteUrl?: string;
   primaryGoal?: string;       // "Get first 100 users" / "Reach $10K MRR"
+  outputLanguage?: OutputLanguage;  // language/dialect for all AI-generated content
 
   // Metadata
   createdAt: string;

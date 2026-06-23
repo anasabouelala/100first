@@ -25,6 +25,47 @@ const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
 // model id (e.g. to `deepseek-chat`) is a one-line change.
 export const MODEL_FLASH = 'deepseek-v4-flash';
 
+// ─── Output language / dialect ─────────────────────────────────────
+// Content generators append this directive so every post, reply and
+// outreach message comes out in the language/dialect the user picked in
+// the project config (Voice Studio). Read from localStorage so service
+// functions don't each need the project threaded through their params.
+export type OutputLanguage = 'en' | 'ar' | 'ar-SA' | 'ar-AE' | 'fr';
+
+const LANGUAGE_DIRECTIVES: Record<OutputLanguage, string> = {
+  en: '',
+  ar: `
+
+═══ OUTPUT LANGUAGE — MODERN STANDARD ARABIC (العربية الفصحى) ═══
+Write ALL reader-facing text in refined, eloquent Modern Standard Arabic (فصحى) at the level of a top-tier Arabic copywriter: precise, dignified, persuasive — never stiff, never machine-translated. Vary the rhythm. Keep brand names and established tech terms (SaaS, X, LinkedIn, Reddit) in Latin script; use Western digits. JSON keys and enum values stay in English — only the human-readable text is Arabic.`,
+  'ar-SA': `
+
+═══ OUTPUT LANGUAGE — SAUDI ARABIC DIALECT (لهجة سعودية راقية) ═══
+Write ALL reader-facing text in natural, upscale Saudi dialect — the way a sharp, well-spoken Saudi founder writes on X today: confident, warm, modern, effortless. Keep it classy and premium: NO crude street slang, NO vulgarity, NO clownish filler. It must read native, not فصحى in disguise. Keep brand/tech terms in Latin script; Western digits. JSON keys/enums stay English; only human-readable text is Arabic.`,
+  'ar-AE': `
+
+═══ OUTPUT LANGUAGE — EMIRATI ARABIC DIALECT (لهجة إماراتية راقية) ═══
+Write ALL reader-facing text in natural, refined Emirati Gulf (خليجي) dialect — the voice of a polished Emirati creator: elegant, self-assured, contemporary. Keep it classy and premium: NO crude slang, NO vulgarity. It must read authentically Emirati, not generic فصحى. Keep brand/tech terms in Latin script; Western digits. JSON keys/enums stay English; only human-readable text is Arabic.`,
+  fr: `
+
+═══ LANGUE DE SORTIE — FRANÇAIS (haut de gamme) ═══
+Rédige TOUT le texte destiné au lecteur dans un français impeccable et haut de gamme, au niveau d'un excellent concepteur-rédacteur : élégant, rythmé, idiomatique — jamais traduit mécaniquement. Évite les anglicismes inutiles. Conserve les noms de marque et termes techniques établis (SaaS, X, LinkedIn) tels quels. Les clés et énumérations JSON restent en anglais ; seul le texte lisible est en français.`,
+};
+
+const getOutputLanguage = (): OutputLanguage => {
+  try {
+    if (typeof localStorage === 'undefined') return 'en';
+    const raw = localStorage.getItem('project_config_v1');
+    if (!raw) return 'en';
+    const lang = JSON.parse(raw)?.outputLanguage as OutputLanguage | undefined;
+    return lang && LANGUAGE_DIRECTIVES[lang] !== undefined ? lang : 'en';
+  } catch { return 'en'; }
+};
+
+/** Directive appended to content-generation prompts so output matches the
+ *  user's chosen language/dialect. Empty string for English (default). */
+export const languageDirective = (): string => LANGUAGE_DIRECTIVES[getOutputLanguage()] || '';
+
 // ── Gemini-compatible Type enum / Schema type ──────────────────────
 // These exist purely so the existing `Type.OBJECT` / `Type.STRING` literals
 // keep compiling. They are converted to JSON Schema strings before hitting
@@ -971,7 +1012,7 @@ export const generateChannelContent = async (
     CRITICAL: 
     - Adapt the tone perfectly (Reddit = authentic, PH = excited maker, HN = technical).
     - Provide 3 specific tips for this platform (e.g. "Don't use link shorteners", "Reply to every comment").
-  `;
+  ${languageDirective()}`;
 
   try {
     const response = await ai.models.generateContent({
@@ -1233,7 +1274,7 @@ export const generateColdOutreach = async (
     2. Be hyper-personalized. Reference specific things from their info.
     3. Goal: Get them to try the app (Beta) or give feedback. Not a hard sale.
     4. Tone: Casual, Founder-to-Founder, or "Hacker" vibes.
-  `;
+  ${languageDirective()}`;
 
   try {
     const response = await ai.models.generateContent({
@@ -1395,7 +1436,7 @@ export const generateOpportunityReply = async (
     - Mentioning the app should be natural, not forced. If the thread is genuinely about a problem the app solves and naming it would actually help the reader, you may bring it up briefly and conversationally — never as an ad. If it doesn't fit naturally, just write a normal helpful reply with no mention of the app.
     - Don't be spammy or copy-paste promotional. Avoid hard CTAs unless they'd feel completely natural from a real person.
     - Match the tone of the platform.
-  `;
+  ${languageDirective()}`;
 
   try {
     const response = await ai.models.generateContent({
@@ -1993,7 +2034,7 @@ Return JSON only.`;
       config: {
         responseMimeType: 'application/json',
         responseSchema: schema,
-        systemInstruction: 'You are an elite social copywriter trained on the best-performing posts of solo founders and contrarian thinkers. You hate corporate language. You worship specificity.'
+        systemInstruction: 'You are an elite social copywriter trained on the best-performing posts of solo founders and contrarian thinkers. You hate corporate language. You worship specificity.' + languageDirective()
       }
     });
     const text = response.text;
@@ -2078,8 +2119,9 @@ export const generateSmartEngagementComment = async (
     casual: 'TONE — CASUAL: Write like you are texting a smart friend. Relaxed and conversational, contractions, plain words, zero corporate stiffness. Warm and easy, never formal or salesy.',
     formal: 'TONE — FORMAL: Polished, professional, and precise. Complete sentences, no slang, no emojis. Measured and credible — the way a respected expert writes in a professional setting.',
   };
-  const toneDirective = toneDirectiveMap[tone]
-    || `TONE — ${tone.toUpperCase()}: Write the reply unmistakably in a ${tone} tone; it must be obvious from the very first sentence.`;
+  const toneDirective = (toneDirectiveMap[tone]
+    || `TONE — ${tone.toUpperCase()}: Write the reply unmistakably in a ${tone} tone; it must be obvious from the very first sentence.`)
+    + languageDirective();
   // When the user explicitly asked for "funny", a conflicting LOW humor dial
   // from their saved voice profile would sabotage it. The explicit tone wins:
   // we force the humor dial high so the voice block reinforces (not fights)

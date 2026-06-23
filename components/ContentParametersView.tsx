@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Loader2, Brain, AlertCircle, Zap, Twitter, Save, Bookmark, X, Plus } from 'lucide-react';
 import { useVoiceProfile } from '../hooks/useVoiceProfile';
+import { useProject, LANGUAGE_OPTIONS, type OutputLanguage } from '../contexts/ProjectContext';
 import { VoiceArchitectureSection, VoiceMatchQuiz } from './ContentEngineView';
 import { Section } from './ui/Section';
 
@@ -14,6 +15,7 @@ import { Section } from './ui/Section';
 
 export const ContentParametersView: React.FC = () => {
     const vp = useVoiceProfile();
+    const { project, updateProject } = useProject();
     const [quizOpen, setQuizOpen] = useState(false);
 
     // Calibration sample lets the user paste a writing sample so the AI
@@ -204,6 +206,28 @@ export const ContentParametersView: React.FC = () => {
 
     return (
         <div className="max-w-5xl mx-auto space-y-10 animate-fade-in pb-24">
+            {/* ─── OUTPUT LANGUAGE & DIALECT — global; stored on the project config.
+                Every generated post, reply and outreach message inherits it. ─── */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white">
+                <div className="shrink-0">
+                    <div className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                        <span aria-hidden="true">🌐</span> Output language &amp; dialect
+                    </div>
+                    <div className="text-[11px] text-gray-500">Applies to every generated post, reply and message.</div>
+                </div>
+                <select
+                    value={project?.outputLanguage || 'en'}
+                    onChange={(e) => updateProject({ outputLanguage: e.target.value as OutputLanguage })}
+                    dir="auto"
+                    aria-label="Output language and dialect"
+                    className="sm:ml-auto w-full sm:w-auto rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-gray-900 focus:outline-none"
+                >
+                    {LANGUAGE_OPTIONS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label} — {o.note}</option>
+                    ))}
+                </select>
+            </div>
+
             {/* ─── SAVED PROFILES — Chrome-style tab selector at the very top ───
                 Sits BEFORE any customization so the user picks a saved voice
                 first (like switching browser tabs), then tweaks below. Applying

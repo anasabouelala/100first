@@ -2,11 +2,11 @@
   "manifest_version": 3,
   "name": "Viraholic Companion",
   "version": "2.0.0",
-  "description": "Smart engagement assistant for LinkedIn and X. Drafts in-context replies on posts you choose to track and waits for your one-tap approval before anything posts.",
+  "description": "AI reply assistant for your X & LinkedIn account. Drafts in-context replies from your feed; you approve before anything posts.",
   "icons": {
-    "16": "icon.png",
-    "48": "icon.png",
-    "128": "icon.png"
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
   },
   "permissions": [
     "storage",
@@ -19,7 +19,6 @@
     "https://*.x.com/*",
     "https://twitter.com/*",
     "https://*.twitter.com/*",
-    "https://syndication.twitter.com/*",
     "https://linkedin.com/*",
     "https://*.linkedin.com/*",
     "http://localhost:3000/*",
@@ -71,6 +70,11 @@
   ],
   "action": {
     "default_title": "Viraholic Companion",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
   }
 }

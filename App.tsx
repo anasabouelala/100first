@@ -13,7 +13,7 @@ import { DashboardView } from './components/DashboardView';
 import {
   Zap, Menu, Home, ShieldCheck,
   Sparkles, Trash2, Plus, Crosshair, Settings2, Rss,
-  LogOut, Loader2, ArrowUpRight
+  LogOut, Loader2, ArrowUpRight, Clock
 } from 'lucide-react';
 
 // Unified section titles — one simple header for every section.
@@ -266,6 +266,43 @@ function AppInner() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-base-200" role="status" aria-live="polite">
         <div className="text-sm text-gray-600">Redirecting to sign in…</div>
+      </div>
+    );
+  }
+
+  // ── 3-day trial gate ──
+  // Free access is limited to 3 days from account creation. After that the user
+  // must create a new account. Client-side gate for now (reinforce server-side
+  // with Supabase RLS / an edge function later for tamper-resistance).
+  const TRIAL_DAYS = 3;
+  const trialCreatedMs = auth.user?.created_at ? Date.parse(auth.user.created_at) : NaN;
+  const trialEndsMs = Number.isFinite(trialCreatedMs) ? trialCreatedMs + TRIAL_DAYS * 86400000 : null;
+  if (trialEndsMs !== null && Date.now() > trialEndsMs) {
+    const startNewAccount = async () => {
+      try { await auth.signOut(); } catch {}
+      try { localStorage.removeItem('project_config_v1'); } catch {}
+      if (typeof window !== 'undefined') window.location.replace('/landing-growth.html');
+    };
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-base-200 px-4" role="status" aria-live="polite">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center">
+          <div className="w-14 h-14 mx-auto rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mb-5">
+            <Clock size={26} className="text-amber-500" aria-hidden="true" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Your 3-day trial has ended</h1>
+          <p className="text-gray-500 mt-3 leading-relaxed">
+            Thanks for trying Viraholic. Free access lasts 3 days per account. To keep
+            going, create a new account.
+          </p>
+          <button
+            type="button"
+            onClick={startNewAccount}
+            className="mt-7 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gray-900 text-white font-semibold hover:bg-black transition-colors"
+          >
+            <LogOut size={18} aria-hidden="true" /> Create a new account
+          </button>
+          <p className="text-[11px] text-gray-400 mt-4">You'll be signed out and taken to sign-up.</p>
+        </div>
       </div>
     );
   }
