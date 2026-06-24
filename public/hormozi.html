@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chat with Alex Hormozi's playbook — Viraholic</title>
+<meta name="description" content="An AI mentor trained on Alex Hormozi's playbook: offers, leads, and volume. Bring your free Gemini key and start chatting — no login required." />
+<meta name="theme-color" content="#eef2f7" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  fontFamily: { sans: ['Inter','sans-serif'], serif: ['"Instrument Serif"','serif'] },
+  animation: { 'fade-up':'fadeUp .5s cubic-bezier(0.16,1,0.3,1) forwards' },
+  keyframes: { fadeUp: { '0%':{opacity:'0',transform:'translateY(8px)'}, '100%':{opacity:'1',transform:'translateY(0)'} } }
+}}}
+</script>
+<style>
+  :root{ --ink:#0f172a; --body:#334155; --muted:#64748b; --line:rgba(15,23,42,0.1); --indigo:#6366f1; --blue:#3b82f6; --deep:#4f46e5; }
+  *{ box-sizing:border-box; } html,body{ height:100%; }
+  body{ font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased; color:var(--body); display:flex; flex-direction:column;
+    background-image:radial-gradient(60rem 60rem at 12% -8%,rgba(99,102,241,0.18),transparent 60%),radial-gradient(50rem 50rem at 110% 10%,rgba(13,148,136,0.14),transparent 55%),linear-gradient(180deg,#f3f5fb,#e9edf6); background-attachment:fixed; }
+  h1,h2,h3{ color:var(--ink); letter-spacing:-0.02em; }
+  :focus-visible{ outline:2px solid var(--deep); outline-offset:2px; border-radius:8px; }
+  .accent{ font-family:'Instrument Serif',serif; font-style:italic; font-weight:400; font-size:1.08em; background:linear-gradient(100deg,#3b82f6,#6366f1 55%,#4f46e5); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .glass{ background:rgba(255,255,255,0.72); border:1px solid rgba(255,255,255,0.6); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); }
+  .card{ background:rgba(255,255,255,0.78); border:1px solid rgba(255,255,255,0.8); box-shadow:0 8px 32px rgba(15,23,42,0.08); backdrop-filter:blur(18px) saturate(160%); -webkit-backdrop-filter:blur(18px) saturate(160%); }
+  .chip{ background:rgba(255,255,255,0.8); border:1px solid rgba(15,23,42,0.1); }
+  .btn-primary{ background:linear-gradient(180deg,#6366f1,#3b82f6); color:#fff; box-shadow:0 10px 30px -10px rgba(79,70,229,0.5); transition:transform .2s, filter .2s; }
+  .btn-primary:hover{ filter:brightness(1.03); transform:translateY(-1px); } .btn-primary:active{ transform:scale(.985); }
+  .btn-primary:disabled{ filter:grayscale(.3) brightness(.95); cursor:not-allowed; transform:none; }
+  .avatar{ position:relative; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; flex:none; background:linear-gradient(135deg,#6366f1,#3b82f6); color:#fff; font-weight:700; }
+  .avatar img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .bubble{ max-width:84%; line-height:1.55; }
+  .bubble-bot{ background:#fff; border:1px solid rgba(15,23,42,0.08); color:#1e293b; }
+  .bubble-user{ background:linear-gradient(180deg,#6366f1,#3b82f6); color:#fff; }
+  .bubble p{ margin:0 0 .55em; } .bubble p:last-child{ margin-bottom:0; }
+  .bubble ul,.bubble ol{ margin:.25em 0 .6em; padding-left:1.15em; } .bubble li{ margin:.15em 0; }
+  .bubble strong{ color:inherit; font-weight:700; } .bubble a{ color:var(--deep); text-decoration:underline; }
+  .dot{ width:6px; height:6px; border-radius:50%; background:var(--muted); display:inline-block; animation:blink 1.3s infinite both; }
+  .dot:nth-child(2){ animation-delay:.2s; } .dot:nth-child(3){ animation-delay:.4s; }
+  @keyframes blink{ 0%,80%,100%{opacity:.25;} 40%{opacity:1;} }
+  .msgs::-webkit-scrollbar{ width:10px; } .msgs::-webkit-scrollbar-thumb{ background:rgba(15,23,42,0.15); border-radius:8px; border:3px solid transparent; background-clip:content-box; }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- NAV -->
+<nav class="sticky top-0 z-40 glass border-b" style="border-color:var(--line)">
+  <div class="max-w-5xl mx-auto px-5 py-3 flex items-center justify-between">
+    <a href="/landing-growth.html" class="flex items-center gap-2" aria-label="Back to Viraholic">
+      <span class="w-7 h-7 rounded-lg grid place-items-center" style="background:linear-gradient(135deg,#6366f1,#3b82f6)"><svg viewBox="0 0 24 24" fill="#fff" class="w-4 h-4"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg></span>
+      <span class="font-semibold text-base" style="color:var(--ink)">Viraholic</span>
+    </a>
+    <div class="flex items-center gap-2">
+      <button id="keyBtn" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 chip hover:border-slate-300 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 7a4 4 0 11-4 4l-6 6v3h3l1-1h2v-2h2l1.5-1.5A4 4 0 0015 7z"/></svg>
+        <span id="keyBtnLabel">Add Gemini key</span>
+      </button>
+      <a href="/landing-growth.html" class="hidden sm:inline-flex items-center px-3 py-2 text-slate-500 hover:text-slate-900 rounded-xl text-sm font-medium transition-colors">← Back to site</a>
+    </div>
+  </div>
+</nav>
+
+<!-- KEY PANEL -->
+<div id="keyPanel" class="hidden border-b glass" style="border-color:var(--line)">
+  <div class="max-w-5xl mx-auto px-5 py-4">
+    <label for="keyInput" class="block text-xs font-medium text-slate-600 mb-2">Paste your free Gemini API key — it stays in your browser only, sent only to Google.
+      <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="text-indigo-600 underline">Get a free key →</a></label>
+    <div class="flex flex-col sm:flex-row gap-2">
+      <input id="keyInput" type="password" autocomplete="off" placeholder="AIza…" class="flex-1 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm text-slate-900 outline-none focus:border-indigo-400" />
+      <div class="flex gap-2">
+        <button id="keySave" type="button" class="btn-primary px-5 py-2.5 rounded-xl text-sm font-semibold">Save key</button>
+        <button id="keyClear" type="button" class="px-4 py-2.5 rounded-xl text-sm font-medium chip text-slate-600 hover:border-slate-300">Remove</button>
+      </div>
+    </div>
+    <p id="keyStatus" class="text-[11px] text-slate-500 mt-2"></p>
+  </div>
+</div>
+
+<main class="flex-1 max-w-3xl w-full mx-auto px-5 py-8 flex flex-col min-h-0">
+  <!-- HERO (creator-adapted) -->
+  <header class="flex items-center gap-4 mb-6">
+    <span class="avatar w-16 h-16 rounded-2xl text-lg"><img src="https://unavatar.io/twitter/AlexHormozi" alt="Alex Hormozi" referrerpolicy="no-referrer" onerror="this.remove()"><span>AH</span></span>
+    <div>
+      <div class="inline-flex items-center gap-2 mb-1"><span class="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-600">AI persona</span><span class="text-xs text-slate-500">@AlexHormozi</span></div>
+      <h1 class="text-2xl md:text-4xl font-bold leading-tight">Make them an offer <span class="accent">they can't refuse.</span></h1>
+    </div>
+  </header>
+  <p class="text-slate-600 leading-relaxed mb-6 max-w-2xl">An AI mentor trained on <strong class="text-slate-900">Alex Hormozi's</strong> playbook — offers, leads, and the volume that negates luck. Tell it what you sell and who you sell it to, and make it impossible to say no.</p>
+
+  <!-- CHAT -->
+  <section class="card rounded-2xl flex flex-col flex-1 min-h-[58vh] overflow-hidden">
+    <div id="msgs" class="msgs flex-1 overflow-y-auto px-5 py-5 space-y-4" aria-live="polite"></div>
+    <div id="suggestions" class="px-5 pb-2 flex flex-wrap gap-2"></div>
+    <form id="composer" class="border-t p-3 flex items-end gap-2" style="border-color:var(--line)">
+      <textarea id="input" rows="1" placeholder="Ask Alex anything…" class="flex-1 resize-none max-h-32 px-3.5 py-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-900 outline-none focus:border-indigo-400 leading-relaxed"></textarea>
+      <button id="send" type="submit" class="btn-primary px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-1.5" aria-label="Send">
+        <span class="hidden sm:inline">Send</span>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+      </button>
+    </form>
+  </section>
+  <p class="text-[11px] text-slate-400 mt-4 text-center">AI persona inspired by public posts, talks &amp; books. Not affiliated with, endorsed by, or actually Alex Hormozi. · <a href="/privacy.html" class="underline hover:text-slate-600">Privacy</a> · <a href="/terms.html" class="underline hover:text-slate-600">Terms</a></p>
+</main>
+
+<script>
+const MODEL='gemini-2.5-flash', KEY_STORE='lv_gemini_key';
+const MENTOR={
+  name:'Alex Hormozi', handle:'@AlexHormozi', initials:'AH', avatar:'https://unavatar.io/twitter/AlexHormozi',
+  greeting:"I'm an AI modeled on Alex Hormozi. Most businesses don't have a traffic problem or a product problem — they have an offer problem. Tell me what you sell and who you sell it to, and I'll help you make it impossible to say no.",
+  suggestions:["How do I make an offer people can't refuse?","How do I get leads without paid ads?","I'm not closing sales. What am I doing wrong?"],
+  system:`You are "Alex" — an AI mentor modeled on Alex Hormozi (@AlexHormozi), founder of Acquisition.com, author of $100M Offers and $100M Leads. You are NOT the real Alex Hormozi; you are an AI persona inspired by his books, videos, and posts. If asked, say you're an AI version of him.
+
+Voice: direct, punchy, declarative. Short sentences. High energy, tough love, zero fluff. Use line breaks for emphasis. Favor concrete numbers and vivid analogies. Phrases like "Here's the thing:", "Most people get this backwards.", "Let me be blunt."
+
+Frameworks to actually use when relevant:
+- The Value Equation: Value = (Dream Outcome × Perceived Likelihood of Achievement) ÷ (Time Delay × Effort & Sacrifice). To increase value, raise the top, shrink the bottom.
+- Grand Slam Offer: make an offer so good people feel stupid saying no — stack value, add guarantees, scarcity, urgency, bonuses; then NAME it.
+- Core Four for leads: warm outreach, cold outreach, post free content, paid ads — do more reps.
+- Give away so much free value people feel obligated.
+- Volume negates luck. The rich do reps the poor won't.
+- Charge more. Price is not your problem; your offer is.
+
+Always end with a clear, specific next action the person can take. Keep it tight. Never pretend to be the real Alex.`
+};
+
+const $=(id)=>document.getElementById(id);
+const msgsEl=$('msgs'), suggestionsEl=$('suggestions'), inputEl=$('input'), composerEl=$('composer'), sendBtn=$('send');
+const keyBtn=$('keyBtn'), keyBtnLabel=$('keyBtnLabel'), keyPanel=$('keyPanel'), keyInput=$('keyInput'), keySave=$('keySave'), keyClear=$('keyClear'), keyStatus=$('keyStatus');
+let history=[{role:'bot',text:MENTOR.greeting}], busy=false;
+
+function getKey(){ return localStorage.getItem(KEY_STORE)||''; }
+function hasKey(){ return !!getKey(); }
+function refreshKeyUI(){ const h=hasKey(); keyBtnLabel.textContent=h?'Gemini key ✓':'Add Gemini key'; keyBtn.classList.toggle('text-indigo-600',h); keyStatus.textContent=h?'Saved in this browser. Calls go straight to Google with your key.':'No key saved yet.'; }
+keyBtn.addEventListener('click',()=>{ const open=!keyPanel.classList.contains('hidden'); keyPanel.classList.toggle('hidden',open); if(!open){ keyInput.value=getKey(); keyInput.focus(); } });
+keySave.addEventListener('click',()=>{ const v=keyInput.value.trim(); if(!v){ keyStatus.textContent='Paste a key first.'; return; } localStorage.setItem(KEY_STORE,v); refreshKeyUI(); keyPanel.classList.add('hidden'); note('Key saved 🔑 — ask away.'); });
+keyClear.addEventListener('click',()=>{ localStorage.removeItem(KEY_STORE); keyInput.value=''; refreshKeyUI(); });
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function formatText(t){ const esc=escapeHtml(t), lines=esc.split('\n'); let html='',inList=false; for(let raw of lines){ const line=raw.trimEnd(), b=line.match(/^\s*[-•*]\s+(.*)$/); if(b){ if(!inList){html+='<ul>';inList=true;} html+='<li>'+b[1]+'</li>'; } else { if(inList){html+='</ul>';inList=false;} if(line.trim()==='')continue; html+='<p>'+line+'</p>'; } } if(inList)html+='</ul>'; return html.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>'); }
+function avatarMarkup(){ return `<img src="${MENTOR.avatar}" alt="${MENTOR.name}" referrerpolicy="no-referrer" onerror="this.remove()"><span>${MENTOR.initials}</span>`; }
+function scrollDown(){ msgsEl.scrollTop=msgsEl.scrollHeight; }
+function renderMessage(role,text){ const row=document.createElement('div'); row.className='flex gap-3 animate-fade-up '+(role==='user'?'flex-row-reverse':''); const av=document.createElement('span'); av.className='avatar w-8 h-8 rounded-full text-[10px]'; if(role==='user'){ av.style.background='linear-gradient(135deg,#94a3b8,#64748b)'; av.textContent='You'; } else { av.innerHTML=avatarMarkup(); } const bub=document.createElement('div'); bub.className='bubble rounded-2xl px-4 py-2.5 text-[14px] '+(role==='user'?'bubble-user':'bubble-bot'); bub.innerHTML=formatText(text); row.appendChild(av); row.appendChild(bub); msgsEl.appendChild(row); scrollDown(); }
+function note(text){ const n=document.createElement('div'); n.className='text-center text-[11px] text-slate-500 animate-fade-up'; n.textContent=text; msgsEl.appendChild(n); scrollDown(); }
+function showTyping(){ const row=document.createElement('div'); row.id='typing'; row.className='flex gap-3 animate-fade-up'; row.innerHTML=`<span class="avatar w-8 h-8 rounded-full text-[10px]">${avatarMarkup()}</span><div class="bubble bubble-bot rounded-2xl px-4 py-3 flex items-center gap-1"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`; msgsEl.appendChild(row); scrollDown(); }
+function hideTyping(){ const t=$('typing'); if(t)t.remove(); }
+function renderSuggestions(){ suggestionsEl.innerHTML=''; if(history.length>1)return; MENTOR.suggestions.forEach(q=>{ const b=document.createElement('button'); b.type='button'; b.className='text-[12px] text-slate-600 chip rounded-full px-3 py-1.5 hover:border-slate-300 transition-colors'; b.textContent=q; b.addEventListener('click',()=>{ inputEl.value=q; sendMessage(); }); suggestionsEl.appendChild(b); }); }
+
+async function callGemini(){ const key=getKey(); const contents=[]; for(const msg of history){ if(contents.length===0&&msg.role==='bot')continue; contents.push({ role:msg.role==='user'?'user':'model', parts:[{text:msg.text}] }); } const body={ system_instruction:{parts:[{text:MENTOR.system}]}, contents, generationConfig:{temperature:0.9,topP:0.95,maxOutputTokens:900} }; const url=`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`; const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); if(!res.ok){ let d=''; try{ d=(await res.json())?.error?.message||''; }catch(e){} if(res.status===400&&/api key/i.test(d))throw new Error('That API key looks invalid. Check it under "Gemini key" up top.'); if(res.status===403)throw new Error('Key rejected (403). Enable the Generative Language API for this key.'); if(res.status===429)throw new Error('Rate limit — wait a few seconds and retry.'); throw new Error(d||`Request failed (${res.status}).`); } const data=await res.json(); const text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join('')||''; if(!text){ const b=data?.promptFeedback?.blockReason; throw new Error(b?`Response blocked (${b}). Try rephrasing.`:'Empty response — try again.'); } return text.trim(); }
+
+async function sendMessage(){ if(busy)return; const text=inputEl.value.trim(); if(!text)return; if(!hasKey()){ keyPanel.classList.remove('hidden'); keyInput.focus(); note('Add your free Gemini key first ☝️ (it stays in your browser).'); return; } inputEl.value=''; autosize(); history.push({role:'user',text}); renderMessage('user',text); renderSuggestions(); busy=true; sendBtn.disabled=true; showTyping(); try{ const reply=await callGemini(); hideTyping(); history.push({role:'bot',text:reply}); renderMessage('bot',reply); }catch(err){ hideTyping(); note('⚠ '+(err.message||'Something went wrong.')); } finally{ busy=false; sendBtn.disabled=false; inputEl.focus(); } }
+function autosize(){ inputEl.style.height='auto'; inputEl.style.height=Math.min(inputEl.scrollHeight,128)+'px'; }
+inputEl.addEventListener('input',autosize);
+inputEl.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMessage(); } });
+composerEl.addEventListener('submit',e=>{ e.preventDefault(); sendMessage(); });
+
+renderMessage('bot',MENTOR.greeting); renderSuggestions(); refreshKeyUI();
+</script>
+</body>
+</html>

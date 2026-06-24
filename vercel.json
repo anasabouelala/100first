@@ -5,6 +5,8 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
+    { "source": "/marclou", "destination": "/marclou.html" },
+    { "source": "/hormozi", "destination": "/hormozi.html" },
     { "source": "/((?!.*\\.).*)", "destination": "/index.html" }
   ]
 }

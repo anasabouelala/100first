@@ -145,6 +145,22 @@ function AppInner() {
   const [newProject, setNewProject] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  // ── 3-day trial ── Free access lasts 3 days from account creation. When it
+  // elapses we AUTO sign the user out and bounce them to the marketing site, so
+  // they can immediately sign into any other account. Client-side gate for now.
+  const TRIAL_DAYS = 3;
+  const trialCreatedMs = auth.user?.created_at ? Date.parse(auth.user.created_at) : NaN;
+  const trialEndsMs = Number.isFinite(trialCreatedMs) ? trialCreatedMs + TRIAL_DAYS * 86400000 : null;
+  const trialExpired = trialEndsMs !== null && Date.now() > trialEndsMs;
+  useEffect(() => {
+    if (!trialExpired) return;
+    (async () => {
+      try { await auth.signOut(); } catch {}
+      try { localStorage.removeItem('project_config_v1'); } catch {}
+      if (typeof window !== 'undefined') window.location.replace('/landing-growth.html');
+    })();
+  }, [trialExpired]);
+
   // Hand the extension a copy of the Gemini API key once the bridge is ready,
   // so the Feed Watcher (and any other SW-side AI feature) can call Gemini
   // directly from the service worker — even when this tab is closed.
@@ -271,18 +287,9 @@ function AppInner() {
   }
 
   // ── 3-day trial gate ──
-  // Free access is limited to 3 days from account creation. After that the user
-  // must create a new account. Client-side gate for now (reinforce server-side
-  // with Supabase RLS / an edge function later for tamper-resistance).
-  const TRIAL_DAYS = 3;
-  const trialCreatedMs = auth.user?.created_at ? Date.parse(auth.user.created_at) : NaN;
-  const trialEndsMs = Number.isFinite(trialCreatedMs) ? trialCreatedMs + TRIAL_DAYS * 86400000 : null;
-  if (trialEndsMs !== null && Date.now() > trialEndsMs) {
-    const startNewAccount = async () => {
-      try { await auth.signOut(); } catch {}
-      try { localStorage.removeItem('project_config_v1'); } catch {}
-      if (typeof window !== 'undefined') window.location.replace('/landing-growth.html');
-    };
+  // The effect above auto-signs-out on expiry; this shows briefly while that
+  // happens, then the visitor lands on the marketing site to sign in again.
+  if (trialExpired) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-base-200 px-4" role="status" aria-live="polite">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center">
@@ -291,17 +298,11 @@ function AppInner() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Your 3-day trial has ended</h1>
           <p className="text-gray-500 mt-3 leading-relaxed">
-            Thanks for trying Viraholic. Free access lasts 3 days per account. To keep
-            going, create a new account.
+            Signing you out… create a new account, or sign in with a different one, to keep going.
           </p>
-          <button
-            type="button"
-            onClick={startNewAccount}
-            className="mt-7 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gray-900 text-white font-semibold hover:bg-black transition-colors"
-          >
-            <LogOut size={18} aria-hidden="true" /> Create a new account
-          </button>
-          <p className="text-[11px] text-gray-400 mt-4">You'll be signed out and taken to sign-up.</p>
+          <div className="mt-6 inline-flex items-center justify-center gap-2 text-gray-400 text-sm">
+            <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Logging out
+          </div>
         </div>
       </div>
     );
