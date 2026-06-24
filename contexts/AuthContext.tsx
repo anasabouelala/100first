@@ -78,7 +78,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signOut: AuthActions['signOut'] = async () => {
-    await supabase.auth.signOut();
+    // Use LOCAL scope so this browser's session is always cleared even if the
+    // server revoke call fails (e.g. an already-expired token) — a global-scope
+    // signOut can throw before clearing local, leaving a ghost session. Then
+    // remove the persisted key directly: the static landing page reads the same
+    // 'lv_supabase_auth' key, so this guarantees it sees a signed-out state and
+    // doesn't bounce the user back into the app (the "stuck in a loop" bug).
+    try { await supabase.auth.signOut({ scope: 'local' }); } catch {}
+    try { localStorage.removeItem('lv_supabase_auth'); } catch {}
   };
 
   const sendPasswordReset: AuthActions['sendPasswordReset'] = async (email) => {
