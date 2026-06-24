@@ -150,9 +150,13 @@ function AppInner() {
   // user logs out (session fully cleared) and lands on the marketing site,
   // where Sign in opens a fresh login for any account. Client-side gate for now.
   const TRIAL_DAYS = 3;
+  // Admin emails get unlimited access (bypass the trial entirely).
+  // Client-side for now — reinforce server-side (RLS) later if needed.
+  const ADMIN_EMAILS = ['anasabouelala@gmail.com'];
+  const isAdmin = !!auth.user?.email && ADMIN_EMAILS.includes(auth.user.email.trim().toLowerCase());
   const trialCreatedMs = auth.user?.created_at ? Date.parse(auth.user.created_at) : NaN;
   const trialEndsMs = Number.isFinite(trialCreatedMs) ? trialCreatedMs + TRIAL_DAYS * 86400000 : null;
-  const trialExpired = trialEndsMs !== null && Date.now() > trialEndsMs;
+  const trialExpired = !isAdmin && trialEndsMs !== null && Date.now() > trialEndsMs;
 
   // Hand the extension a copy of the Gemini API key once the bridge is ready,
   // so the Feed Watcher (and any other SW-side AI feature) can call Gemini
