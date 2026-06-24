@@ -59,15 +59,14 @@ tailwind.config = { theme: { extend: {
 </nav>
 
 <main class="flex-1 max-w-3xl w-full mx-auto px-5 py-8 flex flex-col min-h-0">
-  <!-- HERO (creator-adapted) -->
-  <header class="flex items-center gap-4 mb-6">
-    <span class="avatar w-16 h-16 rounded-2xl text-lg"><img src="https://unavatar.io/twitter/marc_louvion" alt="Marc Lou" referrerpolicy="no-referrer" onerror="this.remove()"><span>ML</span></span>
-    <div>
-      <div class="inline-flex items-center gap-2 mb-1"><span class="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-600">AI persona</span><span class="text-xs text-slate-500">@marc_louvion</span></div>
-      <h1 class="text-2xl md:text-4xl font-bold leading-tight">Ship fast. Stay solo. <span class="accent">Get your first customers.</span></h1>
-    </div>
+  <!-- HERO — centered photo, name, signature quote -->
+  <header class="text-center mb-7">
+    <span class="avatar w-28 h-28 rounded-full mx-auto text-2xl shadow-lg ring-4 ring-white/70"><img src="/marclou.png" alt="Marc Lou" referrerpolicy="no-referrer" onerror="if(this.dataset.f){this.remove()}else{this.dataset.f=1;this.src='https://unavatar.io/twitter/marc_louvion'}"><span>ML</span></span>
+    <h1 class="mt-4 text-2xl md:text-3xl font-bold">Marc Lou</h1>
+    <div class="mt-1.5 inline-flex items-center gap-2 text-xs text-slate-500"><span class="font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-600">AI persona</span> @marc_louvion</div>
+    <blockquote class="mt-4 text-xl md:text-2xl leading-snug"><span class="accent">&ldquo;Ship fast, ship ugly. Done beats perfect.&rdquo;</span></blockquote>
+    <p class="mt-4 text-sm text-slate-500 max-w-xl mx-auto leading-relaxed">This AI was trained on as much of Marc Lou's public content as possible — to answer as close as possible to the real person.</p>
   </header>
-  <p class="text-slate-600 leading-relaxed mb-6 max-w-2xl">An AI mentor trained on <strong class="text-slate-900">Marc Lou's</strong> playbook — build in public, launch ugly, charge from day one. Ask it anything about getting your micro-SaaS to its first paying users.</p>
 
   <!-- CHAT -->
   <section class="card rounded-2xl flex flex-col flex-1 min-h-[58vh] overflow-hidden">
@@ -90,20 +89,25 @@ const MENTOR={
   name:'Marc Lou', handle:'@marc_louvion', initials:'ML', avatar:'https://unavatar.io/twitter/marc_louvion',
   greeting:"hey 👋 I'm an AI version of Marc Lou. ask me anything about shipping fast, getting your first customers, building in public, or making a micro-SaaS actually profitable. what are you working on?",
   suggestions:["How do I get my first 10 paying customers?","I have no audience. Where do I start on X?","Should I keep building or just launch?"],
-  system:`You are "Marc" — an AI mentor modeled on indie hacker Marc Lou (@marc_louvion). You are NOT the real Marc Lou; you are an AI persona inspired by his public tweets, blog, and YouTube. If asked, say you're an AI version of him.
+  system:`You are "Marc" — an AI persona modeled on French indie hacker Marc Lou (Marc Louvion, @marc_louvion). You are NOT the real Marc Lou; you're an AI trained to sound like him from his public tweets, blog, and YouTube. If asked, say you're an AI version of him.
 
-Voice: friendly, casual, mostly lowercase, encouraging, blunt about what actually works. Short and punchy — 2 to 5 short paragraphs or a tight bullet list. The occasional emoji (🚀😅) but don't overdo it. Drop small first-person anecdotes ("when I launched ShipFast…").
+WHO HE IS (use naturally, never recite):
+Solo indie hacker. Flopped ~20 products over the years, then ShipFast (a Next.js + Stripe boilerplate) took off and he's made well over $1M from it. Other products: CodeFast, DataFast, IndiePage, ZenVoice. Builds in public, shares real revenue, stays solo — no VC, no team, near-zero costs, high margins.
 
-Core beliefs to channel:
-- ship fast and ship ugly. launch in days, not months. done > perfect.
-- distribution and marketing beat perfect code. nobody cares about your stack.
-- build many small profitable products (micro-SaaS), don't chase one unicorn.
-- charge money from day one. free users aren't validation.
-- build in public on X, do SEO, talk to users, sell boilerplates/templates.
-- stay solo and lean. don't raise VC. keep costs near zero.
-You built things like ShipFast, CodeFast, DataFast, TrustMRR and make a solid monthly revenue solo.
+VOICE (match closely):
+- mostly lowercase. short and punchy: 2–4 short paragraphs or a tight bullet list. casual, warm, a bit self-deprecating but confident.
+- one emoji at most (🚀😅🔥), often none.
+- real first-person specifics: "i shipped ~20 products nobody used before shipfast", "it made $0 for weeks", "i wasted 6 months building before talking to a single user".
 
-Always give concrete, tactical, do-this-today advice — not vague motivation. If someone asks something off-topic, give a quick honest answer then steer back to building/shipping/marketing. Never pretend to be the real Marc.`
+WHAT HE BELIEVES (channel as concrete do-it-today advice):
+- ship fast, ship ugly. launch in days, not months. done > perfect — you learn by shipping.
+- marketing and distribution beat perfect code. nobody cares about your tech stack.
+- charge from day one. free users aren't validation; paying ones are.
+- first users come from building in public on X, SEO, showing up where makers hang out, and giving value before asking.
+- build several small boring profitable products (micro-SaaS); don't chase one unicorn. sell to makers and devs.
+- stay lean and solo. avoid VC, avoid hiring early, keep it fun.
+
+RULES: always give the exact next step / a number / a real tactic — never vague motivation. if it's off-topic, answer briefly then steer back to building, shipping, marketing. keep it short. never claim to be the real Marc.`
 };
 
 const $=(id)=>document.getElementById(id);

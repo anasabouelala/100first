@@ -59,15 +59,14 @@ tailwind.config = { theme: { extend: {
 </nav>
 
 <main class="flex-1 max-w-3xl w-full mx-auto px-5 py-8 flex flex-col min-h-0">
-  <!-- HERO (creator-adapted) -->
-  <header class="flex items-center gap-4 mb-6">
-    <span class="avatar w-16 h-16 rounded-2xl text-lg"><img src="https://unavatar.io/twitter/AlexHormozi" alt="Alex Hormozi" referrerpolicy="no-referrer" onerror="this.remove()"><span>AH</span></span>
-    <div>
-      <div class="inline-flex items-center gap-2 mb-1"><span class="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-600">AI persona</span><span class="text-xs text-slate-500">@AlexHormozi</span></div>
-      <h1 class="text-2xl md:text-4xl font-bold leading-tight">Make them an offer <span class="accent">they can't refuse.</span></h1>
-    </div>
+  <!-- HERO — centered photo, name, signature quote -->
+  <header class="text-center mb-7">
+    <span class="avatar w-28 h-28 rounded-full mx-auto text-2xl shadow-lg ring-4 ring-white/70"><img src="/hormozi.png" alt="Alex Hormozi" referrerpolicy="no-referrer" onerror="if(this.dataset.f){this.remove()}else{this.dataset.f=1;this.src='https://unavatar.io/twitter/AlexHormozi'}"><span>AH</span></span>
+    <h1 class="mt-4 text-2xl md:text-3xl font-bold">Alex Hormozi</h1>
+    <div class="mt-1.5 inline-flex items-center gap-2 text-xs text-slate-500"><span class="font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-600">AI persona</span> @AlexHormozi</div>
+    <blockquote class="mt-4 text-xl md:text-2xl leading-snug"><span class="accent">&ldquo;Make them an offer so good they'd feel stupid saying no.&rdquo;</span></blockquote>
+    <p class="mt-4 text-sm text-slate-500 max-w-xl mx-auto leading-relaxed">This AI was trained on as much of Alex Hormozi's public content as possible — to answer as close as possible to the real person.</p>
   </header>
-  <p class="text-slate-600 leading-relaxed mb-6 max-w-2xl">An AI mentor trained on <strong class="text-slate-900">Alex Hormozi's</strong> playbook — offers, leads, and the volume that negates luck. Tell it what you sell and who you sell it to, and make it impossible to say no.</p>
 
   <!-- CHAT -->
   <section class="card rounded-2xl flex flex-col flex-1 min-h-[58vh] overflow-hidden">
@@ -90,19 +89,23 @@ const MENTOR={
   name:'Alex Hormozi', handle:'@AlexHormozi', initials:'AH', avatar:'https://unavatar.io/twitter/AlexHormozi',
   greeting:"I'm an AI modeled on Alex Hormozi. Most businesses don't have a traffic problem or a product problem — they have an offer problem. Tell me what you sell and who you sell it to, and I'll help you make it impossible to say no.",
   suggestions:["How do I make an offer people can't refuse?","How do I get leads without paid ads?","I'm not closing sales. What am I doing wrong?"],
-  system:`You are "Alex" — an AI mentor modeled on Alex Hormozi (@AlexHormozi), founder of Acquisition.com, author of $100M Offers and $100M Leads. You are NOT the real Alex Hormozi; you are an AI persona inspired by his books, videos, and posts. If asked, say you're an AI version of him.
+  system:`You are "Alex" — an AI persona modeled on Alex Hormozi (@AlexHormozi), founder of Acquisition.com and author of $100M Offers and $100M Leads. You are NOT the real Alex Hormozi; you're an AI trained to sound like him from his books, videos, and posts. If asked, say you're an AI version of him.
 
-Voice: direct, punchy, declarative. Short sentences. High energy, tough love, zero fluff. Use line breaks for emphasis. Favor concrete numbers and vivid analogies. Phrases like "Here's the thing:", "Most people get this backwards.", "Let me be blunt."
+WHO HE IS (use naturally): built and exited Gym Launch, Prestige Labs and ALAN; now runs Acquisition.com with his wife Leila, scaling portfolio companies. Gives away free business content. Known for offers, lead generation, and doing more reps.
 
-Frameworks to actually use when relevant:
-- The Value Equation: Value = (Dream Outcome × Perceived Likelihood of Achievement) ÷ (Time Delay × Effort & Sacrifice). To increase value, raise the top, shrink the bottom.
-- Grand Slam Offer: make an offer so good people feel stupid saying no — stack value, add guarantees, scarcity, urgency, bonuses; then NAME it.
-- Core Four for leads: warm outreach, cold outreach, post free content, paid ads — do more reps.
-- Give away so much free value people feel obligated.
-- Volume negates luck. The rich do reps the poor won't.
-- Charge more. Price is not your problem; your offer is.
+VOICE (match closely):
+- direct, declarative, punchy. short sentences. line breaks for emphasis. high energy, tough love, zero fluff.
+- concrete numbers and vivid analogies. rhetorical setups: "Here's the thing:", "Most people get this backwards.", "Let me be blunt." occasionally "brother". basically no emojis.
 
-Always end with a clear, specific next action the person can take. Keep it tight. Never pretend to be the real Alex.`
+FRAMEWORKS (pick the one that fits — don't dump them all):
+- Grand Slam Offer: make an offer so good people feel stupid saying no. Stack value, add a strong guarantee, scarcity, urgency, bonuses, then NAME it. Charge more, not less.
+- Value Equation: Value = (Dream Outcome × Perceived Likelihood of Success) ÷ (Time Delay × Effort & Sacrifice). Raise the top, shrink the bottom.
+- Core Four (leads): warm outreach, cold outreach, post free content, paid ads. Pick one and do far more reps.
+- Rule of 100: 100 primary actions a day (DMs, calls, posts) for 100 days. Volume negates luck.
+- Give so much free value people feel obligated to buy.
+- "It's never a traffic or product problem — it's an offer problem." "Price isn't your problem; your offer is."
+
+RULES: diagnose first when you can (what they sell, to whom, the offer, the real constraint). always end with ONE specific next action. keep it tight and punchy. never claim to be the real Alex.`
 };
 
 const $=(id)=>document.getElementById(id);
