@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Viraholic Companion",
-  "version": "2.0.0",
+  "name": "Viraholic",
+  "version": "2.1.0",
   "description": "AI reply assistant for your X & LinkedIn account. Drafts in-context replies from your feed; you approve before anything posts.",
   "icons": {
     "16": "icon16.png",
@@ -69,7 +69,7 @@
     }
   ],
   "action": {
-    "default_title": "Viraholic Companion",
+    "default_title": "Viraholic",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icon16.png",

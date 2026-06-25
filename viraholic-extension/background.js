@@ -8,6 +8,17 @@ importScripts('LeadIntelligenceEngine.js', 'discovery_engine.js');
 
 const LOG_TAG = "[Answerly]";
 
+// ── Web-app license link ── The extension only works while the Viraholic web
+// app is open and the account is active (signed in + not trial-expired). The
+// app broadcasts a short-TTL license (page bridge → SET_LICENSE) that we check
+// before any agent work; if it goes stale, the agent is dormant.
+let VIRAHOLIC_LICENSE = null;
+try { chrome.storage.local.get('viraholic_license', (r) => { VIRAHOLIC_LICENSE = (r && r.viraholic_license) || null; }); } catch (e) {}
+function isLicensed() {
+  const L = VIRAHOLIC_LICENSE;
+  return !!(L && L.active && typeof L.until === 'number' && Date.now() < L.until);
+}
+
 // Build marker — bump when shipping engine changes so a quick glance at the
 // service-worker console confirms the latest code is actually loaded (i.e. the
 // extension was reloaded after edits). If you don't see this line with the
@@ -339,6 +350,7 @@ async function ensureTrackingAlarm() {
 // Called every 1 minute by the heartbeat alarm. Decides whether it's
 // time for a chronic check based on the user's interval setting.
 async function tickTracking() {
+  if (!isLicensed()) return;  // dormant unless the web app says the account is active
   try {
     const { [LAST_TICK_KEY]: lastTickAt = 0, answerly_last_cycle_at = 0, answerly_creator_configs = [] } =
       await chrome.storage.local.get([LAST_TICK_KEY, 'answerly_last_cycle_at', 'answerly_creator_configs']);
@@ -424,6 +436,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
     console.log(LOG_TAG, `[Alarm] fired: ${alarm.name} at ${new Date().toLocaleTimeString()}`);
+    // Web-app license gate: do no agent work unless the account is active.
+    // Allow only harmless housekeeping alarms through.
+    if (!isLicensed() && alarm.name !== 'stealthCheck' && alarm.name !== 'resetEngagementCounter') return;
     // Legacy alarm name — drop. Heartbeat replaces it. Cleanup runs in ensureTrackingAlarm.
     if (alarm.name === 'stealthCheck') { chrome.alarms.clear('stealthCheck').catch(() => {}); }
     // Primary heartbeat
@@ -1153,6 +1168,19 @@ async function processEngagementQueue() {
 // 2. Main Message Listener Hub
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log(LOG_TAG, "Message received:", request.action || request.type);
+
+    // ── Web-app license ──
+    if (request.action === 'SET_LICENSE') {
+        VIRAHOLIC_LICENSE = request.license || null;
+        try { chrome.storage.local.set({ viraholic_license: VIRAHOLIC_LICENSE }); } catch (e) {}
+        sendResponse({ ok: true, licensed: isLicensed() });
+        return true;
+    }
+    // Gate all agent work on a valid, current web-app license.
+    if (['forceCheck','performReconSearch','DISCOVERY_START','DISCOVERY_RESUME','CAMPAIGN_START','CAMPAIGN_RESUME','CAMPAIGN_RUN_NOW','TRACKING_RUN_NOW','TRACKING_KICK','TRACKING_FORCE_TICK','AUTO_COMMENT_SUBMIT','STEAL_VOICE_FETCH_POSTS','ENRICH_ACCOUNT','DISCOVERY_SMOKE_TEST'].indexOf(request.action) !== -1 && !isLicensed()) {
+        sendResponse({ ok: false, error: 'Viraholic: open the web app and make sure your account is active to use the agent.' });
+        return true;
+    }
 
     // ── Trusted insert (CDP) requested by the engagement agent ──
     // The agent has focused the Draft.js editor and placed a caret; we inject a

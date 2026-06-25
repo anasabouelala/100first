@@ -102,6 +102,14 @@ try {
     if (raw) __answerly_known_tracked_urls = new Set(JSON.parse(raw).map(c => c.url).filter(Boolean));
 } catch {}
 
+// Web-app license link: forward the app's short-TTL "active" signal to the
+// background, which gates all agent work on it.
+window.addEventListener('viraholic_license', (event) => {
+    try {
+        chrome.runtime.sendMessage({ action: 'SET_LICENSE', license: event.detail }, () => { void chrome.runtime.lastError; });
+    } catch (e) {}
+});
+
 // Push Gemini API key from the web app into chrome.storage (hunter brain
 // vocabulary bloom reads it from there). Stored locally; never exfiltrated.
 window.addEventListener('answerly_set_gemini_key', (event) => {

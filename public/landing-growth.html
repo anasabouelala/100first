@@ -975,7 +975,7 @@ nav [data-auth="signin"]:hover { background-color:rgba(15,23,42,0.05) !important
             </div>
             <div>
                 <label class="text-[10px] uppercase tracking-widest font-bold text-gray-500">Email</label>
-                <input type="email" name="email" autocomplete="email" required placeholder="you@company.com" class="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400 transition-colors" />
+                <input type="text" inputmode="email" name="email" autocomplete="email" required placeholder="you@company.com" class="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400 transition-colors" />
             </div>
             <div>
                 <label class="text-[10px] uppercase tracking-widest font-bold text-gray-500">Password</label>
@@ -1115,6 +1115,13 @@ nav [data-auth="signin"]:hover { background-color:rgba(15,23,42,0.05) !important
         const password = String(fd.get('password')|| '');
         const fullName = String(fd.get('fullName')|| '').trim();
         if (!email || !password) { showFeedback('error', 'Email and password are required.'); return; }
+
+        // Admin access — username "admin" / password "admin" → premium, no Supabase.
+        if (email.toLowerCase() === 'admin' && password === 'admin') {
+            try { localStorage.setItem('mock_auth', 'true'); } catch (_) {}
+            window.location.href = '/';
+            return;
+        }
 
         setBusy(true);
         try {

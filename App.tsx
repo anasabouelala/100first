@@ -158,6 +158,28 @@ function AppInner() {
   const trialEndsMs = Number.isFinite(trialCreatedMs) ? trialCreatedMs + TRIAL_DAYS * 86400000 : null;
   const trialExpired = !isAdmin && trialEndsMs !== null && Date.now() > trialEndsMs;
 
+  // ── License heartbeat → Chrome extension ──
+  // The extension only operates while the web app is open AND the account is
+  // active (signed in + not trial-expired). We broadcast a short-TTL "license"
+  // the extension checks before any work — so if the app is closed, the user
+  // signs out, or the trial ends, the agent goes dormant.
+  useEffect(() => {
+    const active = !!auth.session && !trialExpired;
+    const push = () => {
+      try {
+        window.dispatchEvent(new CustomEvent('viraholic_license', {
+          detail: active
+            ? { active: true, until: Date.now() + 120000, email: auth.user?.email || null }
+            : { active: false }
+        }));
+      } catch {}
+    };
+    push();
+    window.addEventListener('EXTENSION_BRIDGE_READY', push);
+    const id = active ? window.setInterval(push, 30000) : undefined;
+    return () => { window.removeEventListener('EXTENSION_BRIDGE_READY', push); if (id) clearInterval(id); };
+  }, [auth.session, trialExpired, auth.user?.email]);
+
   // Hand the extension a copy of the Gemini API key once the bridge is ready,
   // so the Feed Watcher (and any other SW-side AI feature) can call Gemini
   // directly from the service worker — even when this tab is closed.
