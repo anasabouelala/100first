@@ -35,23 +35,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     let mounted = true;
-
-    // 1. Bootstrap: read the current session once on mount.
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
+    let settled = false;
+    // Clear the "Checking session" spinner as soon as we know the session — ONCE.
+    // Later token rotations keep syncing the session but must not re-show the spinner.
+    const settle = (s: Session | null) => {
+      if (!mounted || settled) return;
+      settled = true;
+      setSession(s);
       setLoading(false);
+    };
+
+    // onAuthStateChange fires INITIAL_SESSION immediately, read straight from
+    // localStorage (no network) — that's what clears the spinner fast. We keep
+    // syncing on later events (sign-in/out, token refresh) too.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (mounted) setSession(newSession);
+      settle(newSession);
     });
 
-    // 2. Subscribe: keep state in sync on sign-in / sign-out / token refresh.
-    //    We deliberately don't flip `loading` back on here — initial-load
-    //    callers shouldn't see a spinner just because a token rotated.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-    });
+    // getSession() can do a NETWORK token-refresh — and wake a paused free-tier
+    // Supabase project — which is what made the spinner hang. Let it run in the
+    // background, but never block the UI on it.
+    supabase.auth.getSession()
+      .then(({ data }) => settle(data.session))
+      .catch(() => settle(null));
+
+    // Absolute safety net: the spinner can never block longer than this.
+    const cap = setTimeout(() => settle(null), 4000);
 
     return () => {
       mounted = false;
+      clearTimeout(cap);
       sub.subscription.unsubscribe();
     };
   }, []);
