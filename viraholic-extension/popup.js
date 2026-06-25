@@ -12,8 +12,8 @@
  */
 
 const DASHBOARD_PORTS = ['3000', '3001', '3002'];
-const DASHBOARD_DEFAULT = 'http://localhost:3000/';
-const HELP_URL = 'http://localhost:3000/'; // points to the in-app help page once auth is set up
+const DASHBOARD_DEFAULT = 'https://viraholic.com/';
+const HELP_URL = 'https://viraholic.com/'; // points to the in-app help page once auth is set up
 const STORAGE_WATCH_KEY = 'lv_companion_watch_enabled';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -40,7 +40,7 @@ async function refreshStatus() {
     chrome.tabs.query({}, (all) => resolve(all || []));
   });
   const dashboardTab = tabs.find(t =>
-    t.url && DASHBOARD_PORTS.some(p => t.url.startsWith(`http://localhost:${p}/`) || t.url.startsWith(`http://127.0.0.1:${p}/`))
+    t.url && (DASHBOARD_PORTS.some(p => t.url.startsWith(`http://localhost:${p}/`) || t.url.startsWith(`http://127.0.0.1:${p}/`)) || t.url.startsWith('https://viraholic.com/') || t.url.includes('.viraholic.com/'))
   );
 
   const dot = document.getElementById('statusDot');
@@ -62,7 +62,7 @@ async function refreshStatus() {
 function openDashboard() {
   chrome.tabs.query({}, (tabs) => {
     const existing = tabs.find(t =>
-      t.url && DASHBOARD_PORTS.some(p => t.url.startsWith(`http://localhost:${p}/`) || t.url.startsWith(`http://127.0.0.1:${p}/`))
+      t.url && (DASHBOARD_PORTS.some(p => t.url.startsWith(`http://localhost:${p}/`) || t.url.startsWith(`http://127.0.0.1:${p}/`)) || t.url.startsWith('https://viraholic.com/') || t.url.includes('.viraholic.com/'))
     );
     if (existing) {
       chrome.tabs.update(existing.id, { active: true });

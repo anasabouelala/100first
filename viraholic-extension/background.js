@@ -402,7 +402,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // Register content scripts programmatically (more reliable than manifest for localhost)
   chrome.scripting.registerContentScripts([{
     id: 'answerly-bridge',
-    matches: ['http://localhost:*/*', 'http://127.0.0.1:*/*'],
+    matches: ['https://viraholic.com/*', 'https://*.viraholic.com/*', 'http://localhost:*/*', 'http://127.0.0.1:*/*'],
     js: ['content_bridge.js'],
     runAt: 'document_start',
     persistAcrossSessions: true
@@ -413,7 +413,7 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 
   // Auto-reload tabs running the web app so the bridge reconnects
-  chrome.tabs.query({ url: ["http://localhost:*/*", "http://127.0.0.1:*/*"] }, (tabs) => {
+  chrome.tabs.query({ url: ["https://viraholic.com/*", "https://*.viraholic.com/*", "http://localhost:*/*", "http://127.0.0.1:*/*"] }, (tabs) => {
     for (const tab of tabs) {
       chrome.tabs.reload(tab.id);
     }
@@ -426,7 +426,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Fallback: inject bridge on tab navigation for localhost (in case manifest matching fails)
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url && (tab.url.startsWith('http://localhost') || tab.url.startsWith('http://127.0.0.1'))) {
+  if (changeInfo.status === 'complete' && tab.url && (tab.url.startsWith('http://localhost') || tab.url.startsWith('http://127.0.0.1') || tab.url.startsWith('https://viraholic.com') || tab.url.includes('.viraholic.com'))) {
     chrome.scripting.executeScript({
       target: { tabId },
       files: ['content_bridge.js']

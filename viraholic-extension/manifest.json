@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Viraholic",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "AI reply assistant for your X & LinkedIn account. Drafts in-context replies from your feed; you approve before anything posts.",
   "icons": {
     "16": "icon16.png",
@@ -21,6 +21,8 @@
     "https://*.twitter.com/*",
     "https://linkedin.com/*",
     "https://*.linkedin.com/*",
+    "https://viraholic.com/*",
+    "https://*.viraholic.com/*",
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*",
     "http://localhost:3001/*",
@@ -34,6 +36,8 @@
   "content_scripts": [
     {
       "matches": [
+        "https://viraholic.com/*",
+        "https://*.viraholic.com/*",
         "http://localhost:3000/*",
         "http://127.0.0.1:3000/*",
         "http://localhost:3001/*",
