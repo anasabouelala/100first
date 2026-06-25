@@ -38,5 +38,5 @@ dist-ssr
 /list_models.js
 .vite-restart.log
 
-# Extension package artifact (regenerate from viraholic-extension/)
-/viraholic-extension.zip
+# Extension package artifacts (regenerate from viraholic-extension/)
+/viraholic-extension*.zip
