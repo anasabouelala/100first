@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient';
 import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, GeneratedContent, ChannelAnalysis, CompetitorData, CompetitorDeepDive, OutreachResponse, MarketOpportunity, ReplyDraft, IndustryBenchmark, SearchDork } from "../types";
 
 // ─── DeepSeek-backed AI client (Gemini-compatible adapter) ──────────
@@ -20,9 +21,8 @@ import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, Generat
 
 // DeepSeek runs through a Supabase Edge Function so the API key stays
 // server-side (Supabase secret DEEPSEEK_API_KEY) and never ships to the browser.
-const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
-const DEEPSEEK_PROXY_URL = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/deepseek` : '';
+// URL + anon key (with baked-in fallbacks) come from supabaseClient.
+const DEEPSEEK_PROXY_URL = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/deepseek` : '';
 
 // Default model. Per spec — kept as a single source of truth so swapping the
 // model id (e.g. to `deepseek-chat`) is a one-line change.

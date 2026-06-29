@@ -12,8 +12,18 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const url     = (import.meta as any).env?.VITE_SUPABASE_URL     as string | undefined;
-const anonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
+// The URL + anon key are public by design (the anon key ships to the browser and
+// is protected by row-level security). Baked in as fallbacks so the deployed app
+// works even if the Vercel env vars aren't set; override with VITE_SUPABASE_URL /
+// VITE_SUPABASE_ANON_KEY to point at a different project.
+const FALLBACK_URL  = 'https://brrpnoynvidfopdujsce.supabase.co';
+const FALLBACK_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJycnBub3ludmlkZm9wZHVqc2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjYzODUsImV4cCI6MjA5NjUwMjM4NX0.89mTbOh0EKV06mMYvhQt4YKL5olbi0G2odymfoSI9E4';
+
+export const SUPABASE_URL      = (((import.meta as any).env?.VITE_SUPABASE_URL)      as string) || FALLBACK_URL;
+export const SUPABASE_ANON_KEY = (((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) as string) || FALLBACK_ANON;
+
+const url = SUPABASE_URL;
+const anonKey = SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = !!(url && anonKey);
 
