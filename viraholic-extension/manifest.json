@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Viraholic",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "AI reply assistant for your X & LinkedIn account. Drafts in-context replies from your feed; you approve before anything posts.",
   "icons": {
     "16": "icon16.png",

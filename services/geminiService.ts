@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient';
+// DeepSeek runs through a same-origin Vercel function (/api/deepseek); no Supabase import needed here.
 import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, GeneratedContent, ChannelAnalysis, CompetitorData, CompetitorDeepDive, OutreachResponse, MarketOpportunity, ReplyDraft, IndustryBenchmark, SearchDork } from "../types";
 
 // ─── DeepSeek-backed AI client (Gemini-compatible adapter) ──────────
@@ -22,7 +22,8 @@ import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, Generat
 // DeepSeek runs through a Supabase Edge Function so the API key stays
 // server-side (Supabase secret DEEPSEEK_API_KEY) and never ships to the browser.
 // URL + anon key (with baked-in fallbacks) come from supabaseClient.
-const DEEPSEEK_PROXY_URL = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/deepseek` : '';
+// Same-origin Vercel serverless function; the DeepSeek key lives in Vercel env.
+const DEEPSEEK_PROXY_URL = '/api/deepseek';
 
 // Default model. Per spec — kept as a single source of truth so swapping the
 // model id (e.g. to `deepseek-chat`) is a one-line change.
@@ -211,12 +212,8 @@ async function deepseekGenerateContent(req: GeminiCallShape): Promise<GeminiResp
 
   const res = await fetch(DEEPSEEK_PROXY_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // Auth to the Supabase Edge Function — the DeepSeek key lives server-side.
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      'apikey': SUPABASE_ANON_KEY
-    },
+    // Same-origin Vercel function; the DeepSeek key lives server-side (Vercel env).
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
 
@@ -246,7 +243,7 @@ export const isGeminiConfigured = (): boolean => !!DEEPSEEK_PROXY_URL;
 
 export class GeminiNotConfiguredError extends Error {
   constructor() {
-    super('Supabase URL missing (VITE_SUPABASE_URL) — the DeepSeek proxy is unreachable.');
+    super('AI backend unavailable — the /api/deepseek proxy is unreachable.');
     this.name = 'GeminiNotConfiguredError';
   }
 }

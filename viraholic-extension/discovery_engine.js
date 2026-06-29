@@ -4651,16 +4651,13 @@ const FEED_HOME_URL = {
     LinkedIn: 'https://www.linkedin.com/feed/',
     Reddit: 'https://www.reddit.com/'
 };
-// ── DeepSeek via the Supabase Edge Function ─────────────────────────────────
-// The extension uses the SAME DeepSeek proxy as the web app. The Supabase URL +
-// anon key are public by design (anon is RLS-protected); hardcoded here so the
-// engine's AI works the moment the extension is licensed — no Gemini key push
-// needed. The DeepSeek key itself stays a Supabase secret. The function's CORS
-// allow-list permits chrome-extension:// origins, so NO manifest host permission is
-// needed (keeps store updates from forcing existing users to re-approve a permission).
-const FEED_SUPABASE_URL   = 'https://brrpnoynvidfopdujsce.supabase.co';
-const FEED_SUPABASE_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJycnBub3ludmlkZm9wZHVqc2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjYzODUsImV4cCI6MjA5NjUwMjM4NX0.89mTbOh0EKV06mMYvhQt4YKL5olbi0G2odymfoSI9E4';
-const FEED_DEEPSEEK_URL    = `${FEED_SUPABASE_URL}/functions/v1/deepseek`;
+// ── DeepSeek via the Vercel function ────────────────────────────────────────
+// The extension uses the SAME DeepSeek proxy as the web app: a serverless
+// function at viraholic.com/api/deepseek that holds the key server-side (Vercel
+// env DEEPSEEK_API_KEY). viraholic.com is already in host_permissions, so the SW
+// fetch needs no extra permission and no key push — and rotating the key in
+// Vercel never touches the extension.
+const FEED_DEEPSEEK_URL    = 'https://viraholic.com/api/deepseek';
 const FEED_DEEPSEEK_MODEL  = 'deepseek-chat';
 
 // POST a single-prompt JSON request to DeepSeek; returns the parsed JSON object
@@ -4670,11 +4667,7 @@ const FEED_DEEPSEEK_MODEL  = 'deepseek-chat';
 async function _deepseekJSON(instructions, { temperature = 0.7, maxTokens = 2048 } = {}) {
     const resp = await fetch(FEED_DEEPSEEK_URL, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${FEED_SUPABASE_ANON}`,
-            'apikey': FEED_SUPABASE_ANON,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             model: FEED_DEEPSEEK_MODEL,
             messages: [{ role: 'user', content: instructions }],

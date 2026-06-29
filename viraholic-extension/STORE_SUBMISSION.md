@@ -5,10 +5,9 @@ Status of known review blockers. ✅ = handled in code/manifest, ⬜ = you must 
 ## Before you submit
 
 - ✅ Manifest V3, no remote code, no `eval`. (Hard technical blockers — clean.)
-- ✅ No secret API keys in the extension. The AI (DeepSeek) key lives only as a
-  Supabase Edge Function secret, server-side. The embedded Supabase URL + anon key are
-  public by design (the anon key is row-level-security–protected and is meant to ship
-  in clients).
+- ✅ No API keys in the extension at all. The AI (DeepSeek) key lives only as a
+  server-side env var on our Vercel function (`api/deepseek`); the extension just calls
+  that function over HTTPS, so nothing secret ships in the package.
 - ✅ Description ≤ 132 chars (store limit).
 - ✅ Removed unused `syndication.twitter.com` host permission.
 - ✅ **Icon is now a real PNG.** Replaced the JPEG with `icon16.png` / `icon48.png` /
@@ -38,8 +37,8 @@ Status of known review blockers. ✅ = handled in code/manifest, ⬜ = you must 
   reply helper into the composer.
 - **host: x.com / twitter.com / linkedin.com** — read the feed you are signed in to and
   place drafted replies into the native composer for your approval.
-- **host: <your dashboard origin>** — sync drafts/settings with the Viraholic web app.
-  (The AI call goes to our Supabase Edge Function via CORS — no host permission for it.)
+- **host: <your dashboard origin>** — sync drafts/settings with the Viraholic web app,
+  and call our serverless AI function at `<origin>/api/deepseek` (same host) to draft replies.
 
 ## Single-purpose statement
 
@@ -51,8 +50,9 @@ Status of known review blockers. ✅ = handled in code/manifest, ⬜ = you must 
 - Collects: "Website content" (posts the user acts on) and "User activity" (drafts).
 - Used only for the single purpose above; **not sold**; **not used for ads**; not used
   for creditworthiness. Check the three required certification boxes.
-- Remote data: post text is sent to our Supabase Edge Function, which forwards it to the
-  AI provider (DeepSeek) to generate drafts. The AI key is never in the extension.
+- Remote data: post text is sent to our serverless function (`api/deepseek` on Vercel),
+  which forwards it to the AI provider (DeepSeek) to generate drafts. The AI key is never
+  in the extension.
 
 ## Packaging the upload
 
