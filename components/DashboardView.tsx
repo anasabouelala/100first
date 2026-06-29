@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProject } from '../contexts/ProjectContext';
-import { AppMode, BuyerPersonaAnalysis, StrategyPlan } from '../types';
+import { AppMode } from '../types';
 import {
-  Crosshair, Radar, Briefcase, TrendingUp, TrendingDown, ArrowUpRight
+  Crosshair, Radar, Briefcase, TrendingUp, TrendingDown, ArrowUpRight,
+  Sparkles, Rss, ArrowRight
 } from 'lucide-react';
 
 interface Props {
@@ -21,9 +22,20 @@ const useDashboardData = () => {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const onChange = () => setTick(t => t + 1);
+    // `storage` only fires for OTHER tabs; the in-app custom events cover same-tab
+    // updates so the dashboard reflects new posts/replies without the 10s wait.
     window.addEventListener('storage', onChange);
+    window.addEventListener('answerly_sync', onChange);
+    window.addEventListener('answerly_history_update', onChange);
+    window.addEventListener('comment_log_loaded', onChange);
     const i = setInterval(() => setTick(t => t + 1), 10000);
-    return () => { window.removeEventListener('storage', onChange); clearInterval(i); };
+    return () => {
+      window.removeEventListener('storage', onChange);
+      window.removeEventListener('answerly_sync', onChange);
+      window.removeEventListener('answerly_history_update', onChange);
+      window.removeEventListener('comment_log_loaded', onChange);
+      clearInterval(i);
+    };
   }, []);
 
   return useMemo(() => {
@@ -71,8 +83,10 @@ const KPI: React.FC<{
   return (
     <button
       onClick={onClick}
+      aria-label={onClick ? `${label}: ${value}. Open` : undefined}
       className={`group text-left bg-white border border-gray-100 hover:border-gray-300 hover:shadow-sm rounded-2xl p-5
                   transition-all duration-200 ease-out active:scale-[0.99]
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
                   ${onClick ? 'cursor-pointer' : 'cursor-default'}`}>
       <div className="flex items-center justify-between mb-4 text-gray-500">
         <span className="flex items-center gap-2 text-xs font-medium text-gray-600">
@@ -129,7 +143,12 @@ const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; t
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-4">
-        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        {/* preserveAspectRatio="none" stretches X to fill width; vector-effect keeps
+            the stroke a uniform 1.5px and we skip per-point dots (which would
+            otherwise distort into ovals under the non-uniform scale). */}
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+          role="img"
+          aria-label={`Posts captured per day over the last 14 days. ${total} total, ${avg.toFixed(1)} per day on average.`}>
           <defs>
             <linearGradient id="actGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#111827" stopOpacity="0.10" />
@@ -139,17 +158,12 @@ const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; t
 
           {[0.33, 0.66].map((p, i) => (
             <line key={i} x1={PAD} y1={H - PAD - (H - PAD * 2) * p} x2={W - PAD} y2={H - PAD - (H - PAD * 2) * p}
-              stroke="#f3f4f6" />
+              stroke="#f3f4f6" vectorEffect="non-scaling-stroke" />
           ))}
 
           <path d={areaPath} fill="url(#actGrad)" />
-          <path d={linePath} fill="none" stroke="#111827" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-
-          {buckets.map((b, i) => (
-            <g key={i}>
-              <circle cx={xFor(i)} cy={yFor(b.count)} r={2.5} fill="#111827" />
-            </g>
-          ))}
+          <path d={linePath} fill="none" stroke="#111827" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round"
+            vectorEffect="non-scaling-stroke" />
 
           {[0, 6, 13].map(i => (
             <text key={i} x={xFor(i)} y={H - 6} fontSize={10} fill="#6b7280" textAnchor="middle">
@@ -157,6 +171,48 @@ const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; t
             </text>
           ))}
         </svg>
+      </div>
+    </section>
+  );
+};
+
+// ─── Get started — first-run empty state ────────────────────────────
+// A brand-new account lands here with all zeros and a flat chart. Instead of
+// that dead end, point them at the three moves that produce their first wins.
+const GetStarted: React.FC<{ setMode: (m: AppMode | 'DASHBOARD') => void }> = ({ setMode }) => {
+  const steps: Array<{ icon: React.ReactNode; title: string; desc: string; cta: string; mode: AppMode }> = [
+    { icon: <Crosshair size={18} />, title: 'Find accounts to track', desc: 'Pick creators in your niche — Viraholic watches their posts for you.', cta: 'Find accounts', mode: AppMode.ACCOUNT_FINDER },
+    { icon: <Rss size={18} />, title: 'Watch your feed', desc: 'Auto-surface buying-intent posts from your own home feed.', cta: 'Set up Feed Watcher', mode: AppMode.FEED_WATCHER },
+    { icon: <Sparkles size={18} />, title: 'Generate content', desc: 'Draft posts and replies in your voice that actually convert.', cta: 'Open Content Engine', mode: AppMode.CONTENT_ENGINE },
+  ];
+  return (
+    <section className="space-y-4">
+      <div>
+        <h3 className="text-[15px] font-semibold text-gray-900 tracking-tight">Get started</h3>
+        <p className="text-[12px] text-gray-500 mt-0.5">Three quick moves to your first wins — pick any to begin.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {steps.map((s, i) => (
+          <button
+            key={s.title}
+            onClick={() => setMode(s.mode)}
+            className="group relative text-left bg-white border border-gray-100 hover:border-primary/40 hover:shadow-sm
+                       rounded-2xl p-5 transition-all duration-200 ease-out active:scale-[0.99]
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+            <span className="absolute top-4 right-4 text-[11px] font-black tabular-nums text-gray-300 group-hover:text-primary/50 transition-colors">
+              {i + 1}
+            </span>
+            <span className="inline-flex w-9 h-9 rounded-xl bg-primary/10 text-primary items-center justify-center mb-3">
+              {s.icon}
+            </span>
+            <div className="text-sm font-semibold text-gray-900">{s.title}</div>
+            <div className="text-[12px] text-gray-500 mt-1 leading-relaxed">{s.desc}</div>
+            <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-primary">
+              {s.cta}
+              <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+            </span>
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -170,8 +226,14 @@ export const DashboardView: React.FC<Props> = ({ setMode, onEditProject }) => {
   const total = data.buckets14d.reduce((a, b) => a + b.count, 0);
   const avg = total / data.buckets14d.length;
 
+  // No activity yet → guide the user instead of showing a flat, empty chart.
+  const isEmpty = data.tracked === 0 && data.answered === 0 && total === 0;
+  // Onboarding now only requires a name, so pitch/audience are often blank —
+  // which makes the AI generic. Nudge (don't force) the user to fill them.
+  const profileIncomplete = !!project && (!project.pitch?.trim() || !project.targetAudience?.trim());
+
   return (
-    <div className="max-w-5xl mx-auto space-y-10 animate-fade-in">
+    <div className="max-w-5xl mx-auto space-y-8 animate-fade-in">
 
       {/* Discreet project badge */}
       {project && (
@@ -193,6 +255,27 @@ export const DashboardView: React.FC<Props> = ({ setMode, onEditProject }) => {
         <p className="text-sm text-gray-600">A quick read on what's moving.</p>
       </header>
 
+      {/* Profile-completion nudge — only when pitch/audience are missing */}
+      {profileIncomplete && (
+        <button
+          onClick={onEditProject}
+          className="w-full text-left flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 hover:bg-amber-50 px-4 py-3 transition-colors
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
+          <span className="flex-shrink-0 w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+            <Sparkles size={15} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-gray-900">Sharpen your AI output</span>
+            <span className="block text-xs text-gray-600">
+              Add your pitch{!project?.targetAudience?.trim() ? ' and target audience' : ''} so content and replies sound on-brand instead of generic.
+            </span>
+          </span>
+          <span className="flex-shrink-0 text-xs font-semibold text-amber-700 inline-flex items-center gap-1">
+            Complete <ArrowRight size={13} />
+          </span>
+        </button>
+      )}
+
       {/* 3 KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <KPI
@@ -205,7 +288,7 @@ export const DashboardView: React.FC<Props> = ({ setMode, onEditProject }) => {
         <KPI
           label="Tracked posts · 7d"
           value={data.signals7d}
-          delta={data.signalsDelta}
+          delta={data.signals7d === 0 && data.signalsPrev7d === 0 ? undefined : data.signalsDelta}
           icon={<Radar size={13} />}
           hint={`${data.signalsPrev7d} previous week`}
           onClick={() => setMode(AppMode.ANSWERLY_RADAR)}
@@ -219,8 +302,10 @@ export const DashboardView: React.FC<Props> = ({ setMode, onEditProject }) => {
         />
       </div>
 
-      {/* 1 Graph */}
-      <ActivityChart buckets={data.buckets14d} total={total} avg={avg} />
+      {/* Empty → guide; otherwise → activity graph */}
+      {isEmpty
+        ? <GetStarted setMode={setMode} />
+        : <ActivityChart buckets={data.buckets14d} total={total} avg={avg} />}
     </div>
   );
 };

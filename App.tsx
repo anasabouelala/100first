@@ -421,7 +421,7 @@ function AppInner() {
                 <Zap className="text-primary" size={24} />
               </div>
               <div>
-                <h1 className="font-display font-bold text-xl leading-none tracking-tight text-gray-900">Launch<br/>Velocity</h1>
+                <h1 className="font-display font-bold text-xl leading-none tracking-tight text-gray-900">Viraholic</h1>
               </div>
             </div>
 
