@@ -5,7 +5,10 @@ Status of known review blockers. ✅ = handled in code/manifest, ⬜ = you must 
 ## Before you submit
 
 - ✅ Manifest V3, no remote code, no `eval`. (Hard technical blockers — clean.)
-- ✅ No hardcoded API keys in the extension (the AI key is provided at runtime).
+- ✅ No secret API keys in the extension. The AI (DeepSeek) key lives only as a
+  Supabase Edge Function secret, server-side. The embedded Supabase URL + anon key are
+  public by design (the anon key is row-level-security–protected and is meant to ship
+  in clients).
 - ✅ Description ≤ 132 chars (store limit).
 - ✅ Removed unused `syndication.twitter.com` host permission.
 - ✅ **Icon is now a real PNG.** Replaced the JPEG with `icon16.png` / `icon48.png` /
@@ -36,6 +39,9 @@ Status of known review blockers. ✅ = handled in code/manifest, ⬜ = you must 
 - **host: x.com / twitter.com / linkedin.com** — read the feed you are signed in to and
   place drafted replies into the native composer for your approval.
 - **host: <your dashboard origin>** — sync drafts/settings with the Viraholic web app.
+- **host: brrpnoynvidfopdujsce.supabase.co** — call our Supabase Edge Function that
+  proxies the AI provider, so the AI key stays server-side instead of shipping in the
+  extension.
 
 ## Single-purpose statement
 
@@ -47,7 +53,8 @@ Status of known review blockers. ✅ = handled in code/manifest, ⬜ = you must 
 - Collects: "Website content" (posts the user acts on) and "User activity" (drafts).
 - Used only for the single purpose above; **not sold**; **not used for ads**; not used
   for creditworthiness. Check the three required certification boxes.
-- Remote data: post text is sent to the AI provider (Gemini/DeepSeek) to generate drafts.
+- Remote data: post text is sent to our Supabase Edge Function, which forwards it to the
+  AI provider (DeepSeek) to generate drafts. The AI key is never in the extension.
 
 ## Packaging the upload
 

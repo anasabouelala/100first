@@ -4651,8 +4651,47 @@ const FEED_HOME_URL = {
     LinkedIn: 'https://www.linkedin.com/feed/',
     Reddit: 'https://www.reddit.com/'
 };
-const FEED_GEMINI_MODEL = 'gemini-flash-latest';
-const FEED_GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${FEED_GEMINI_MODEL}:generateContent`;
+// ── DeepSeek via the Supabase Edge Function ─────────────────────────────────
+// The extension uses the SAME DeepSeek proxy as the web app. The Supabase URL +
+// anon key are public by design (anon is RLS-protected); hardcoded here so the
+// engine's AI works the moment the extension is licensed — no Gemini key push
+// needed. The DeepSeek key itself stays a Supabase secret. NOTE: this requires
+// the Supabase host in manifest host_permissions so the SW fetch bypasses CORS.
+const FEED_SUPABASE_URL   = 'https://brrpnoynvidfopdujsce.supabase.co';
+const FEED_SUPABASE_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJycnBub3ludmlkZm9wZHVqc2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjYzODUsImV4cCI6MjA5NjUwMjM4NX0.89mTbOh0EKV06mMYvhQt4YKL5olbi0G2odymfoSI9E4';
+const FEED_DEEPSEEK_URL    = `${FEED_SUPABASE_URL}/functions/v1/deepseek`;
+const FEED_DEEPSEEK_MODEL  = 'deepseek-chat';
+
+// POST a single-prompt JSON request to DeepSeek; returns the parsed JSON object
+// or throws (with .status on HTTP errors). DeepSeek has no responseSchema like
+// Gemini, so callers MUST spell out the JSON shape in the prompt (and use the
+// word "JSON") for response_format json_object to behave.
+async function _deepseekJSON(instructions, { temperature = 0.7, maxTokens = 2048 } = {}) {
+    const resp = await fetch(FEED_DEEPSEEK_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${FEED_SUPABASE_ANON}`,
+            'apikey': FEED_SUPABASE_ANON,
+        },
+        body: JSON.stringify({
+            model: FEED_DEEPSEEK_MODEL,
+            messages: [{ role: 'user', content: instructions }],
+            temperature,
+            max_tokens: maxTokens,
+            response_format: { type: 'json_object' },
+        }),
+    });
+    if (!resp.ok) {
+        const err = await resp.text().catch(() => '');
+        const e = new Error(`HTTP ${resp.status} ${err.slice(0, 200)}`);
+        e.status = resp.status;
+        throw e;
+    }
+    const json = await resp.json();
+    const textOut = json?.choices?.[0]?.message?.content || '{}';
+    return JSON.parse(textOut);
+}
 
 async function loadFeedWatchConfig() {
     const { feed_watch_config } = await chrome.storage.local.get(['feed_watch_config']);
@@ -4683,9 +4722,9 @@ async function scheduleFeedWatch(cfg) {
         Object.entries(cfg.enabled).filter(([, v]) => v).map(([k]) => k).join(','));
 }
 
-// Call Gemini's REST API from inside the service worker to score a batch of
-// freshly-scraped feed posts against the user's brief. The API key is the same
-// VITE_GEMINI_API_KEY the panel uses, pushed to chrome.storage via the bridge.
+// Call DeepSeek (via the Supabase Edge Function) from inside the service worker
+// to score a batch of freshly-scraped feed posts against the user's brief. No
+// API key is needed client-side — the key is a Supabase secret on the function.
 // Build the scoring instructions. Two distinct rubrics so the attributed
 // "profile fit" number actually measures what each mode claims:
 //   • 'brief'   — strict opportunity-spotting against the user's typed brief.
@@ -4733,11 +4772,6 @@ ${JSON.stringify(payload)}`;
 // `mode` selects the rubric ('brief' | 'product').
 async function scoreFeedPostsInExt(prompt, posts, mode = 'brief') {
     if (!posts || posts.length === 0) return [];
-    const { gemini_api_key } = await chrome.storage.local.get(['gemini_api_key']);
-    if (!gemini_api_key) {
-        console.warn(FEED_TAG, 'Gemini key missing — open the app once so it pushes the key to the extension. Returning failed (not 0-fit) scores.');
-        return posts.map(p => ({ uuid: p.uuid, score: 0, reason: 'Gemini key not yet shared with extension — open the app once to enable.', failed: true, noKey: true }));
-    }
 
     // CRITICAL: the model echoes back a key so we can match its judgement to the
     // right post. We must NOT use the real uuid for that round-trip — LinkedIn
@@ -4761,48 +4795,21 @@ async function scoreFeedPostsInExt(prompt, posts, mode = 'brief') {
         text: (p.text || '').slice(0, 800)
     }));
 
-    const RESPONSE_SCHEMA = {
-        type: 'OBJECT',
-        properties: {
-            results: {
-                type: 'ARRAY',
-                items: {
-                    type: 'OBJECT',
-                    properties: {
-                        id:     { type: 'STRING' },
-                        score:  { type: 'NUMBER' },
-                        reason: { type: 'STRING' }
-                    },
-                    required: ['id', 'score', 'reason']
-                }
-            }
-        },
-        required: ['results']
-    };
-
-    // One Gemini round over a subset. Returns { ok, byId, status }. ok=false
+    // One DeepSeek round over a subset. Returns { ok, byId, status }. ok=false
     // means a hard transport/parse failure — distinct from a per-post 0.
     const callOnce = async (subset) => {
-        const instructions = _buildFeedScoreInstructions(prompt, toPayload(subset), mode);
-        const body = { contents: [{ parts: [{ text: instructions }] }], generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA } };
+        const instructions = _buildFeedScoreInstructions(prompt, toPayload(subset), mode) +
+            '\n\nReturn ONLY a JSON object of this exact shape (no prose, no markdown):\n' +
+            '{"results":[{"id":"<the id copied verbatim>","score":<integer 0-100>,"reason":"<one short sentence>"}]}\n' +
+            'Include exactly one entry per post above.';
         try {
-            const resp = await fetch(`${FEED_GEMINI_URL}?key=${encodeURIComponent(gemini_api_key)}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-            });
-            if (!resp.ok) {
-                const err = await resp.text().catch(() => '');
-                console.error(FEED_TAG, `Gemini call failed: ${resp.status} ${err.slice(0, 200)}`);
-                return { ok: false, byId: new Map(), status: resp.status };
-            }
-            const json = await resp.json();
-            const textOut = json?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-            let parsed; try { parsed = JSON.parse(textOut); } catch { parsed = { results: [] }; }
+            const parsed = await _deepseekJSON(instructions, { temperature: 0.4, maxTokens: 4096 });
             const results = Array.isArray(parsed?.results) ? parsed.results : [];
             // Key by the echoed id (coerced to string — the model may return it as a number).
             return { ok: true, byId: new Map(results.map(r => [String(r.id), r])), status: 200 };
         } catch (e) {
-            console.error(FEED_TAG, 'Gemini call threw:', e);
-            return { ok: false, byId: new Map(), status: 0, error: e };
+            console.error(FEED_TAG, 'DeepSeek scorer call failed:', e?.message || e);
+            return { ok: false, byId: new Map(), status: e?.status || 0, error: e };
         }
     };
 
@@ -4881,8 +4888,7 @@ function _buildVoiceGuidance(vp) {
 // return action:'skip' so we never post filler. `comment` is empty for
 // 'repost'/'skip'.
 async function draftEngagementInExt(post, scoreResult, voiceProfile, brief) {
-    const { gemini_api_key } = await chrome.storage.local.get(['gemini_api_key']);
-    if (!gemini_api_key) return { action: 'skip', comment: '', rationale: 'No Gemini key shared with extension.' };
+    // DeepSeek proxy is always reachable (public Supabase anon) — no key push needed.
 
     const voice = _buildVoiceGuidance(voiceProfile);
     const authorLine = [post.author?.displayName, post.author?.handle && '@' + post.author.handle, post.author?.bylineSubtitle]
@@ -4936,36 +4942,11 @@ Decide the BEST single action:
 
 Return JSON: { action, comment, rationale }. "comment" is the reply text for action="comment" (empty otherwise). "rationale" is one short sentence on why this action.`;
 
-    const body = {
-        contents: [{ parts: [{ text: instructions }] }],
-        generationConfig: {
-            temperature: 0.8,
-            responseMimeType: 'application/json',
-            responseSchema: {
-                type: 'OBJECT',
-                properties: {
-                    action:    { type: 'STRING', enum: ['comment', 'repost', 'skip'] },
-                    comment:   { type: 'STRING' },
-                    rationale: { type: 'STRING' }
-                },
-                required: ['action', 'rationale']
-            }
-        }
-    };
+    const jsonInstructions = instructions +
+        '\n\nReturn ONLY a JSON object of this exact shape (no prose, no markdown):\n' +
+        '{"action":"comment|repost|skip","comment":"<reply text — empty unless action is comment>","rationale":"<one short sentence>"}';
     try {
-        const resp = await fetch(`${FEED_GEMINI_URL}?key=${encodeURIComponent(gemini_api_key)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        if (!resp.ok) {
-            const err = await resp.text().catch(() => '');
-            console.warn(FEED_TAG, `Draft call failed: ${resp.status} ${err.slice(0, 160)}`);
-            return { action: 'skip', comment: '', rationale: `Draft HTTP ${resp.status}` };
-        }
-        const json = await resp.json();
-        const textOut = json?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-        let parsed; try { parsed = JSON.parse(textOut); } catch { parsed = {}; }
+        const parsed = await _deepseekJSON(jsonInstructions, { temperature: 0.8, maxTokens: 700 });
         const action = ['comment', 'repost', 'skip'].includes(parsed.action) ? parsed.action : 'skip';
         let comment = String(parsed.comment || '').trim().slice(0, Math.max(lengthBudget, 280));
         if (action !== 'comment') comment = '';
@@ -4974,8 +4955,9 @@ Return JSON: { action, comment, rationale }. "comment" is the reply text for act
         }
         return { action, comment, rationale: String(parsed.rationale || '').slice(0, 240) };
     } catch (e) {
-        console.warn(FEED_TAG, 'Draft threw:', e?.message || e);
-        return { action: 'skip', comment: '', rationale: `Draft error: ${(e?.message || 'unknown').slice(0, 120)}` };
+        console.warn(FEED_TAG, 'DeepSeek draft failed:', e?.message || e);
+        const httpMsg = e?.status ? `Draft HTTP ${e.status}` : `Draft error: ${(e?.message || 'unknown').slice(0, 120)}`;
+        return { action: 'skip', comment: '', rationale: httpMsg };
     }
 }
 
@@ -5850,12 +5832,11 @@ async function _runFeedWatchSweepInner() {
     let scored = 0;
 
     // ── Live diagnostic accumulator (persisted at each phase) ──
-    const { gemini_api_key: _diagKey } = await chrome.storage.local.get(['gemini_api_key']);
     const diag = {
         startedAt: new Date().toISOString(),
         lastSkip: null,
         enabledPlatforms: enabled,
-        geminiKeyPresent: !!_diagKey,
+        aiProvider: 'deepseek',
         platforms: {},           // per-platform: { navOk, blocked, found, steps, scrapeDiag, error }
         dedupSkipped: 0,         // scraped but already seen / already in tracker
         freshlyScraped: 0,
@@ -6265,9 +6246,7 @@ async function _runFeedWatchSweepInner() {
                     if (!r) continue;
                     // A HARD scorer failure (transient HTTP / parse) is NOT a
                     // 0-fit — surface the post instead of silently dropping it so
-                    // a blip doesn't empty the tracker. A missing Gemini key
-                    // (noKey) is a config problem we can't score around, so those
-                    // still drop (the diagnostic tells the user to add the key).
+                    // a blip doesn't empty the tracker.
                     if (r.failed) { if (!r.noKey) passing.push({ post: p, score: r }); continue; }
                     if (r.score < minScore) continue;
                     passing.push({ post: p, score: r });
@@ -6471,7 +6450,7 @@ TARGET AUDIENCE: ${audience || '(unspecified)'}`;
             else diag.conclusion = 'ZERO scraped — the page rendered but no post cards matched the scraper selectors (logged out, empty feed, or markup changed). Check platform login.';
         } else if (passing.length === 0) {
             if (diag.scoreMode === 'brief') {
-                diag.conclusion = `Scraped ${freshlyScraped.length} but NONE scored ≥ ${minScore}. ${diag.geminiKeyPresent ? 'Lower minimum relevancy or broaden the brief.' : 'Gemini key is NOT present in the extension — open the app once so it pushes the key, or clear the brief to surface everything.'}`;
+                diag.conclusion = `Scraped ${freshlyScraped.length} but NONE scored ≥ ${minScore}. Lower minimum relevancy or broaden the brief.`;
             } else if (diag.scoreMode === 'no-brief (product-ranked)') {
                 diag.conclusion = `Scraped ${freshlyScraped.length} but NONE met the ${minScore}% Minimum profile fit. Lower the fit threshold in Feed Watcher, or refine your product/audience.`;
             } else {

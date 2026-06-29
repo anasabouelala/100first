@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Viraholic",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "AI reply assistant for your X & LinkedIn account. Drafts in-context replies from your feed; you approve before anything posts.",
   "icons": {
     "16": "icon16.png",
@@ -23,6 +23,7 @@
     "https://*.linkedin.com/*",
     "https://viraholic.com/*",
     "https://*.viraholic.com/*",
+    "https://brrpnoynvidfopdujsce.supabase.co/*",
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*",
     "http://localhost:3001/*",
