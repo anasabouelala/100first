@@ -1085,7 +1085,7 @@ nav [data-auth="signin"]:hover { background-color:rgba(15,23,42,0.05) !important
         el.addEventListener('click', (ev) => {
             ev.preventDefault();
             // If the visitor is already signed in, every CTA jumps straight to the dashboard.
-            if (currentSession) { window.location.href = '/'; return; }
+            if (currentSession) { window.location.href = '/dashboard'; return; }
             openModal(el.dataset.auth);
         });
     });
@@ -1119,7 +1119,7 @@ nav [data-auth="signin"]:hover { background-color:rgba(15,23,42,0.05) !important
         // Admin access — username "admin" / password "admin" → premium, no Supabase.
         if (email.toLowerCase() === 'admin' && password === 'admin') {
             try { localStorage.setItem('mock_auth', 'true'); } catch (_) {}
-            window.location.href = '/';
+            window.location.href = '/dashboard';
             return;
         }
 
@@ -1140,11 +1140,11 @@ nav [data-auth="signin"]:hover { background-color:rgba(15,23,42,0.05) !important
                     showFeedback('info', 'Check your inbox to confirm your email — then come back and sign in.');
                     return;
                 }
-                window.location.href = '/';
+                window.location.href = '/dashboard';
             } else {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) { showFeedback('error', friendlyError(error.message)); return; }
-                window.location.href = '/';
+                window.location.href = '/dashboard';
             }
         } catch (err) {
             console.error('[auth] unexpected', err);

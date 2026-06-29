@@ -2260,8 +2260,13 @@ For each option, "why" explains in one short phrase why this reply lands AND whi
       config: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.95 }
     });
     return JSON.parse(response.text) as SmartComment;
-  } catch {
-    return { options: [{ body: "Great perspective! Would love to connect.", why: "Neutral opener" }] };
+  } catch (e: any) {
+    // Do NOT silently substitute a canned comment — that produced the SAME generic
+    // reply ("Great perspective! Would love to connect.") on every post whenever the
+    // AI backend was unreachable. Surface the failure so the UI shows an error/retry
+    // instead of misleading filler the user might actually post.
+    console.error('generateSmartEngagementComment failed:', e?.message || e);
+    throw new Error(e?.message || 'Comment generation failed — the AI backend (DeepSeek) is unreachable.');
   }
 };
 

@@ -69,7 +69,7 @@ const STAGE_CONFIG = {
 // (collapse 3+ blank lines, trim, dedup spaces) so it always lays out
 // the same regardless of source noise.
 // ────────────────────────────────────────────────────────────────────
-const RADAR_POST_PREVIEW_CHARS = 240;
+const RADAR_POST_PREVIEW_CHARS = 600;
 // Paginate the tracker — rendering hundreds of post cards (each with its own
 // expandable editor / masonry slot) was the cause of the slow load. 50/page
 // keeps the DOM small while still showing a meaningful batch.
@@ -846,11 +846,18 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                       item.campaignId;
       return !isRecon;
     }).map(item => {
-      // Already scored (recon/AI)? Leave it untouched.
-      if (typeof item.relevancyScore === 'number' || typeof item.relevance === 'number') return item;
+      // A bare relevancyScore of 100 with no reason is the extension's "promote
+      // everything" default (or a scoring failure), NOT a real fit — it made every
+      // post read as "100% profile fit". Treat it as unscored and re-estimate.
+      const isBareDefault = item.relevancyScore === 100 && !item.relevancyReason;
+      const hasRealScore = !isBareDefault &&
+        (typeof item.relevancyScore === 'number' || typeof item.relevance === 'number');
+      if (hasRealScore) return item;
       const inferred = inferFit(item);
-      if (!inferred) return item;
-      return { ...item, relevancyScore: inferred.score, relevancyReason: inferred.reason, _fitInferred: true };
+      if (inferred) return { ...item, relevancyScore: inferred.score, relevancyReason: inferred.reason, _fitInferred: true };
+      // Nothing to infer from and only a default → show as unscored, not a fake 100%.
+      if (isBareDefault) { const { relevancyScore, relevance, ...rest } = item; return rest; }
+      return item;
     });
   }, [radarHistory, trackedUrls, fitKeywords]);
 
