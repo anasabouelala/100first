@@ -23,8 +23,7 @@ const STORAGE_KEY_RESULTS = 'discovery_results_archive';
 
 const PLATFORMS: { id: DiscoveryPlatform; label: string; icon: React.ReactNode; color: string; bgGradient: string }[] = [
   { id: 'X', label: 'X / Twitter', icon: <Twitter size={20} />, color: 'text-slate-900', bgGradient: 'from-slate-900 to-slate-700' },
-  { id: 'LinkedIn', label: 'LinkedIn', icon: <Linkedin size={20} />, color: 'text-blue-700', bgGradient: 'from-blue-700 to-blue-500' },
-  { id: 'Reddit', label: 'Reddit', icon: <MessageCircle size={20} />, color: 'text-orange-600', bgGradient: 'from-orange-600 to-amber-500' }
+  { id: 'LinkedIn', label: 'LinkedIn', icon: <Linkedin size={20} />, color: 'text-blue-700', bgGradient: 'from-blue-700 to-blue-500' }
 ];
 
 const AUTHORITY_TIERS: { id: AuthorityLevel; label: string; range: string; description: string }[] = [
@@ -827,7 +826,6 @@ const ManualAddForm: React.FC<{
         >
           <option value="X">X</option>
           <option value="LinkedIn">LinkedIn</option>
-          <option value="Reddit">Reddit</option>
         </select>
         <input
           value={input}
@@ -863,7 +861,7 @@ const Header: React.FC<{ extensionConnected: boolean; mission: DiscoveryMission 
           Find <span className="text-primary">creators</span> in your niche
         </h1>
         <p className="opacity-60 max-w-2xl text-base leading-relaxed">
-          Search X, LinkedIn and Reddit for accounts worth following and engaging with. Built to stay safe and avoid getting flagged.
+          Search X and LinkedIn for accounts worth following and engaging with. Built to stay safe and avoid getting flagged.
         </p>
       </div>
       <div className="flex flex-col gap-2 items-end">

@@ -27,8 +27,7 @@ const DEFAULT_CONFIG: FeedWatcherConfig = {
 
 const PLATFORMS: { id: DiscoveryPlatform; label: string; icon: React.ReactNode }[] = [
   { id: 'X',        label: 'X / Twitter', icon: <Twitter size={20} /> },
-  { id: 'LinkedIn', label: 'LinkedIn',    icon: <Linkedin size={20} /> },
-  { id: 'Reddit',   label: 'Reddit',      icon: <MessageCircle size={20} /> }
+  { id: 'LinkedIn', label: 'LinkedIn',    icon: <Linkedin size={20} /> }
 ];
 
 function loadConfig(): FeedWatcherConfig {

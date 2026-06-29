@@ -18,8 +18,11 @@ import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, Generat
 //   • Gemini's `Type` enum / `Schema` shape — re-implemented locally with the
 //      same uppercase names so existing schema literals compile unchanged.
 
-const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY ?? '';
-const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
+// DeepSeek runs through a Supabase Edge Function so the API key stays
+// server-side (Supabase secret DEEPSEEK_API_KEY) and never ships to the browser.
+const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+const DEEPSEEK_PROXY_URL = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/deepseek` : '';
 
 // Default model. Per spec — kept as a single source of truth so swapping the
 // model id (e.g. to `deepseek-chat`) is a one-line change.
@@ -65,6 +68,19 @@ const getOutputLanguage = (): OutputLanguage => {
 /** Directive appended to content-generation prompts so output matches the
  *  user's chosen language/dialect. Empty string for English (default). */
 export const languageDirective = (): string => LANGUAGE_DIRECTIVES[getOutputLanguage()] || '';
+
+// Appended to every content/reply prompt: force fidelity to the user's own
+// voice AND make the output read human, not AI (defeats AI-detector tells).
+const HUMAN_VOICE_RULES = `
+
+VOICE FIDELITY (top priority): match the user's voice profile EXACTLY — their rhythm, sentence length, vocabulary, punctuation habits, energy and quirks. If a writing sample is provided, mirror its cadence and word choices. Someone who knows them should think "that's them", not "an AI wrote this."
+
+SOUND HUMAN, NEVER LIKE AI (this content must be indistinguishable from a real person's):
+- Banned AI tells (never use): em-dashes (—); "in today's world", "let's dive in", "it's not just X, it's Y", "the truth is", "let's be honest", "at the end of the day", "game-changer", "unlock", "leverage", "elevate", "supercharge", "navigate the landscape", "testament to", "delve", "tapestry", "robust", "seamless", "realm", "in conclusion", "needle-moving".
+- Vary sentence length: mix short punchy lines with longer ones. Uniform, balanced rhythm reads as AI.
+- Avoid tidy rule-of-three lists, over-balanced parallelism, and a neat summary sentence at the end.
+- Use concrete specifics (real numbers, names, dates), contractions, the occasional sentence fragment, and one genuine opinion. Slightly imperfect beats polished.
+- Don't hedge ("might", "perhaps") or over-explain. Write like someone who actually lived it.`;
 
 // ── Gemini-compatible Type enum / Schema type ──────────────────────
 // These exist purely so the existing `Type.OBJECT` / `Type.STRING` literals
@@ -193,11 +209,13 @@ async function deepseekGenerateContent(req: GeminiCallShape): Promise<GeminiResp
     }
   }
 
-  const res = await fetch(DEEPSEEK_BASE_URL, {
+  const res = await fetch(DEEPSEEK_PROXY_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+      // Auth to the Supabase Edge Function — the DeepSeek key lives server-side.
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_ANON_KEY
     },
     body: JSON.stringify(body)
   });
@@ -224,11 +242,11 @@ export const ai = {
   }
 };
 
-export const isGeminiConfigured = (): boolean => !!DEEPSEEK_API_KEY;
+export const isGeminiConfigured = (): boolean => !!DEEPSEEK_PROXY_URL;
 
 export class GeminiNotConfiguredError extends Error {
   constructor() {
-    super('DeepSeek API key missing from services/geminiService.ts.');
+    super('Supabase URL missing (VITE_SUPABASE_URL) — the DeepSeek proxy is unreachable.');
     this.name = 'GeminiNotConfiguredError';
   }
 }
@@ -2034,7 +2052,7 @@ Return JSON only.`;
       config: {
         responseMimeType: 'application/json',
         responseSchema: schema,
-        systemInstruction: 'You are an elite social copywriter trained on the best-performing posts of solo founders and contrarian thinkers. You hate corporate language. You worship specificity.' + languageDirective()
+        systemInstruction: 'You are an elite social copywriter trained on the best-performing posts of solo founders and contrarian thinkers. You hate corporate language. You worship specificity.' + languageDirective() + HUMAN_VOICE_RULES
       }
     });
     const text = response.text;
@@ -2121,7 +2139,7 @@ export const generateSmartEngagementComment = async (
   };
   const toneDirective = (toneDirectiveMap[tone]
     || `TONE — ${tone.toUpperCase()}: Write the reply unmistakably in a ${tone} tone; it must be obvious from the very first sentence.`)
-    + languageDirective();
+    + languageDirective() + HUMAN_VOICE_RULES;
   // When the user explicitly asked for "funny", a conflicting LOW humor dial
   // from their saved voice profile would sabotage it. The explicit tone wins:
   // we force the humor dial high so the voice block reinforces (not fights)
