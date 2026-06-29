@@ -39,9 +39,7 @@ Status of known review blockers. ✅ = handled in code/manifest, ⬜ = you must 
 - **host: x.com / twitter.com / linkedin.com** — read the feed you are signed in to and
   place drafted replies into the native composer for your approval.
 - **host: <your dashboard origin>** — sync drafts/settings with the Viraholic web app.
-- **host: brrpnoynvidfopdujsce.supabase.co** — call our Supabase Edge Function that
-  proxies the AI provider, so the AI key stays server-side instead of shipping in the
-  extension.
+  (The AI call goes to our Supabase Edge Function via CORS — no host permission for it.)
 
 ## Single-purpose statement
 

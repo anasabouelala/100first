@@ -16,6 +16,12 @@ const ALLOWED_ORIGINS = [
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
   /^https:\/\/([a-z0-9-]+\.)?viraholic\.com$/,
+  // The Viraholic extension's service worker calls this function directly. Allowing
+  // any chrome-extension:// origin lets the extension reach it via CORS WITHOUT a
+  // manifest host permission — so a store update never forces users to re-approve a
+  // new permission. A website cannot forge a chrome-extension:// Origin, so this
+  // does NOT widen access for regular web pages.
+  /^chrome-extension:\/\/[a-p]{32}$/,
 ];
 
 function corsHeaders(origin: string | null): Record<string, string> {

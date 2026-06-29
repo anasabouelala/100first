@@ -4655,8 +4655,9 @@ const FEED_HOME_URL = {
 // The extension uses the SAME DeepSeek proxy as the web app. The Supabase URL +
 // anon key are public by design (anon is RLS-protected); hardcoded here so the
 // engine's AI works the moment the extension is licensed — no Gemini key push
-// needed. The DeepSeek key itself stays a Supabase secret. NOTE: this requires
-// the Supabase host in manifest host_permissions so the SW fetch bypasses CORS.
+// needed. The DeepSeek key itself stays a Supabase secret. The function's CORS
+// allow-list permits chrome-extension:// origins, so NO manifest host permission is
+// needed (keeps store updates from forcing existing users to re-approve a permission).
 const FEED_SUPABASE_URL   = 'https://brrpnoynvidfopdujsce.supabase.co';
 const FEED_SUPABASE_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJycnBub3ludmlkZm9wZHVqc2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjYzODUsImV4cCI6MjA5NjUwMjM4NX0.89mTbOh0EKV06mMYvhQt4YKL5olbi0G2odymfoSI9E4';
 const FEED_DEEPSEEK_URL    = `${FEED_SUPABASE_URL}/functions/v1/deepseek`;
