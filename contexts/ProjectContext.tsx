@@ -96,7 +96,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const clearProject = () => setProjectState(null);
 
-  const isComplete = !!(project?.productName && project?.pitch && project?.category && project?.targetAudience);
+  // Only the product name is required to enter the app. Pitch / category / audience
+  // sharpen the AI but are optional — collected progressively, never a first-run wall.
+  const isComplete = !!(project?.productName);
 
   return (
     <ProjectContext.Provider value={{ project, setProject, updateProject, isComplete, clearProject }}>

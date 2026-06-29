@@ -22,6 +22,11 @@ const STAGE_OPTIONS: Array<{ value: ProjectConfig['stage']; label: string; desc:
   { value: 'scaling',     label: 'Scaling',     desc: "Real revenue, growing" }
 ];
 
+// Only the product name is required to get in. Pitch / category / audience are
+// optional — they sharpen the AI, but they should never wall a new user out on
+// first run. Users add them anytime via "Optional details" or the edit modal.
+const REQUIRED_FIELDS: (keyof ProjectConfig)[] = ['productName'];
+
 export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) => {
   const { project, setProject } = useProject();
   // 'new' mode starts blank (replacing current project); 'edit' starts with current values.
@@ -72,10 +77,9 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
   };
 
   const handleSubmit = () => {
-    const required: (keyof ProjectConfig)[] = ['productName', 'pitch', 'category', 'targetAudience'];
     const next: Record<string, boolean> = {};
     let bad = false;
-    required.forEach(k => {
+    REQUIRED_FIELDS.forEach(k => {
       if (!form[k] || (form[k] as string).trim() === '') {
         next[k] = true;
         bad = true;
@@ -91,9 +95,10 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
     const now = new Date().toISOString();
     setProject({
       productName: form.productName!.trim(),
-      pitch: form.pitch!.trim(),
-      category: form.category!.trim(),
-      targetAudience: form.targetAudience!.trim(),
+      // Optional now — default to empty strings (sections fall back gracefully).
+      pitch: form.pitch?.trim() || '',
+      category: form.category?.trim() || '',
+      targetAudience: form.targetAudience?.trim() || '',
       valueProposition: form.valueProposition?.trim(),
       pricingModel: form.pricingModel?.trim(),
       competitors: form.competitors?.trim(),
@@ -107,15 +112,72 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
     if (onClose) onClose();
   };
 
-  const requiredFilled = ['productName', 'pitch', 'category', 'targetAudience']
-    .filter(k => form[k as keyof ProjectConfig] && (form[k as keyof ProjectConfig] as string).trim() !== '').length;
-  const progress = (requiredFilled / 4) * 100;
+  const requiredFilled = REQUIRED_FIELDS
+    .filter(k => form[k] && (form[k] as string).trim() !== '').length;
+  const progress = (requiredFilled / REQUIRED_FIELDS.length) * 100;
+
+  // ── The three "context" fields ──────────────────────────────────────
+  // Required when the user deliberately edits/creates a project; optional on
+  // first run (tucked under "Optional details" so the first screen is just a
+  // name). Defined once and placed per-mode below.
+  const pitchField = (
+    <FieldRow
+      icon={<Sparkles size={14} />}
+      label="Elevator pitch"
+      hint="What does it do, who is it for, and why does it matter? 1-2 sentences.">
+      <textarea
+        value={form.pitch || ''}
+        onChange={e => update('pitch', e.target.value)}
+        placeholder="e.g. Viraholic turns every social platform into a customer-acquisition engine for SaaS founders by surfacing buying-intent conversations across X and LinkedIn, then drafting on-brand replies."
+        rows={3}
+        className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-sm leading-relaxed resize-none transition-colors" />
+    </FieldRow>
+  );
+
+  const categoryField = (
+    <FieldRow icon={<Target size={14} />} label="Category">
+      <div className="space-y-2">
+        <input
+          value={form.category || ''}
+          onChange={e => update('category', e.target.value)}
+          placeholder="e.g. B2B SaaS"
+          className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-base font-medium transition-colors" />
+        <div className="flex flex-wrap gap-1.5">
+          {CATEGORY_PRESETS.map(c => (
+            <button key={c} type="button" onClick={() => update('category', c)}
+              className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all ${
+                form.category === c
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-primary hover:text-primary'
+              }`}>
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+    </FieldRow>
+  );
+
+  const audienceField = (
+    <FieldRow
+      icon={<Users size={14} />}
+      label="Target audience"
+      hint="Who pays for this? Be specific — job title, company stage, or persona.">
+      <input
+        value={form.targetAudience || ''}
+        onChange={e => update('targetAudience', e.target.value)}
+        placeholder="e.g. Solo SaaS founders & Heads of Demand Gen at Series A-B B2B SaaS"
+        className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-base transition-colors" />
+    </FieldRow>
+  );
+
+  const isFirstTime = mode === 'first-time';
 
   // The form body (shared between modes)
   const body = (
     <>
       {/* Close (edit / new mode) */}
-      {mode !== 'first-time' && onClose && (
+      {!isFirstTime && onClose && (
         <button onClick={onClose}
           className="absolute top-4 right-4 z-10 p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-700 transition-colors">
           <X size={18} />
@@ -123,40 +185,42 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
       )}
 
       {/* Header */}
-      <div className={`${mode !== 'first-time' ? 'p-8 pb-6' : 'mb-8'}`}>
+      <div className={`${!isFirstTime ? 'p-8 pb-6' : 'mb-8'}`}>
         <div className="flex items-center gap-2 mb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20">
             <Rocket size={20} />
           </div>
           <div className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">
-            {mode === 'edit' ? 'Edit project' : mode === 'new' ? 'New project' : 'One-time setup'}
+            {mode === 'edit' ? 'Edit project' : mode === 'new' ? 'New project' : 'Quick start'}
           </div>
         </div>
         <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight">
           {mode === 'edit' ? 'Update your project'
             : mode === 'new' ? 'Set up a new project'
-            : 'Tell us about your product'}
+            : 'What are you working on?'}
         </h1>
         <p className="text-gray-500 mt-2 leading-relaxed">
           {mode === 'edit'
             ? 'Changes apply to every section — account finder, feed watcher, content engine.'
             : mode === 'new'
               ? 'You can only have one active project at a time, so this replaces your current one — its tracked accounts, posts and voice are cleared, and the new project starts fresh. You stay signed in.'
-              : 'Fill this once. Every section — account finder, feed watcher, content engine — will use this data instead of asking you again.'}
+              : 'Just a name to get started. Add your pitch and audience anytime — they sharpen what the AI writes, but you can jump straight in.'}
         </p>
 
-        {/* Progress */}
-        <div className="mt-5 flex items-center gap-3">
-          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-primary to-blue-500 transition-all duration-500"
-              style={{ width: `${progress}%` }} />
+        {/* Progress — only meaningful when more than one field is required */}
+        {REQUIRED_FIELDS.length > 1 && (
+          <div className="mt-5 flex items-center gap-3">
+            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-primary to-blue-500 transition-all duration-500"
+                style={{ width: `${progress}%` }} />
+            </div>
+            <span className="text-xs font-black tracking-widest uppercase text-gray-500 tabular-nums">{requiredFilled}/{REQUIRED_FIELDS.length}</span>
           </div>
-          <span className="text-xs font-black tracking-widest uppercase text-gray-500 tabular-nums">{requiredFilled}/4</span>
-        </div>
+        )}
       </div>
 
       {/* Required fields */}
-      <div className={`bg-white ${mode !== 'first-time' ? 'mx-8' : ''} rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5`}>
+      <div className={`bg-white ${!isFirstTime ? 'mx-8' : ''} rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5`}>
         <FieldRow
           icon={<Tag size={14} />}
           label="Product name"
@@ -166,78 +230,46 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
             value={form.productName || ''}
             onChange={e => update('productName', e.target.value)}
             placeholder="e.g. Viraholic"
+            autoFocus
+            onKeyDown={e => { if (e.key === 'Enter' && isFirstTime) handleSubmit(); }}
             className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-base font-medium transition-colors" />
         </FieldRow>
 
-        <FieldRow
-          icon={<Sparkles size={14} />}
-          label="Elevator pitch"
-          hint="What does it do, who is it for, and why does it matter? 1-2 sentences."
-          required
-          error={errors.pitch}>
-          <textarea
-            value={form.pitch || ''}
-            onChange={e => update('pitch', e.target.value)}
-            placeholder="e.g. Viraholic turns every social platform into a customer-acquisition engine for SaaS founders by surfacing buying-intent conversations across Reddit, X and LinkedIn, then drafting on-brand replies."
-            rows={3}
-            className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-sm leading-relaxed resize-none transition-colors" />
-        </FieldRow>
-
-        <FieldRow
-          icon={<Target size={14} />}
-          label="Category"
-          required
-          error={errors.category}>
-          <div className="space-y-2">
-            <input
-              value={form.category || ''}
-              onChange={e => update('category', e.target.value)}
-              placeholder="e.g. B2B SaaS"
-              className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-base font-medium transition-colors" />
-            <div className="flex flex-wrap gap-1.5">
-              {CATEGORY_PRESETS.map(c => (
-                <button key={c} type="button" onClick={() => update('category', c)}
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all ${
-                    form.category === c
-                      ? 'bg-primary text-white border-primary'
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-primary hover:text-primary'
-                  }`}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-        </FieldRow>
-
-        <FieldRow
-          icon={<Users size={14} />}
-          label="Target audience"
-          hint="Who pays for this? Be specific — job title, company stage, or persona."
-          required
-          error={errors.targetAudience}>
-          <input
-            value={form.targetAudience || ''}
-            onChange={e => update('targetAudience', e.target.value)}
-            placeholder="e.g. Solo SaaS founders & Heads of Demand Gen at Series A-B B2B SaaS"
-            className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-base transition-colors" />
-        </FieldRow>
+        {/* On edit/new, the context fields live here. On first run they move to
+            "Optional details" so the first screen is just the name. */}
+        {!isFirstTime && (
+          <>
+            {pitchField}
+            {categoryField}
+            {audienceField}
+          </>
+        )}
       </div>
 
       {/* Optional toggle */}
       <button onClick={() => setShowOptional(s => !s)}
-        className={`${mode !== 'first-time' ? 'mx-8' : ''} mt-4 w-[calc(100%-${mode === 'edit' ? '4rem' : '0'})] mx-auto flex items-center justify-between px-5 py-3 rounded-2xl border border-gray-200 hover:border-gray-300 bg-white transition-all group`}
+        className={`${!isFirstTime ? 'mx-8' : ''} mt-4 w-full flex items-center justify-between px-5 py-3 rounded-2xl border border-gray-200 hover:border-gray-300 bg-white transition-all group`}
         style={mode === 'edit' ? { width: 'calc(100% - 4rem)' } : {}}>
         <span className="flex items-center gap-2">
           <Sparkles size={14} className="text-amber-500" />
-          <span className="text-sm font-bold text-gray-700">Optional details</span>
-          <span className="text-[10px] text-gray-400 font-medium hidden sm:inline">— sharpens AI output for personas & distribution</span>
+          <span className="text-sm font-bold text-gray-700">{isFirstTime ? 'Add details now' : 'Optional details'}</span>
+          <span className="text-[10px] text-gray-400 font-medium hidden sm:inline">— sharpens AI output (you can do this later)</span>
         </span>
         {showOptional ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
       </button>
 
       {/* Optional fields */}
       {showOptional && (
-        <div className={`bg-white ${mode !== 'first-time' ? 'mx-8' : ''} rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5 mt-3 animate-fade-in`}>
+        <div className={`bg-white ${!isFirstTime ? 'mx-8' : ''} rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5 mt-3 animate-fade-in`}>
+          {/* On first run, pitch/category/audience are optional and live here. */}
+          {isFirstTime && (
+            <>
+              {pitchField}
+              {categoryField}
+              {audienceField}
+            </>
+          )}
+
           <FieldRow icon={<Swords size={14} />} label="Unique value / wedge">
             <textarea
               value={form.valueProposition || ''}
@@ -299,7 +331,7 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
 
       {/* Footer CTA */}
       <div className={`${mode === 'edit' ? 'mx-8 mb-8' : ''} mt-6 flex items-center gap-3`}>
-        {mode !== 'first-time' && onClose && (
+        {!isFirstTime && onClose && (
           <button onClick={onClose}
             className="px-6 py-3 text-gray-500 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
             Cancel
@@ -308,12 +340,12 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
         <button onClick={handleSubmit}
           className="flex-1 flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-primary to-blue-600 text-white font-bold text-base rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:scale-[1.01] active:scale-100 transition-all">
           <Check size={18} />
-          {mode === 'edit' ? 'Save changes' : mode === 'new' ? 'Create project' : 'Launch project'}
+          {mode === 'edit' ? 'Save changes' : mode === 'new' ? 'Create project' : 'Start'}
         </button>
       </div>
 
       {/* Footer hint — only on first-time */}
-      {mode === 'first-time' && (
+      {isFirstTime && (
         <p className="text-[11px] text-gray-400 text-center mt-4 font-medium">
           Everything is stored locally — never sent anywhere except to the AI sections you trigger manually.
         </p>
@@ -323,7 +355,7 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
 
   // Wrap in modal (edit / new) or full-page (first-time) — done inline so
   // the input components aren't unmounted on every keystroke
-  if (mode !== 'first-time') {
+  if (!isFirstTime) {
     return (
       <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-md animate-fade-in">
         <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl relative">
@@ -378,7 +410,7 @@ export const ProjectSummaryCard: React.FC<{ onEdit: () => void; compact?: boolea
             </div>
             <div className="min-w-0 flex-1">
               <div className="font-bold text-sm text-gray-900 truncate leading-tight">{project.productName}</div>
-              <div className="text-[10px] text-gray-500 font-medium truncate leading-tight">{project.category}</div>
+              <div className="text-[10px] text-gray-500 font-medium truncate leading-tight">{project.category || 'Add details'}</div>
             </div>
           </div>
           <span className="text-[9px] font-black tracking-widest uppercase text-primary opacity-0 group-hover:opacity-100 transition-opacity">Edit</span>
