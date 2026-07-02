@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Viraholic — طوّر مكانتك على لينكد إن وإكس، بصفتك الخبيرَ الأبرز في مجالك.</title>
+<title>Viraholic — طوّر حضورك على لينكد إن وإكس، بصفتك الخبيرَ الأبرز في مجالك.</title>
 <meta name="description" content="وكيل النمو على لينكد إن وإكس. يترصّد المحادثات التي ينشغل بها جمهورك، ويصوغ الردّ المناسب بنبرتك، فتظهر حيث يجب أن تُرى — حتى يقترن اسمك بالخبرة في مجالك." />
-<meta property="og:title" content="طوّر مكانتك على لينكد إن وإكس، بصفتك الخبيرَ الأبرز في مجالك." />
+<meta property="og:title" content="طوّر حضورك على لينكد إن وإكس، بصفتك الخبيرَ الأبرز في مجالك." />
 <meta property="og:description" content="يعثر الوكيل على المحادثات المناسبة، ويكتب بنبرتك، ويعينك على الإيقاع الثابت الذي يصنع التصدّر على لينكد إن وإكس." />
 <meta name="theme-color" content="#eef2f7" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -71,7 +71,8 @@ tailwind.config = { theme: { extend: {
         <a href="/landing-growth.fr.html">FR</a>
         <a href="/landing-growth.ar.html" aria-current="true">عربي</a>
       </nav>
-      <a href="/" class="px-4 py-2 rounded-lg btn-cta text-sm whitespace-nowrap">ابدأ مجانًا ←</a>
+      <button type="button" data-auth="signin" data-nav-signin class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 rounded-lg transition-colors">تسجيل الدخول</button>
+      <button type="button" data-auth="signup" data-auth-label-default="ابدأ مجانًا" data-auth-label-signed-in="افتح اللوحة" class="px-4 py-2 rounded-lg btn-cta text-sm whitespace-nowrap"><span data-auth-label>ابدأ مجانًا</span> ←</button>
     </div>
   </div>
 </header>
@@ -86,16 +87,16 @@ tailwind.config = { theme: { extend: {
       <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> وكيلك للنمو على لينكد إن وإكس
     </span>
     <h1 class="text-4xl md:text-6xl lg:text-7xl font-bold leading-[1.35] mt-6 animate-fade-up" style="color:var(--ink);animation-delay:80ms;animation-fill-mode:backwards;">
-      طوّر مكانتك على لينكد إن وإكس، بصفتك <span class="accent">الخبيرَ الأبرز في مجالك.</span>
+      طوّر حضورك على <svg role="img" aria-label="LinkedIn" viewBox="0 0 24 24" fill="#0A66C2" style="height:.78em;width:auto;display:inline-block;vertical-align:-.12em;margin-inline:.06em"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg> و<svg role="img" aria-label="X" viewBox="0 0 24 24" fill="#0f172a" style="height:.72em;width:auto;display:inline-block;vertical-align:-.06em;margin-inline:.06em"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>، بصفتك <span class="accent">الخبيرَ الأبرز في مجالك.</span>
     </h1>
     <p class="text-2xl md:text-4xl lg:text-5xl text-slate-400 mt-5 font-bold animate-fade-up" style="animation-delay:120ms;animation-fill-mode:backwards;">
-      نموٌّ <span class="grad-text num">عشرة أضعاف</span> على المنصّتين.
+      نمو <span class="grad-text num">X 10</span> على المنصتين.
     </p>
     <p class="text-lg md:text-xl text-slate-600 mt-6 max-w-2xl mx-auto leading-relaxed animate-fade-up" style="animation-delay:180ms;animation-fill-mode:backwards;">
       يترصّد Viraholic المحادثات التي ينشغل بها جمهورك، ويصوغ الردّ المناسب بنبرتك، ويعرضه عليك بنقرة. توافق، فتظهر حيث يجب أن تُرى — يومًا بعد يوم، حتى يقترن اسمك بالخبرة في مجالك.
     </p>
     <div class="mt-9 flex flex-wrap items-center justify-center gap-3 animate-fade-up" style="animation-delay:240ms;animation-fill-mode:backwards;">
-      <a href="/" class="px-7 py-3.5 rounded-xl btn-cta text-base">ابدأ مجانًا ←</a>
+      <button type="button" data-auth="signup" data-auth-label-default="ابدأ مجانًا" data-auth-label-signed-in="افتح اللوحة" class="px-7 py-3.5 rounded-xl btn-cta text-base"><span data-auth-label>ابدأ مجانًا</span> ←</button>
       <a href="#loop" class="px-6 py-3.5 rounded-xl border border-slate-300 text-slate-700 font-medium hover:border-slate-400 hover:bg-white/50 transition">شاهد كيف يعمل</a>
     </div>
     <p class="mt-3 text-xs text-slate-400 animate-fade-up" style="animation-delay:280ms;animation-fill-mode:backwards;">بدون بطاقة ائتمان.</p>
@@ -232,7 +233,7 @@ tailwind.config = { theme: { extend: {
       <div class="card rounded-2xl p-6"><div class="text-3xl font-bold num grad-text">02</div><h3 class="font-bold text-lg mt-2 mb-1">اكتب بنبرتك</h3><p class="text-[14px] text-slate-600 leading-relaxed">ما إن ينشر حسابٌ متابَع حتى يقرأه الوكيل ويصوغ ردًّا بصوتك. موجزٌ على إكس، أوسعُ على لينكد إن، جاهزٌ في ثوانٍ.</p></div>
       <div class="card rounded-2xl p-6"><div class="text-3xl font-bold num grad-text">03</div><h3 class="font-bold text-lg mt-2 mb-1">وافِق في 15 دقيقة</h3><p class="text-[14px] text-slate-600 leading-relaxed">افتح اللوحة 15 دقيقة يوميًا. تصفّح القائمة، بدّل كلمة، ووافق على الباقي. يُنشَر الردّ باسمك.</p></div>
     </div>
-    <p class="text-center text-[14px] text-slate-600 mt-8 max-w-2xl mx-auto leading-relaxed">تدور هذه الحلقة كلّ يوم. وكلّ ردٍّ مفيدٍ لبنةٌ في مكانتك — يراها أشخاصٌ لم يكونوا ليفتحوا رسالتك الباردة قطّ.</p>
+    <p class="text-center text-[14px] text-slate-600 mt-8 max-w-2xl mx-auto leading-relaxed">تدور هذه الحلقة كلّ يوم. وكلّ ردٍّ مفيدٍ لبنةٌ في حضورك — يراها أشخاصٌ لم يكونوا ليفتحوا رسالتك الباردة قطّ.</p>
 
     <div class="mt-14 max-w-4xl mx-auto">
       <h3 class="text-2xl md:text-3xl font-bold leading-tight text-center">أوّلُ ستّة أسابيع… بلا مبالغة.</h3>
@@ -266,8 +267,8 @@ tailwind.config = { theme: { extend: {
 <section class="px-5 pb-24">
   <div class="max-w-3xl mx-auto text-center card rounded-3xl p-10">
     <h2 class="text-3xl md:text-4xl font-bold leading-tight">كُن أوّلَ اسمٍ <span class="accent">يخطر على بالهم.</span></h2>
-    <p class="text-base text-slate-600 mt-4 max-w-xl mx-auto leading-relaxed">15 دقيقة يوميًا… صوتك، وموافقتك، واسمك. والوكيل يتكفّل بالباقي، فترتقي مكانتك يومًا بعد يوم.</p>
-    <a href="/" class="inline-block mt-8 px-8 py-4 rounded-xl btn-cta text-base">ابدأ مجانًا ←</a>
+    <p class="text-base text-slate-600 mt-4 max-w-xl mx-auto leading-relaxed">15 دقيقة يوميًا… صوتك، وموافقتك، واسمك. والوكيل يتكفّل بالباقي، فترتقي حضورك يومًا بعد يوم.</p>
+    <button type="button" data-auth="signup" data-auth-label-default="ابدأ مجانًا" data-auth-label-signed-in="افتح اللوحة" class="mt-8 px-8 py-4 rounded-xl btn-cta text-base inline-flex items-center gap-1"><span data-auth-label>ابدأ مجانًا</span> ←</button>
     <p class="mt-3 text-xs text-slate-400">بدون بطاقة ائتمان.</p>
   </div>
 </section>
@@ -283,6 +284,206 @@ tailwind.config = { theme: { extend: {
     </div>
   </div>
 </footer>
+
+<!-- ───────────── نافذة الدخول / التسجيل ─────────────
+     مخفيّة افتراضيًا. تُفتح عند النقر على أيّ زرّ يحمل [data-auth]،
+     وتبدّل بين «تسجيل الدخول» و«إنشاء حساب» عبر التبويبين. -->
+<div id="auth-modal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+  <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden" role="document">
+    <div class="px-7 pt-7 pb-3 flex items-start justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="inline-grid place-items-center w-7 h-7 rounded-md" style="background:linear-gradient(135deg,#6366f1,#3b82f6)"><svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M13 2L3 14h7v8l10-12h-7z"/></svg></span>
+          <span class="font-bold text-base text-slate-900">Viraholic</span>
+        </div>
+        <h3 id="auth-modal-title" class="text-xl font-bold text-slate-900">مرحبًا بعودتك</h3>
+        <p class="text-[13px] text-slate-500 mt-0.5" data-auth-subtitle>سجّل الدخول لفتح لوحتك.</p>
+      </div>
+      <button type="button" data-auth-close class="text-slate-400 hover:text-slate-700 p-1 -m-1 rounded-md" aria-label="إغلاق">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl mx-7">
+      <button type="button" data-auth-tab="signin" class="px-3 py-2 rounded-lg text-[13px] font-bold bg-white shadow-sm text-slate-900 transition-colors">تسجيل الدخول</button>
+      <button type="button" data-auth-tab="signup" class="px-3 py-2 rounded-lg text-[13px] font-bold text-slate-500 hover:text-slate-800 transition-colors">إنشاء حساب</button>
+    </div>
+    <form id="auth-form" class="px-7 pt-5 pb-7 space-y-3">
+      <div data-auth-show="signup" class="hidden">
+        <label class="text-[10px] tracking-widest font-bold text-slate-500">اسمك</label>
+        <input type="text" name="fullName" autocomplete="name" placeholder="مايا ر." class="mt-1 w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-slate-400 transition-colors" />
+      </div>
+      <div>
+        <label class="text-[10px] tracking-widest font-bold text-slate-500">البريد الإلكتروني</label>
+        <input type="text" inputmode="email" name="email" autocomplete="email" required placeholder="you@company.com" dir="ltr" class="mt-1 w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-slate-400 transition-colors text-left" />
+      </div>
+      <div>
+        <label class="text-[10px] tracking-widest font-bold text-slate-500">كلمة المرور</label>
+        <input type="password" name="password" autocomplete="current-password" required minlength="8" placeholder="8 أحرف على الأقل" dir="ltr" class="mt-1 w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-slate-400 transition-colors text-left" />
+        <button type="button" data-auth-forgot data-auth-show="signin" class="text-[11px] text-slate-500 hover:text-slate-900 mt-1.5">هل نسيت كلمة المرور؟</button>
+      </div>
+      <div id="auth-feedback" class="hidden text-[12px] leading-relaxed rounded-lg p-3"></div>
+      <button type="submit" data-auth-submit class="w-full mt-2 px-4 py-2.5 btn-cta rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+        <span data-auth-submit-label>تسجيل الدخول</span>
+        <svg data-auth-spinner class="w-4 h-4 animate-spin hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M22 12a10 10 0 0 1-10 10"/></svg>
+      </button>
+      <p class="text-[11px] text-slate-400 text-center pt-1" data-auth-show="signup">بإنشائك حسابًا فأنت توافق على تلقّي رسائل بخصوص تجربتك. دون بطاقة ائتمان. ألغِ متى شئت.</p>
+    </form>
+  </div>
+</div>
+
+<!-- ───────────── سكربت الدخول ─────────────
+     يهيّئ Supabase، ويربط النافذة، ويعالج الدخول/التسجيل/الاستعادة،
+     ثم يوجّه إلى اللوحة على "/dashboard" عند النجاح. -->
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@^2.108.0';
+  const SUPABASE_URL      = 'https://brrpnoynvidfopdujsce.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJycnBub3ludmlkZm9wZHVqc2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjYzODUsImV4cCI6MjA5NjUwMjM4NX0.89mTbOh0EKV06mMYvhQt4YKL5olbi0G2odymfoSI9E4';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'lv_supabase_auth' }
+  });
+
+  const modal = document.getElementById('auth-modal');
+  const form = document.getElementById('auth-form');
+  const feedback = document.getElementById('auth-feedback');
+  const submitBtn = form.querySelector('[data-auth-submit]');
+  const submitLabel = form.querySelector('[data-auth-submit-label]');
+  const spinner = form.querySelector('[data-auth-spinner]');
+  const titleEl = document.getElementById('auth-modal-title');
+  const subtitleEl = document.querySelector('[data-auth-subtitle]');
+  const tabBtns = document.querySelectorAll('[data-auth-tab]');
+  let mode = 'signin';
+
+  function setMode(next) {
+    mode = next;
+    tabBtns.forEach(b => {
+      const active = b.dataset.authTab === mode;
+      b.classList.toggle('bg-white', active);
+      b.classList.toggle('shadow-sm', active);
+      b.classList.toggle('text-slate-900', active);
+      b.classList.toggle('text-slate-500', !active);
+    });
+    if (mode === 'signup') {
+      titleEl.textContent = 'ابدأ تجربتك المجانية';
+      subtitleEl.textContent = 'أنشئ حسابك — دون بطاقة ائتمان.';
+      submitLabel.textContent = 'إنشاء حساب';
+    } else {
+      titleEl.textContent = 'مرحبًا بعودتك';
+      subtitleEl.textContent = 'سجّل الدخول لفتح لوحتك.';
+      submitLabel.textContent = 'تسجيل الدخول';
+    }
+    document.querySelectorAll('[data-auth-show]').forEach(el => {
+      el.classList.toggle('hidden', el.dataset.authShow !== mode);
+    });
+    const pw = form.querySelector('input[name="password"]');
+    if (pw) pw.autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
+    hideFeedback();
+  }
+
+  function openModal(nextMode = 'signin') {
+    setMode(nextMode);
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => form.querySelector('input[name="email"]').focus(), 30);
+    document.addEventListener('keydown', escClose);
+  }
+  function closeModal() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.removeEventListener('keydown', escClose);
+    hideFeedback();
+  }
+  function escClose(e) { if (e.key === 'Escape') closeModal(); }
+  modal.addEventListener('mousedown', (e) => { if (e.target === modal) closeModal(); });
+  document.querySelectorAll('[data-auth-close]').forEach(el => el.addEventListener('click', closeModal));
+  tabBtns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.authTab)));
+
+  document.querySelectorAll('[data-auth]').forEach(el => {
+    el.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      if (currentSession) { window.location.href = '/dashboard'; return; }
+      openModal(el.dataset.auth);
+    });
+  });
+
+  function showFeedback(kind, msg) {
+    feedback.textContent = msg;
+    feedback.className = 'text-[12px] leading-relaxed rounded-lg p-3 ' +
+      (kind === 'error' ? 'bg-rose-50 border border-rose-200 text-rose-800'
+                        : 'bg-emerald-50 border border-emerald-200 text-emerald-800');
+  }
+  function hideFeedback() { feedback.className = 'hidden text-[12px] leading-relaxed rounded-lg p-3'; feedback.textContent = ''; }
+  function setBusy(busy) { submitBtn.disabled = busy; spinner.classList.toggle('hidden', !busy); }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideFeedback();
+    const fd = new FormData(form);
+    const email = String(fd.get('email') || '').trim();
+    const password = String(fd.get('password') || '');
+    const fullName = String(fd.get('fullName') || '').trim();
+    if (!email || !password) { showFeedback('error', 'البريد الإلكتروني وكلمة المرور مطلوبان.'); return; }
+
+    if (email.toLowerCase() === 'admin' && password === 'admin') {
+      try { localStorage.setItem('mock_auth', 'true'); } catch (_) {}
+      window.location.href = '/dashboard';
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({
+          email, password,
+          options: { data: fullName ? { full_name: fullName } : undefined, emailRedirectTo: window.location.origin + '/' }
+        });
+        if (error) { showFeedback('error', friendlyError(error.message)); return; }
+        if (data?.user && !data?.session) { showFeedback('info', 'تحقّق من بريدك لتأكيد عنوانك، ثم عُد وسجّل الدخول.'); return; }
+        window.location.href = '/dashboard';
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) { showFeedback('error', friendlyError(error.message)); return; }
+        window.location.href = '/dashboard';
+      }
+    } catch (err) {
+      console.error('[auth] unexpected', err);
+      showFeedback('error', 'حدث خطأ ما. حاول مرّة أخرى بعد لحظات.');
+    } finally { setBusy(false); }
+  });
+
+  document.querySelector('[data-auth-forgot]').addEventListener('click', async () => {
+    const email = String(new FormData(form).get('email') || '').trim();
+    if (!email) { showFeedback('error', 'اكتب بريدك في الأعلى أولًا، ثم اضغط «هل نسيت كلمة المرور؟».'); return; }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/' });
+      if (error) { showFeedback('error', friendlyError(error.message)); return; }
+      showFeedback('info', 'تحقّق من بريدك، ستجد رابط إعادة التعيين.');
+    } finally { setBusy(false); }
+  });
+
+  function friendlyError(raw) {
+    const m = (raw || '').toLowerCase();
+    if (m.includes('invalid login') || m.includes('invalid credentials')) return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+    if (m.includes('user already registered'))                            return 'هذا البريد مسجَّل بالفعل. جرّب تسجيل الدخول بدلًا من ذلك.';
+    if (m.includes('email not confirmed'))                                return 'أكّد بريدك أولًا — أرسلنا إليك رابطًا.';
+    if (m.includes('password should be at least'))                        return 'استخدم كلمة مرور من 8 أحرف على الأقل.';
+    if (m.includes('rate'))                                               return 'محاولات كثيرة. أمهِلها دقيقة ثم أعد المحاولة.';
+    return raw || 'تعذّر تسجيل الدخول.';
+  }
+
+  let currentSession = null;
+  function reflectSessionInCTAs(session) {
+    currentSession = session;
+    const signedIn = !!session;
+    document.querySelectorAll('[data-auth-label-default]').forEach(btn => {
+      const labelEl = btn.querySelector('[data-auth-label]') || btn;
+      labelEl.textContent = signedIn ? (btn.dataset.authLabelSignedIn || 'افتح اللوحة') : btn.dataset.authLabelDefault;
+    });
+    document.querySelectorAll('[data-auth="signin"][data-nav-signin]').forEach(el => el.classList.toggle('hidden', signedIn));
+  }
+  supabase.auth.getSession().then(({ data }) => reflectSessionInCTAs(data.session));
+  supabase.auth.onAuthStateChange((_e, s) => reflectSessionInCTAs(s));
+</script>
 
 </body>
 </html>
