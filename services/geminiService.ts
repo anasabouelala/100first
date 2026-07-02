@@ -25,9 +25,11 @@ import { StrategyPlan, RoastResult, GroundingChunk, DistributionChannel, Generat
 // Same-origin Vercel serverless function; the DeepSeek key lives in Vercel env.
 const DEEPSEEK_PROXY_URL = '/api/deepseek';
 
-// Default model. Per spec — kept as a single source of truth so swapping the
-// model id (e.g. to `deepseek-chat`) is a one-line change.
-export const MODEL_FLASH = 'deepseek-v4-flash';
+// Default model. Single source of truth so swapping the model id is a one-line
+// change. DeepSeek only serves `deepseek-chat` (V3) and `deepseek-reasoner` (R1);
+// the old `deepseek-v4-flash` value was a placeholder DeepSeek rejected upstream
+// with 400 "Model Not Exist", which broke every web-app AI call.
+export const MODEL_FLASH = 'deepseek-chat';
 
 // ─── Output language / dialect ─────────────────────────────────────
 // Content generators append this directive so every post, reply and
