@@ -5,9 +5,10 @@ import {
     ShieldCheck, Heart, Sparkles, Check, X, ArrowRight, ArrowUpRight, Flame, MessageSquarePlus, Users,
     Activity, Clock, Repeat2, Lock, Rss, Quote, Film, Zap
 } from 'lucide-react';
-import { generateSmartEngagementComment } from '../services/geminiService';
+import { generateSmartEngagementComment, scoreProfileFits } from '../services/geminiService';
 import { useVoiceProfile } from '../hooks/useVoiceProfile';
 import { useProject } from '../contexts/ProjectContext';
+import { useT } from '../contexts/I18nContext';
 import { VOICE_PRESETS } from './ContentEngineView';
 import { SmartComment, PipelineLead, LeadInteraction } from '../types';
 import { useAutoCommentStatusMap } from './AutoCommentControls';
@@ -120,19 +121,20 @@ function cleanPostText(raw: string): string {
 // Format the post timestamp as "2h ago" / "Just now" / "3d ago" — much
 // faster to parse at a glance than a full date+time. Falls back to a date
 // for anything older than a week.
-function formatRelativeTime(ts: number | string | undefined | null): string {
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
+function formatRelativeTime(ts: number | string | undefined | null, t: TFn): string {
     // History items store timestamps as ISO strings — accept both.
     const n = typeof ts === 'number' ? ts : (ts ? new Date(ts).getTime() : NaN);
-    if (!Number.isFinite(n)) return 'Recently';
+    if (!Number.isFinite(n)) return t('time.recently');
     const diffMs = Date.now() - n;
-    if (diffMs < 0) return 'Just now';
+    if (diffMs < 0) return t('time.justNow');
     const m = Math.floor(diffMs / 60_000);
-    if (m < 1) return 'Just now';
-    if (m < 60) return `${m}m ago`;
+    if (m < 1) return t('time.justNow');
+    if (m < 60) return t('time.mAgo', { n: m });
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
+    if (h < 24) return t('time.hAgo', { n: h });
     const d = Math.floor(h / 24);
-    if (d < 7) return `${d}d ago`;
+    if (d < 7) return t('time.dAgo', { n: d });
     return new Date(n).toLocaleDateString();
 }
 
@@ -161,6 +163,7 @@ const RadarPostCard: React.FC<{
     onInlineRegenerate?: () => void;
     onInlineDiscard?: () => void;
 }> = ({ item, onComment, commentStatus, draft, onConfirmDraft, onDiscardDraft, onRemovePost, onRepost, onQuote, selected, onToggleSelect, batchDraft, batchState, onBatchDraftChange, inlineDraft, inlineState, onInlineDraftChange, onInlinePost, onInlineRegenerate, onInlineDiscard }) => {
+    const t = useT();
     const [expanded, setExpanded] = useState(false);
     const [draftText, setDraftText] = useState('');
     const [showReply, setShowReply] = useState(false);
@@ -177,12 +180,12 @@ const RadarPostCard: React.FC<{
     // Per-platform identity. Avatar gets the brand colour; everything else
     // stays neutral so the post content is what jumps out, not the chrome.
     const theme = isReddit
-        ? { avatarBg: 'bg-orange-500', accent: 'text-orange-700', accentHover: 'group-hover:text-orange-700', name: 'Reddit', openOn: 'Open thread' }
+        ? { avatarBg: 'bg-orange-500', accent: 'text-orange-700', accentHover: 'group-hover:text-orange-700', name: 'Reddit', openOn: t('tracker.open.thread') }
         : isLinkedIn
-        ? { avatarBg: 'bg-blue-600',  accent: 'text-blue-700',   accentHover: 'group-hover:text-blue-700',   name: 'LinkedIn', openOn: 'Open post' }
+        ? { avatarBg: 'bg-blue-600',  accent: 'text-blue-700',   accentHover: 'group-hover:text-blue-700',   name: 'LinkedIn', openOn: t('tracker.open.post') }
         : isX
-        ? { avatarBg: 'bg-gray-900',  accent: 'text-gray-900',   accentHover: 'group-hover:text-gray-900',   name: 'X', openOn: 'Open post' }
-        : { avatarBg: 'bg-gray-700',  accent: 'text-gray-700',   accentHover: 'group-hover:text-gray-700',   name: 'Web', openOn: 'Open' };
+        ? { avatarBg: 'bg-gray-900',  accent: 'text-gray-900',   accentHover: 'group-hover:text-gray-900',   name: 'X', openOn: t('tracker.open.post') }
+        : { avatarBg: 'bg-gray-700',  accent: 'text-gray-700',   accentHover: 'group-hover:text-gray-700',   name: t('tracker.platform.web'), openOn: t('tracker.open.generic') };
 
     // Reddit posts: item.text = title, item.body = self-text (may be empty).
     // X / LinkedIn: item.text = the full post, item.body is unused.
@@ -208,7 +211,7 @@ const RadarPostCard: React.FC<{
         ? (creatorLabel.startsWith('r/') ? creatorLabel : `r/${creatorLabel}`)
         : `@${creatorLabel}`;
 
-    const relTime = formatRelativeTime(item.timestamp);
+    const relTime = formatRelativeTime(item.timestamp, t);
 
     // Visual style for the unified comment status pill. Every post shows
     // SOME status so the user can tell at a glance whether the post has
@@ -216,14 +219,14 @@ const RadarPostCard: React.FC<{
     const isReplied = commentStatus === 'posted-auto' || commentStatus === 'posted-manual';
     const commentBadge =
         commentStatus === 'posted-auto'
-            ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✓', label: 'Auto-replied' }
+            ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✓', label: t('tracker.status.autoReplied') }
         : commentStatus === 'posted-manual'
-            ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✓', label: 'You replied' }
+            ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✓', label: t('tracker.status.youReplied') }
         : commentStatus === 'queued'
-            ? { cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: '⏳', label: 'Auto-reply queued' }
+            ? { cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: '⏳', label: t('tracker.status.queued') }
         : commentStatus === 'skipped'
-            ? { cls: 'bg-gray-50 text-gray-500 border-gray-200', icon: '○', label: 'Skipped by filter' }
-        : { cls: 'bg-white text-gray-400 border-gray-200', icon: '○', label: 'Not replied yet' };
+            ? { cls: 'bg-gray-50 text-gray-500 border-gray-200', icon: '○', label: t('tracker.status.skipped') }
+        : { cls: 'bg-white text-gray-400 border-gray-200', icon: '○', label: t('tracker.status.notReplied') };
 
     // ── Profile-fit tint ──
     // The whole card is tinted on a red→amber→green scale by how well the post
@@ -275,13 +278,13 @@ const RadarPostCard: React.FC<{
         : priority >= 45 ? { label: 'COOL', bg: 'bg-amber-50',   text: 'text-amber-700',  ring: 'ring-amber-200',  tip: 'Can wait — fresher or higher-fit posts will outrank it.' }
         :                  { label: 'COLD', bg: 'bg-gray-100',   text: 'text-gray-600',   ring: 'ring-gray-200',   tip: 'Low priority — old or low-fit. Probably skip.' };
     const FIT_STYLES: Record<string, { card: string; num: string; bar: string; label: string }> = {
-        excellent: { card: 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 hover:border-emerald-300 hover:shadow-emerald-100', num: 'text-emerald-600', bar: 'bg-emerald-500', label: 'Strong fit' },
-        good:      { card: 'bg-gradient-to-br from-green-50/80 to-white border-green-200 hover:border-green-300 hover:shadow-green-100', num: 'text-green-600', bar: 'bg-green-500', label: 'Good fit' },
-        mid:       { card: 'bg-gradient-to-br from-amber-50/80 to-white border-amber-200 hover:border-amber-300 hover:shadow-amber-100', num: 'text-amber-600', bar: 'bg-amber-500', label: 'Moderate fit' },
-        low:       { card: 'bg-gradient-to-br from-orange-50/80 to-white border-orange-200 hover:border-orange-300 hover:shadow-orange-100', num: 'text-orange-600', bar: 'bg-orange-500', label: 'Weak fit' },
-        poor:      { card: 'bg-gradient-to-br from-rose-50/70 to-white border-rose-200 hover:border-rose-300 hover:shadow-rose-100', num: 'text-rose-500', bar: 'bg-rose-400', label: 'Low fit' },
+        excellent: { card: 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200 hover:border-emerald-300 hover:shadow-emerald-100', num: 'text-emerald-600', bar: 'bg-emerald-500', label: t('tracker.fit.strong') },
+        good:      { card: 'bg-gradient-to-br from-green-50/80 to-white border-green-200 hover:border-green-300 hover:shadow-green-100', num: 'text-green-600', bar: 'bg-green-500', label: t('tracker.fit.good') },
+        mid:       { card: 'bg-gradient-to-br from-amber-50/80 to-white border-amber-200 hover:border-amber-300 hover:shadow-amber-100', num: 'text-amber-600', bar: 'bg-amber-500', label: t('tracker.fit.moderate') },
+        low:       { card: 'bg-gradient-to-br from-orange-50/80 to-white border-orange-200 hover:border-orange-300 hover:shadow-orange-100', num: 'text-orange-600', bar: 'bg-orange-500', label: t('tracker.fit.weak') },
+        poor:      { card: 'bg-gradient-to-br from-rose-50/70 to-white border-rose-200 hover:border-rose-300 hover:shadow-rose-100', num: 'text-rose-500', bar: 'bg-rose-400', label: t('tracker.fit.low') },
     };
-    const fitStyle = fitTier ? FIT_STYLES[fitTier] : { card: 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-gray-200/40', num: 'text-gray-500', bar: 'bg-gray-300', label: 'Unscored' };
+    const fitStyle = fitTier ? FIT_STYLES[fitTier] : { card: 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-gray-200/40', num: 'text-gray-500', bar: 'bg-gray-300', label: t('tracker.fit.unscored') };
     // A replied post gets an emerald edge regardless of fit, so "done" still reads first.
     const cardBorder = isReplied ? 'border-emerald-300' : '';
 
@@ -342,11 +345,11 @@ const RadarPostCard: React.FC<{
                         <span className="text-gray-300">·</span>
                         {item.discoveredVia === 'feed' ? (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-violet-50 text-violet-700 border-violet-200" title="Surfaced by the Feed Watcher from your home timeline.">
-                                <Rss size={10} /> Feed
+                                <Rss size={10} /> {t('tracker.badge.feed')}
                             </span>
                         ) : (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-sky-50 text-sky-700 border-sky-200" title="From an account or keyword you're tracking.">
-                                <Radar size={10} /> Tracked
+                                <Radar size={10} /> {t('tracker.badge.tracked')}
                             </span>
                         )}
                         {/* Comment status pill — ALWAYS shown so each post answers
@@ -366,7 +369,7 @@ const RadarPostCard: React.FC<{
                             <>
                                 <span className="text-gray-300">·</span>
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-sky-50 text-sky-700 border-sky-200" title="This is a repost — a reply targets the original post.">
-                                    <Repeat2 size={11} /> Repost
+                                    <Repeat2 size={11} /> {t('tracker.badge.repost')}
                                 </span>
                             </>
                         )}
@@ -374,7 +377,7 @@ const RadarPostCard: React.FC<{
                             <>
                                 <span className="text-gray-300">·</span>
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-amber-50 text-amber-700 border-amber-200" title="The author limited who can reply to this post — you may not be able to reply.">
-                                    <Lock size={11} /> Replies restricted
+                                    <Lock size={11} /> {t('tracker.badge.repliesRestricted')}
                                 </span>
                             </>
                         )}
@@ -388,11 +391,11 @@ const RadarPostCard: React.FC<{
                 {fit !== null && (
                     <div
                         className={`text-right flex-shrink-0 px-2.5 py-1.5 rounded-xl bg-white/70 border border-current/10 ${fitStyle.num}`}
-                        title={item.relevancyReason || `${fitStyle.label} — how well this post fits your niche & voice.`}
+                        title={item.relevancyReason || fitStyle.label}
                     >
                         <div className={`text-[22px] font-extrabold leading-none tabular-nums ${fitStyle.num}`}>{fit}<span className="text-[13px] font-bold opacity-70">%</span></div>
                         <div className={`text-[10px] font-extrabold uppercase tracking-wider mt-0.5 ${fitStyle.num}`}>{fitStyle.label}</div>
-                        <div className="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">profile fit</div>
+                        <div className="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">{t('tracker.fit.caption')}</div>
                     </div>
                 )}
                 {/* Remove this post from the tracker */}
@@ -456,7 +459,7 @@ const RadarPostCard: React.FC<{
                     && item.originalPost.text.trim().slice(0, 80) !== (body || '').trim().slice(0, 80) && (
                     <blockquote className="mt-3 border-l-2 border-sky-300 pl-3 py-1.5 bg-sky-50/50 rounded-r-md">
                         <div className="text-[10px] uppercase tracking-wider text-sky-700 font-bold mb-1 flex items-center gap-1">
-                            <Quote size={10} /> Quoting{item.originalPost.author ? ` @${item.originalPost.author}` : ''}
+                            <Quote size={10} /> {t('tracker.quoting')}{item.originalPost.author ? ` @${item.originalPost.author}` : ''}
                         </div>
                         <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">
                             {item.originalPost.text}
@@ -622,8 +625,9 @@ const RadarPostCard: React.FC<{
                 </div>
             )}
 
-            {/* FOOTER — actions */}
-            <div className="flex items-center gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50/60">
+            {/* FOOTER — actions. flex-wrap so the row never clips inside the
+                overflow-hidden card when 4+ buttons don't fit the card width. */}
+            <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50/60">
                 {/* The Auto-reply DRAFT toggle (only when an auto-draft is ready)
                      sits alongside the manual Comment button — both always
                      available; auto-generation only happens when the account
@@ -633,7 +637,7 @@ const RadarPostCard: React.FC<{
                         onClick={() => setShowReply(s => !s)}
                         className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white transition-all duration-200 ease-out active:scale-[0.97] animate-pulse"
                         title="An auto-reply draft is ready — review and approve it">
-                        <Sparkles size={12} /> {showReply ? 'Hide suggested reply' : 'Review suggested reply'}
+                        <Sparkles size={12} /> {showReply ? t('tracker.btn.hideReply') : t('tracker.btn.reviewReply')}
                     </button>
                 )}
                 <button
@@ -648,8 +652,8 @@ const RadarPostCard: React.FC<{
                                 }`}
                     title={isReplied ? 'Already replied — generate another reply in your voice' : 'Generate a reply in your voice, right here'}>
                     {inlineState === 'generating'
-                        ? <><RefreshCw size={12} className="animate-spin" /> Writing…</>
-                        : <><Sparkles size={12} /> {isReplied ? 'Reply again' : 'Comment'}</>}
+                        ? <><RefreshCw size={12} className="animate-spin" /> {t('tracker.btn.writing')}</>
+                        : <><Sparkles size={12} /> {isReplied ? t('tracker.btn.replyAgain') : t('tracker.btn.comment')}</>}
                 </button>
                 {/* Repost & Quote — X/Twitter only. Repost is one-tap; Quote
                      opens the comment composer in quote mode (adds your take). */}
@@ -658,7 +662,7 @@ const RadarPostCard: React.FC<{
                         onClick={onRepost}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:text-emerald-700 bg-white border border-gray-200 hover:border-emerald-300 rounded-lg text-xs font-medium transition-all duration-200 ease-out active:scale-[0.97]"
                         title="Repost this to your followers (no added text)">
-                        <Repeat2 size={12} /> Repost
+                        <Repeat2 size={12} /> {t('tracker.btn.repost')}
                     </button>
                 )}
                 {isX && onQuote && (
@@ -666,7 +670,7 @@ const RadarPostCard: React.FC<{
                         onClick={onQuote}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:text-violet-700 bg-white border border-gray-200 hover:border-violet-300 rounded-lg text-xs font-medium transition-all duration-200 ease-out active:scale-[0.97]"
                         title="Quote this post with your own take">
-                        <Quote size={12} /> Quote
+                        <Quote size={12} /> {t('tracker.btn.quote')}
                     </button>
                 )}
                 <a href={item.postUrl || item.url} target="_blank" rel="noreferrer"
@@ -682,6 +686,15 @@ const RadarPostCard: React.FC<{
 export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }) => {
   const { project } = useProject();
   const [radarHistory, setRadarHistory] = useState<any[]>([]);
+  // ── Real DeepSeek profile-fit scores, cached by post key (url|uuid) ──
+  // Replaces the fake flat "100%" the extension used to stamp on every post.
+  // Persisted so we don't re-score the same post across reloads.
+  const [aiFitScores, setAiFitScores] = useState<Record<string, { score: number; reason: string }>>(() => {
+    try { return JSON.parse(localStorage.getItem('profile_fit_cache_v1') || '{}') || {}; } catch { return {}; }
+  });
+  // busy = a scoring pass is in flight; done = keys already sent (avoids
+  // re-queuing); count caps how many posts we AI-score per mount (cost guard).
+  const fitScoringRef = React.useRef<{ busy: boolean; done: Set<string>; count: number }>({ busy: false, done: new Set(), count: 0 });
   const [drafts, setDrafts] = useState<any[]>([]);
   const [extensionConnected, setExtensionConnected] = useState(false);
   const [leads, setLeads] = useState<PipelineLead[]>([]);
@@ -846,6 +859,10 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                       item.campaignId;
       return !isRecon;
     }).map(item => {
+      // Real DeepSeek score wins over everything (extension default, heuristic).
+      const key = item.url || item.uuid;
+      const ai = key ? aiFitScores[key] : null;
+      if (ai) return { ...item, relevancyScore: ai.score, relevancyReason: ai.reason, _fitAI: true };
       // A bare relevancyScore of 100 with no reason is the extension's "promote
       // everything" default (or a scoring failure), NOT a real fit — it made every
       // post read as "100% profile fit". Treat it as unscored and re-estimate.
@@ -859,7 +876,66 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
       if (isBareDefault) { const { relevancyScore, relevance, ...rest } = item; return rest; }
       return item;
     });
-  }, [radarHistory, trackedUrls, fitKeywords]);
+  }, [radarHistory, trackedUrls, fitKeywords, aiFitScores]);
+
+  // ── DeepSeek profile-fit scoring ──────────────────────────────────────
+  // Score tracked posts that don't yet have a real AI fit, in small batches,
+  // newest-first, and cache the result. This is what makes the fit badge a
+  // realistic 0-100 (varied per post) instead of a flat 100%. Bounded per
+  // mount so a large history can't run up the API bill.
+  const MAX_AI_FIT_PER_MOUNT = 60;
+  useEffect(() => {
+    const product = project?.productName?.trim();
+    const audience = project?.targetAudience?.trim();
+    if (!product && !audience) return;               // no ICP context → keep heuristic
+    if (fitScoringRef.current.busy) return;
+    if (fitScoringRef.current.count >= MAX_AI_FIT_PER_MOUNT) return;
+
+    const candidates = radarHistory.filter(item => {
+      const key = item.url || item.uuid;
+      if (!key || trackedUrls.has(key)) return false;
+      if (aiFitScores[key] || fitScoringRef.current.done.has(key)) return false;
+      const isRecon = item.isRecon || item.text?.includes('[RECON]') ||
+        item.platform?.toLowerCase().includes('recon') || item.campaignId;
+      if (isRecon) return false;
+      return String(item.text || item.title || item.content || '').trim().length > 0;
+    });
+    if (!candidates.length) return;
+
+    const room = MAX_AI_FIT_PER_MOUNT - fitScoringRef.current.count;
+    const batch = candidates.slice(0, Math.min(24, room));   // newest-first (history is sorted)
+    batch.forEach(i => fitScoringRef.current.done.add(i.url || i.uuid));
+    fitScoringRef.current.busy = true;
+    fitScoringRef.current.count += batch.length;
+
+    (async () => {
+      try {
+        const ctx = { product, audience, pitch: project?.pitch, keywords: [...fitKeywords] };
+        for (let i = 0; i < batch.length; i += 8) {
+          const chunk = batch.slice(i, i + 8);
+          const payload = chunk.map(it => ({
+            key: it.url || it.uuid,
+            author: it.author || it.authorName || it.name || '',
+            text: String(it.text || it.title || it.content || ''),
+            platform: it.platform || ''
+          }));
+          let results: { key: string; score: number; reason: string }[] = [];
+          try { results = await scoreProfileFits(payload, ctx); }
+          catch (e) { console.warn('[profile-fit] scoring failed', e); continue; }
+          if (results.length) {
+            setAiFitScores(prev => {
+              const next = { ...prev };
+              for (const r of results) if (r.key) next[r.key] = { score: r.score, reason: r.reason };
+              try { localStorage.setItem('profile_fit_cache_v1', JSON.stringify(next)); } catch {}
+              return next;
+            });
+          }
+        }
+      } finally {
+        fitScoringRef.current.busy = false;
+      }
+    })();
+  }, [radarHistory, trackedUrls, aiFitScores, fitKeywords, project?.productName, project?.targetAudience, project?.pitch]);
 
   // 2. RECON SIGNALS: Hits from automated missions that aren't in the pipeline yet
   const newReconSignals = useMemo(() => {

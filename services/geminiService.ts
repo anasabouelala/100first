@@ -254,6 +254,91 @@ export function assertConfigured() {
   if (!isGeminiConfigured()) throw new GeminiNotConfiguredError();
 }
 
+// =====================================================================
+// PROFILE FIT — real, DeepSeek-scored relevance for tracked posts
+// =====================================================================
+// The Posts Tracker used to show a flat "100% profile fit" on every card
+// (the extension's promote-everything default). This scores a batch of posts
+// against the user's actual product + ICP via DeepSeek and returns a realistic,
+// discriminating 0-100 fit per post with a one-line reason. Batched + cached by
+// the caller so we don't re-score the same post or hammer the API.
+export interface ProfileFitScore { key: string; score: number; reason: string; }
+
+export const scoreProfileFits = async (
+  posts: { key: string; author?: string; text: string; platform?: string }[],
+  ctx: { product?: string; audience?: string; pitch?: string; keywords?: string[] }
+): Promise<ProfileFitScore[]> => {
+  assertConfigured();
+  if (!posts.length) return [];
+
+  const schema: Schema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        key: { type: Type.STRING, description: "Echo the post's key back verbatim." },
+        score: { type: Type.INTEGER, description: "0-100 fit score." },
+        reason: { type: Type.STRING, description: "Max 12 words, concrete — why that score." }
+      },
+      required: ["key", "score", "reason"]
+    }
+  };
+
+  const list = posts.map(p => ({
+    key: p.key,
+    platform: p.platform || '',
+    author: p.author || '',
+    text: (p.text || '').replace(/\s+/g, ' ').slice(0, 400)
+  }));
+
+  const prompt = `You rate how well each social post fits a specific company that wants to REPLY to it as a growth move. High fit = the author/topic is close to this company's ideal customer or niche AND there is a natural opening to add value by replying.
+
+COMPANY
+- Product: ${ctx.product || 'n/a'}
+- Ideal customer / audience: ${ctx.audience || 'n/a'}
+${ctx.pitch ? `- What it does: ${ctx.pitch}\n` : ''}${ctx.keywords?.length ? `- Niche keywords: ${ctx.keywords.slice(0, 12).join(', ')}\n` : ''}
+SCORING — be realistic and DISCRIMINATING. Do NOT give everything a high score:
+- 85-100: bullseye — author is squarely the ICP AND directly on-topic; replying obviously adds value.
+- 65-84: good — clearly adjacent audience or on-topic; worth engaging.
+- 45-64: mixed — some overlap but off-topic, wrong seniority, or wrong segment.
+- 25-44: weak — tangential; a reply would look random.
+- 0-24: irrelevant, spammy, promotional, or off-niche.
+A healthy feed is a MIX: only a few 85+, several below 50. Never default everything to 100.
+
+Return a JSON array, one object per post: { "key": <echo the key>, "score": <0-100 integer>, "reason": "<max 12 words>" }.
+
+POSTS:
+${JSON.stringify(list)}`;
+
+  const res = await ai.models.generateContent({
+    model: MODEL_FLASH,
+    contents: prompt,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: schema,
+      temperature: 0.35,
+      systemInstruction: 'You are a precise B2B growth analyst. You score relevance honestly and never inflate. Output only the JSON array.'
+    }
+  });
+
+  let text = (res.text || '').trim();
+  if (!text) return [];
+  let parsed: any = null;
+  try { parsed = JSON.parse(text); }
+  catch {
+    const s = text.indexOf('['), e = text.lastIndexOf(']');
+    if (s >= 0 && e > s) { try { parsed = JSON.parse(text.slice(s, e + 1)); } catch {} }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter((x: any) => x && typeof x.key === 'string')
+    .map((x: any) => ({
+      key: String(x.key),
+      score: Math.max(0, Math.min(100, Math.round(Number(x.score) || 0))),
+      reason: String(x.reason || '').slice(0, 120)
+    }));
+};
+
 // Helper: Validate and enrich opportunity with real page title
 const validateOpportunity = async (opp: MarketOpportunity): Promise<MarketOpportunity | null> => {
   try {
