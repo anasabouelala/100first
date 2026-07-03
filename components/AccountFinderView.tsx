@@ -15,6 +15,7 @@ import {
   DiscoveryCampaign, EngagementFloor, PostRecencyDays
 } from '../types';
 import { useProject } from '../contexts/ProjectContext';
+import { useT } from '../contexts/I18nContext';
 import { findAccountsWithAI, AISuggestedAccount, isGeminiConfigured } from '../services/geminiService';
 
 const STORAGE_KEY_MISSION = 'discovery_mission_active';
@@ -36,24 +37,26 @@ const AUTHORITY_TIERS: { id: AuthorityLevel; label: string; range: string; descr
 // Engagement preset → human-readable per-platform translation. The actual
 // numeric thresholds live in the engine (ENGAGEMENT_THRESHOLDS); these
 // strings exist only so the user can SEE what each preset means.
+// label/tagline/helper/description/budget hold i18n KEYS (resolved with t() at
+// render) so these module-level constants can still be localized.
 const ENGAGEMENT_PRESETS: { id: EngagementFloor; label: string; tagline: string; helper: string }[] = [
-  { id: 'any',   label: 'Any post',       tagline: 'No engagement filter',  helper: 'Surface every author who mentioned your keywords. Maximum breadth, lowest signal.' },
-  { id: 'some',  label: 'Some traction',  tagline: '~10+ likes per post',    helper: 'Filters out total dead posts. Use when your niche is small.' },
-  { id: 'real',  label: 'Real signal',    tagline: '~50+ likes per post',    helper: 'Recommended. Authors whose content is actually engaged with.' },
-  { id: 'viral', label: 'Viral only',     tagline: '~500+ likes per post',   helper: 'Only top creators. Use sparingly — most niches don’t have many.' }
+  { id: 'any',   label: 'af.eng.any.label',   tagline: 'af.eng.any.tagline',   helper: 'af.eng.any.helper' },
+  { id: 'some',  label: 'af.eng.some.label',  tagline: 'af.eng.some.tagline',  helper: 'af.eng.some.helper' },
+  { id: 'real',  label: 'af.eng.real.label',  tagline: 'af.eng.real.tagline',  helper: 'af.eng.real.helper' },
+  { id: 'viral', label: 'af.eng.viral.label', tagline: 'af.eng.viral.tagline', helper: 'af.eng.viral.helper' }
 ];
 
 const RECENCY_PRESETS: { id: PostRecencyDays; label: string }[] = [
-  { id: 7,    label: 'Last 7 days' },
-  { id: 30,   label: 'Last 30 days' },
-  { id: 90,   label: 'Last 90 days' },
-  { id: null, label: 'Any time' }
+  { id: 7,    label: 'af.recency.7' },
+  { id: 30,   label: 'af.recency.30' },
+  { id: 90,   label: 'af.recency.90' },
+  { id: null, label: 'af.recency.any' }
 ];
 
 const MODE_CONFIG: Record<DiscoveryMode, { label: string; description: string; icon: React.ReactNode; budget: string; color: string }> = {
-  surgical: { label: 'Quick',  description: 'Pure feed scrape, engagement floor only', icon: <Crosshair size={20} />, budget: '~10-20 accounts', color: 'emerald' },
-  volume:   { label: 'Wide',   description: 'More queries + deeper scroll',             icon: <Radar size={20} />,     budget: '~50-100 accounts', color: 'blue' },
-  deep:     { label: 'Deep',   description: 'Seed expand: click into top posts, scrape reactors/repliers', icon: <Brain size={20} />, budget: '~25-50 high-confidence', color: 'purple' }
+  surgical: { label: 'af.mode.surgical.label', description: 'af.mode.surgical.desc', icon: <Crosshair size={20} />, budget: 'af.mode.surgical.budget', color: 'emerald' },
+  volume:   { label: 'af.mode.volume.label',   description: 'af.mode.volume.desc',   icon: <Radar size={20} />,     budget: 'af.mode.volume.budget', color: 'blue' },
+  deep:     { label: 'af.mode.deep.label',     description: 'af.mode.deep.desc',     icon: <Brain size={20} />,     budget: 'af.mode.deep.budget', color: 'purple' }
 };
 
 const DEFAULT_FILTERS: DiscoveryFilters = {
@@ -99,18 +102,19 @@ function migrateFilters(raw: any): DiscoveryFilters {
 
 type AudienceSize = 'any' | 'small' | 'medium' | 'large';
 
+// label/helper hold i18n KEYS resolved with t() at render.
 const AUDIENCE_PRESETS: { id: AudienceSize; label: string; helper: string }[] = [
-  { id: 'any',    label: 'Any size',  helper: 'No follower-count filter' },
-  { id: 'small',  label: 'Small',     helper: 'Under ~50K — high reply rate' },
-  { id: 'medium', label: 'Medium',    helper: '~50K–1M — solid reach' },
-  { id: 'large',  label: 'Large',     helper: 'Over 1M — broad influence' }
+  { id: 'any',    label: 'af.size.any.label',    helper: 'af.size.any.helper' },
+  { id: 'small',  label: 'af.size.small.label',  helper: 'af.size.small.helper' },
+  { id: 'medium', label: 'af.size.medium.label', helper: 'af.size.medium.helper' },
+  { id: 'large',  label: 'af.size.large.label',  helper: 'af.size.large.helper' }
 ];
 
 const AI_ENGAGEMENT_PRESETS: { id: 'any' | 'some' | 'real' | 'viral'; label: string; helper: string }[] = [
-  { id: 'any',   label: 'Any',         helper: 'No engagement filter' },
-  { id: 'some',  label: 'Some',        helper: '~10+ per post' },
-  { id: 'real',  label: 'Real signal', helper: '~50+ per post' },
-  { id: 'viral', label: 'Viral',       helper: '~500+ per post' }
+  { id: 'any',   label: 'af.aieng.any.label',   helper: 'af.aieng.any.helper' },
+  { id: 'some',  label: 'af.aieng.some.label',  helper: 'af.aieng.some.helper' },
+  { id: 'real',  label: 'af.aieng.real.label',  helper: 'af.aieng.real.helper' },
+  { id: 'viral', label: 'af.aieng.viral.label', helper: 'af.aieng.viral.helper' }
 ];
 
 // Curated country list for the geo filter. "Worldwide" disables the filter.
@@ -225,6 +229,7 @@ function aiToDiscovered(a: AISuggestedAccount, platform: DiscoveryPlatform): Dis
 
 export const AccountFinderView: React.FC = () => {
   const { project } = useProject();
+  const t = useT();
 
   // --- AI finder config ---
   const [platform, setPlatform] = useState<DiscoveryPlatform>('X');
@@ -573,7 +578,7 @@ export const AccountFinderView: React.FC = () => {
       {/* AI FINDER CONFIG */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card title="Where to search" subtitle="Pick one platform" icon={<Globe size={18} />}>
+          <Card title={t('af.card.where.title')} subtitle={t('af.card.where.sub2')} icon={<Globe size={18} />}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {PLATFORMS.map(p => (
                 <button
@@ -595,17 +600,17 @@ export const AccountFinderView: React.FC = () => {
             </div>
           </Card>
 
-          <Card title="What's your niche?" subtitle="The AI uses this to pick accounts" icon={<Brain size={18} />}>
+          <Card title={t('af.niche.title')} subtitle={t('af.niche.sub')} icon={<Brain size={18} />}>
             <textarea
               value={niche}
               onChange={(e) => setNiche(e.target.value)}
-              placeholder="e.g. AI agents for SaaS founders, build-in-public solopreneurs in dev tools, growth marketers focused on B2B SaaS pricing…"
+              placeholder={t('af.niche.ph')}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400 transition-colors min-h-[90px] resize-y"
             />
             <div className="mt-4">
               <ChipsInput
-                label="Keywords (optional)"
-                placeholder="e.g. agents, no-code, indie hacker"
+                label={t('af.kw2.label')}
+                placeholder={t('af.kw2.ph')}
                 value={keywordDraft}
                 onChange={setKeywordDraft}
                 chips={keywords}
@@ -616,7 +621,7 @@ export const AccountFinderView: React.FC = () => {
             </div>
           </Card>
 
-          <Card title="Country" subtitle="Where should the accounts be based?" icon={<Globe size={18} />}>
+          <Card title={t('af.country.title')} subtitle={t('af.country.sub')} icon={<Globe size={18} />}>
             <div className="space-y-3">
               <select
                 value={country}
@@ -624,28 +629,28 @@ export const AccountFinderView: React.FC = () => {
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white text-gray-800 outline-none hover:border-gray-400 focus:border-gray-400 transition-colors"
               >
                 {COUNTRY_OPTIONS.map(c => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
+                  <option key={c.id} value={c.id}>{c.id === 'any' ? t('af.country.worldwide') : c.label}</option>
                 ))}
               </select>
               {country === 'custom' && (
                 <input
                   value={countryCustom}
                   onChange={e => setCountryCustom(e.target.value)}
-                  placeholder="e.g. Norway, South Korea, Bay Area..."
+                  placeholder={t('af.country.custom.ph')}
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400 transition-colors"
                 />
               )}
               <div className="text-[10px] text-gray-500 leading-relaxed">
                 {country === 'any'
-                  ? 'No geo filter — accounts can be based anywhere.'
+                  ? t('af.country.helper.any')
                   : country === 'custom'
-                    ? 'The AI will prioritize creators based in this region.'
-                    : `Only suggest creators primarily based in ${country}.`}
+                    ? t('af.country.helper.custom')
+                    : t('af.country.helper.specific', { country })}
               </div>
             </div>
           </Card>
 
-          <Card title="Account size" subtitle="How big should the accounts be?" icon={<Users size={18} />}>
+          <Card title={t('af.size.title')} subtitle={t('af.size.sub')} icon={<Users size={18} />}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {AUDIENCE_PRESETS.map(p => {
                 const active = audienceSize === p.id;
@@ -657,15 +662,15 @@ export const AccountFinderView: React.FC = () => {
                       active ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-400 bg-white'
                     }`}
                   >
-                    <div className="font-bold text-xs">{p.label}</div>
-                    <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500'}`}>{p.helper}</div>
+                    <div className="font-bold text-xs">{t(p.label)}</div>
+                    <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500'}`}>{t(p.helper)}</div>
                   </button>
                 );
               })}
             </div>
           </Card>
 
-          <Card title="Engagement bar" subtitle="Filter for accounts whose posts get traction" icon={<Heart size={18} />}>
+          <Card title={t('af.card.eng.title')} subtitle={t('af.card.eng2.sub')} icon={<Heart size={18} />}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {AI_ENGAGEMENT_PRESETS.map(p => {
                 const active = engagementBar === p.id;
@@ -677,8 +682,8 @@ export const AccountFinderView: React.FC = () => {
                       active ? 'border-rose-600 bg-rose-600 text-white' : 'border-gray-200 hover:border-rose-300 bg-white'
                     }`}
                   >
-                    <div className="font-bold text-xs">{p.label}</div>
-                    <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500'}`}>{p.helper}</div>
+                    <div className="font-bold text-xs">{t(p.label)}</div>
+                    <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500'}`}>{t(p.helper)}</div>
                   </button>
                 );
               })}
@@ -688,11 +693,11 @@ export const AccountFinderView: React.FC = () => {
 
         {/* RIGHT: Run + tracking settings */}
         <div className="space-y-6">
-          <Card title="Find accounts" subtitle="AI suggests real accounts to follow" icon={<Sparkles size={18} />}>
+          <Card title={t('af.find.title')} subtitle={t('af.find.sub')} icon={<Sparkles size={18} />}>
             <div className="space-y-4">
               <div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-1.5">
-                  How many to suggest
+                  {t('af.find.howMany')}
                 </div>
                 <div className="flex items-center gap-3">
                   <input
@@ -711,11 +716,11 @@ export const AccountFinderView: React.FC = () => {
               >
                 {searching ? (
                   <>
-                    <Loader2 size={16} className="animate-spin" /> Searching…
+                    <Loader2 size={16} className="animate-spin" /> {t('af.find.searching')}
                   </>
                 ) : (
                   <>
-                    <Sparkles size={16} /> Find accounts
+                    <Sparkles size={16} /> {t('af.find.cta')}
                   </>
                 )}
               </button>
@@ -727,7 +732,7 @@ export const AccountFinderView: React.FC = () => {
               )}
               {!niche.trim() && keywords.length === 0 && (
                 <div className="text-[10px] text-gray-500 leading-relaxed">
-                  Describe your niche or add a keyword first.
+                  {t('af.find.hint')}
                 </div>
               )}
             </div>
@@ -742,8 +747,8 @@ export const AccountFinderView: React.FC = () => {
         <div className="flex items-center gap-2 mb-3">
           <div className="bg-gray-900 p-1.5 rounded-lg"><Plus size={14} className="text-white" /></div>
           <div>
-            <div className="text-sm font-bold text-gray-900">Add an account to track manually</div>
-            <div className="text-[10px] text-gray-500">Paste a handle, profile URL, or subreddit — it starts getting watched right away.</div>
+            <div className="text-sm font-bold text-gray-900">{t('af.manual.title')}</div>
+            <div className="text-[10px] text-gray-500">{t('af.manual.sub')}</div>
           </div>
         </div>
         <ManualAddForm onAdd={addManualAccount} />
@@ -848,20 +853,22 @@ const ManualAddForm: React.FC<{
   );
 };
 
-const Header: React.FC<{ extensionConnected: boolean; mission: DiscoveryMission | null }> = ({ extensionConnected, mission }) => (
+const Header: React.FC<{ extensionConnected: boolean; mission: DiscoveryMission | null }> = ({ extensionConnected, mission }) => {
+  const t = useT();
+  return (
   <div className="bg-gray-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden shadow-2xl">
-    <div className="absolute top-0 right-0 opacity-5 rotate-12 p-10"><Crosshair size={240} /></div>
+    <div className="absolute top-0 right-0 rtl:right-auto rtl:left-0 opacity-5 rotate-12 p-10"><Crosshair size={240} /></div>
     <div className="relative z-10 flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
       <div>
         <div className="flex items-center gap-3 mb-3">
           <div className="bg-primary/20 p-2 rounded-xl"><Crosshair className="text-primary" size={20} /></div>
-          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/50">Account Finder</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/50">{t('af.eyebrow')}</span>
         </div>
         <h1 className="text-4xl lg:text-5xl font-display font-bold mb-3 tracking-tight">
-          Find <span className="text-primary">creators</span> in your niche
+          {t('af.title.a')} <span className="text-primary">{t('af.title.hl')}</span> {t('af.title.b')}
         </h1>
         <p className="opacity-60 max-w-2xl text-base leading-relaxed">
-          Search X and LinkedIn for accounts worth following and engaging with. Built to stay safe and avoid getting flagged.
+          {t('af.subtitle')}
         </p>
       </div>
       <div className="flex flex-col gap-2 items-end">
@@ -870,29 +877,34 @@ const Header: React.FC<{ extensionConnected: boolean; mission: DiscoveryMission 
       </div>
     </div>
   </div>
-);
+  );
+};
 
-const ExtensionBadge: React.FC<{ connected: boolean }> = ({ connected }) => (
+const ExtensionBadge: React.FC<{ connected: boolean }> = ({ connected }) => {
+  const t = useT();
+  return (
   <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border backdrop-blur-md transition-all ${
     connected ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'
   }`}>
     <div className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
     <span className={`text-[10px] font-black uppercase tracking-widest ${connected ? 'text-emerald-300' : 'text-amber-300'}`}>
-      {connected ? 'Connected' : 'Extension off'}
+      {connected ? t('af.badge.connected') : t('af.badge.off')}
     </span>
   </div>
-);
+  );
+};
 
 const MissionStatusBadge: React.FC<{ status: MissionStatus }> = ({ status }) => {
+  const t = useT();
   const config: Record<MissionStatus, { label: string; color: string; icon: React.ReactNode }> = {
-    idle: { label: 'Ready', color: 'gray', icon: <Clock size={10} /> },
-    preparing: { label: 'Starting', color: 'blue', icon: <Loader2 size={10} className="animate-spin" /> },
-    scanning: { label: 'Searching', color: 'purple', icon: <Activity size={10} className="animate-pulse" /> },
-    paused: { label: 'Paused', color: 'amber', icon: <Pause size={10} /> },
-    cooldown: { label: 'Waiting', color: 'orange', icon: <ShieldAlert size={10} /> },
-    completed: { label: 'Done', color: 'emerald', icon: <Check size={10} /> },
-    failed: { label: 'Failed', color: 'red', icon: <X size={10} /> },
-    aborted: { label: 'Stopped', color: 'gray', icon: <StopCircle size={10} /> }
+    idle: { label: t('af.status.idle'), color: 'gray', icon: <Clock size={10} /> },
+    preparing: { label: t('af.status.preparing'), color: 'blue', icon: <Loader2 size={10} className="animate-spin" /> },
+    scanning: { label: t('af.status.scanning'), color: 'purple', icon: <Activity size={10} className="animate-pulse" /> },
+    paused: { label: t('af.status.paused'), color: 'amber', icon: <Pause size={10} /> },
+    cooldown: { label: t('af.status.cooldown'), color: 'orange', icon: <ShieldAlert size={10} /> },
+    completed: { label: t('af.status.completed'), color: 'emerald', icon: <Check size={10} /> },
+    failed: { label: t('af.status.failed'), color: 'red', icon: <X size={10} /> },
+    aborted: { label: t('af.status.aborted'), color: 'gray', icon: <StopCircle size={10} /> }
   };
   const c = config[status];
   return (
@@ -911,12 +923,13 @@ const ConfigurationPanel: React.FC<any> = ({
   togglePlatform, addToArray, removeFromArray,
   launchMission, extensionConnected
 }) => {
+  const t = useT();
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* LEFT: Targeting */}
       <div className="lg:col-span-2 space-y-6">
         {/* PLATFORMS */}
-        <Card title="Where to search" subtitle="Pick one or more" icon={<Globe size={18} />}>
+        <Card title={t('af.card.where.title')} subtitle={t('af.card.where.sub')} icon={<Globe size={18} />}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {PLATFORMS.map(p => (
               <button
@@ -939,10 +952,10 @@ const ConfigurationPanel: React.FC<any> = ({
         </Card>
 
         {/* KEYWORDS */}
-        <Card title="What to search for" subtitle="Words that describe your niche" icon={<Hash size={18} />}>
+        <Card title={t('af.card.what.title')} subtitle={t('af.card.what.sub')} icon={<Hash size={18} />}>
           <ChipsInput
-            label="Keywords (required)"
-            placeholder="e.g. AI agents, no-code, indie hacker"
+            label={t('af.kw.label')}
+            placeholder={t('af.kw.ph')}
             value={activeKeywordInput}
             onChange={setActiveKeywordInput}
             chips={filters.keywords}
@@ -952,7 +965,7 @@ const ConfigurationPanel: React.FC<any> = ({
           />
           <div className="mt-4">
             <ChipsInput
-              label="Hashtags (optional)"
+              label={t('af.ht.label')}
               placeholder="#buildinpublic"
               value={activeHashtagInput}
               onChange={setActiveHashtagInput}
@@ -964,8 +977,8 @@ const ConfigurationPanel: React.FC<any> = ({
           </div>
           <div className="mt-4">
             <ChipsInput
-              label="Words to avoid"
-              placeholder="crypto, NFT (skip these)"
+              label={t('af.excl.label')}
+              placeholder={t('af.excl.ph')}
               value={activeExcludeInput}
               onChange={setActiveExcludeInput}
               chips={filters.excludeKeywords}
@@ -977,7 +990,7 @@ const ConfigurationPanel: React.FC<any> = ({
         </Card>
 
         {/* ENGAGEMENT BAR — the headline filter under the engagement-led model */}
-        <Card title="Engagement bar" subtitle="How engaged must their posts be" icon={<Heart size={18} />}>
+        <Card title={t('af.card.eng.title')} subtitle={t('af.card.eng.sub')} icon={<Heart size={18} />}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
             {ENGAGEMENT_PRESETS.map(p => {
               const active = filters.engagementFloor === p.id;
@@ -991,18 +1004,18 @@ const ConfigurationPanel: React.FC<any> = ({
                       : 'border-gray-200 hover:border-rose-300 bg-white'
                   }`}
                 >
-                  <div className="font-bold text-xs">{p.label}</div>
-                  <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500'}`}>{p.tagline}</div>
+                  <div className="font-bold text-xs">{t(p.label)}</div>
+                  <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500'}`}>{t(p.tagline)}</div>
                 </button>
               );
             })}
           </div>
           <div className="text-[11px] text-gray-500 leading-relaxed mb-4">
-            {ENGAGEMENT_PRESETS.find(p => p.id === filters.engagementFloor)?.helper}
+            {t(ENGAGEMENT_PRESETS.find(p => p.id === filters.engagementFloor)?.helper || '')}
           </div>
           <div className="border-t border-gray-100 pt-4">
             <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1.5">
-              <CalendarClock size={12} /> Posts within
+              <CalendarClock size={12} /> {t('af.postsWithin')}
             </div>
             <div className="grid grid-cols-4 gap-2 mb-4">
               {RECENCY_PRESETS.map(r => {
@@ -1015,16 +1028,16 @@ const ConfigurationPanel: React.FC<any> = ({
                       active ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-400 bg-white'
                     }`}
                   >
-                    {r.label}
+                    {t(r.label)}
                   </button>
                 );
               })}
             </div>
             <NumberInput
-              label="Audience engagement rate ≥ (%)"
+              label={t('af.engRate.label')}
               value={filters.minEngagementRate}
               onChange={(v: number | undefined) => setFilters((f: DiscoveryFilters) => ({ ...f, minEngagementRate: v }))}
-              placeholder="optional — e.g. 2"
+              placeholder={t('af.engRate.ph')}
             />
           </div>
         </Card>
@@ -1036,18 +1049,18 @@ const ConfigurationPanel: React.FC<any> = ({
         >
           <div className="flex items-center gap-3">
             <Settings2 size={18} className="text-gray-700" />
-            <span className="font-bold text-sm">More filters</span>
-            <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Optional</span>
+            <span className="font-bold text-sm">{t('af.moreFilters')}</span>
+            <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{t('af.optional')}</span>
           </div>
           {showAdvanced ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
 
         {showAdvanced && (
-          <Card title="Refine audience" subtitle="Optional — extra knobs. Engagement leads, these are tiebreakers." icon={<Filter size={18} />}>
+          <Card title={t('af.card.refine.title')} subtitle={t('af.card.refine.sub')} icon={<Filter size={18} />}>
             <div className="space-y-5">
               <div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2 flex items-center gap-1.5">
-                  <Globe size={12} /> Language
+                  <Globe size={12} /> {t('af.language')}
                 </div>
                 <TextInput
                   label=""
@@ -1059,12 +1072,12 @@ const ConfigurationPanel: React.FC<any> = ({
 
               <div className="space-y-3 pt-1">
                 <Toggle
-                  label="Only verified accounts"
+                  label={t('af.verifiedOnly')}
                   checked={filters.verifiedOnly}
                   onChange={(v: boolean) => setFilters((f: DiscoveryFilters) => ({ ...f, verifiedOnly: v }))}
                 />
                 <Toggle
-                  label="Skip accounts I already track"
+                  label={t('af.skipTracked')}
                   checked={filters.excludeAlreadyTracked}
                   onChange={(v: boolean) => setFilters((f: DiscoveryFilters) => ({ ...f, excludeAlreadyTracked: v }))}
                 />
@@ -1076,7 +1089,7 @@ const ConfigurationPanel: React.FC<any> = ({
 
       {/* RIGHT: Mode + Launch */}
       <div className="space-y-6">
-        <Card title="Search type" subtitle="Pick your strategy" icon={<Brain size={18} />}>
+        <Card title={t('af.card.searchType.title')} subtitle={t('af.card.searchType.sub')} icon={<Brain size={18} />}>
           <div className="space-y-3">
             {(Object.keys(MODE_CONFIG) as DiscoveryMode[]).map(m => {
               const c = MODE_CONFIG[m];
@@ -1094,12 +1107,12 @@ const ConfigurationPanel: React.FC<any> = ({
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className={active ? `text-${c.color}-600` : 'text-gray-500'}>{c.icon}</div>
-                      <span className="font-bold text-sm">{c.label}</span>
+                      <span className="font-bold text-sm">{t(c.label)}</span>
                     </div>
                     {active && <Check size={16} className={`text-${c.color}-600`} />}
                   </div>
-                  <div className="text-xs text-gray-600 leading-relaxed mb-2">{c.description}</div>
-                  <div className={`text-[10px] uppercase tracking-wider font-black ${active ? `text-${c.color}-700` : 'text-gray-400'}`}>{c.budget}</div>
+                  <div className="text-xs text-gray-600 leading-relaxed mb-2">{t(c.description)}</div>
+                  <div className={`text-[10px] uppercase tracking-wider font-black ${active ? `text-${c.color}-700` : 'text-gray-400'}`}>{t(c.budget)}</div>
                 </button>
               );
             })}
@@ -1118,14 +1131,14 @@ const ConfigurationPanel: React.FC<any> = ({
         />
         {(!filters.platforms.length || !filters.keywords.length) && (
           <div className="text-[10px] text-gray-500 text-center font-bold uppercase tracking-wider">
-            Pick a platform and add keywords to start
+            {t('af.launchHint')}
           </div>
         )}
         {!extensionConnected && (
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
             <AlertTriangle size={14} className="text-amber-700 mt-0.5 flex-shrink-0" />
             <div className="text-[10px] text-amber-800 leading-relaxed">
-              <span className="font-bold">Extension not installed.</span> Install the Viraholic extension to search real accounts.
+              <span className="font-bold">{t('af.extNotInstalled.bold')}</span> {t('af.extNotInstalled.rest')}
             </div>
           </div>
         )}
