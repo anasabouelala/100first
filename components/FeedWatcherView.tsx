@@ -4,6 +4,7 @@ import {
   Twitter, Linkedin, MessageCircle, Loader2, ShieldCheck, AlertTriangle, Check
 } from 'lucide-react';
 import { DiscoveryPlatform, FeedWatcherConfig } from '../types';
+import { useT } from '../contexts/I18nContext';
 
 // ────────────────────────────────────────────────────────────────────
 // FEED WATCHER — TOP-LEVEL SECTION
@@ -45,6 +46,7 @@ function loadConfig(): FeedWatcherConfig {
 }
 
 export const FeedWatcherView: React.FC = () => {
+  const t = useT();
   const [cfg, setCfg] = useState<FeedWatcherConfig>(() => loadConfig());
   const [extensionConnected, setExtensionConnected] = useState(false);
   const [bufferCount, setBufferCount] = useState(0);
@@ -122,17 +124,17 @@ export const FeedWatcherView: React.FC = () => {
       <div className="bg-white p-4 rounded-2xl border border-gray-200 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 text-xs">
           <ShieldCheck size={14} className="text-gray-500" />
-          <span className="font-bold uppercase tracking-widest text-gray-700">Extension</span>
+          <span className="font-bold uppercase tracking-widest text-gray-700">{t('fw.ext')}</span>
         </div>
         {extensionConnected ? (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-emerald-50 text-emerald-800 border border-emerald-200">
             <Check size={12} />
-            <span className="font-bold">Connected</span>
+            <span className="font-bold">{t('fw.connected')}</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-amber-50 text-amber-800 border border-amber-200">
             <AlertTriangle size={12} />
-            <span className="font-bold">Bridge not detected — reload the extension</span>
+            <span className="font-bold">{t('fw.bridgeOff')}</span>
           </div>
         )}
       </div>
@@ -145,17 +147,17 @@ export const FeedWatcherView: React.FC = () => {
               <Rss size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Background automation</h2>
-              <p className="text-[11px] text-gray-500">Runs in the extension — even when this tab is closed.</p>
+              <h2 className="text-base font-bold text-gray-900">{t('fw.title')}</h2>
+              <p className="text-[11px] text-gray-500">{t('fw.subtitle')}</p>
             </div>
           </div>
           <div className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${anyOn ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-            {anyOn ? 'Active' : 'Off'}
+            {anyOn ? t('fw.active') : t('fw.off')}
           </div>
         </div>
 
         <p className="text-[12px] text-gray-600 mt-3 mb-5 leading-relaxed">
-          Toggle the platforms below. Every <span className="font-semibold">{cfg.pollIntervalMinutes} minutes</span>, the extension opens a stealth window and scrolls each enabled home feed — exactly like a human would — until it has scraped up to <span className="font-semibold">{cfg.maxPostsPerSweep ?? 50}</span> posts (your target below) or runs out of new ones. Gemini scores each new post against your brief; anything ≥ <span className="font-semibold">{cfg.minRelevancy}</span>/100 lands in the <span className="font-semibold">Posts Tracker</span>. The same post never gets scored twice. Author info is read straight from the feed card — no profile is ever opened.
+          {t('fw.intro', { interval: cfg.pollIntervalMinutes, max: cfg.maxPostsPerSweep ?? 50, min: cfg.minRelevancy })}
         </p>
 
         {/* Per-platform toggles */}
@@ -173,7 +175,7 @@ export const FeedWatcherView: React.FC = () => {
                   <span className="text-xs font-bold">{p.label}</span>
                 </div>
                 <div className={`mt-1.5 text-[10px] font-bold uppercase tracking-wider ${on ? 'text-emerald-600' : 'text-gray-400'}`}>
-                  {on ? 'Watching' : 'Off'}
+                  {on ? t('fw.watching') : t('fw.off')}
                 </div>
                 {on && <CheckCircle2 size={14} className="absolute top-2 right-2 text-emerald-600" />}
               </button>
@@ -185,22 +187,22 @@ export const FeedWatcherView: React.FC = () => {
           {/* Brief */}
           <div>
             <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2 flex items-center gap-1.5">
-              <Brain size={12} /> What I'm looking for <span className="text-gray-400 font-bold normal-case tracking-normal">· optional</span>
+              <Brain size={12} /> {t('fw.brief.label')} <span className="text-gray-400 font-bold normal-case tracking-normal">· {t('fw.optional')}</span>
             </div>
             <textarea
               value={cfg.prompt}
               onChange={e => setPatch({ prompt: e.target.value })}
-              placeholder={"Leave blank to auto-target from your product — or get specific, e.g. People complaining about cold-outreach tools, founders asking for marketing help, posts about hiring their first growth marketer."}
+              placeholder={t('fw.brief.ph')}
               rows={5}
               className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:border-gray-900 focus:outline-none resize-y leading-relaxed bg-white"
             />
             {cfg.prompt.trim() ? (
               <div className="text-[10px] text-gray-400 mt-1.5 italic">
-                Be specific — vague briefs surface vague matches.
+                {t('fw.brief.specific')}
               </div>
             ) : (
               <div className="text-[10px] text-emerald-700 mt-1.5 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-2 leading-relaxed">
-                <span className="font-bold">Surfacing everything.</span> With no brief I send every post I scroll past to your Posts Tracker — ranked by fit to the <span className="font-semibold">product & audience</span> in your project when available. Type a brief above to filter strictly instead.
+                <span className="font-bold">{t('fw.brief.everythingBold')}</span> {t('fw.brief.everythingRest')}
               </div>
             )}
           </div>
@@ -211,7 +213,7 @@ export const FeedWatcherView: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
-                  <Rss size={12} /> Max posts per sweep
+                  <Rss size={12} /> {t('fw.maxPosts')}
                 </div>
                 <div className="text-sm font-bold text-gray-900 tabular-nums">{cfg.maxPostsPerSweep ?? 50}</div>
               </div>
@@ -224,7 +226,7 @@ export const FeedWatcherView: React.FC = () => {
                 className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:border-gray-900 focus:outline-none tabular-nums bg-white"
               />
               <div className="text-[10px] text-gray-400 mt-1.5 italic">
-                How many posts to pull into your Posts Tracker each sweep (1–100). Higher targets scroll the feed longer — a 100-post sweep can take several minutes of visible scrolling.
+                {t('fw.maxPosts.helper')}
               </div>
             </div>
 
@@ -233,7 +235,7 @@ export const FeedWatcherView: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
-                  <Filter size={12} /> Minimum profile fit
+                  <Filter size={12} /> {t('fw.minFit')}
                 </div>
                 <div className="text-sm font-bold text-gray-900 tabular-nums">{cfg.minRelevancy}%</div>
               </div>
@@ -247,18 +249,18 @@ export const FeedWatcherView: React.FC = () => {
                 className="w-full accent-emerald-600"
               />
               <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                <span>0% — keep most</span>
-                <span>100% — perfect fit only</span>
+                <span>{t('fw.min.keepMost')}</span>
+                <span>{t('fw.min.perfect')}</span>
               </div>
               <div className="text-[10px] text-gray-400 mt-1.5 italic">
-                Only posts that fit your profile at or above this % reach the tracker — the same fit score shown on each card.
+                {t('fw.minFit.helper')}
               </div>
             </div>
 
             {/* Timer */}
             <div>
               <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2 flex items-center gap-1.5">
-                <Clock size={12} /> Poll every
+                <Clock size={12} /> {t('fw.pollEvery')}
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -269,7 +271,7 @@ export const FeedWatcherView: React.FC = () => {
                   onChange={e => setPatch({ pollIntervalMinutes: Math.max(2, Math.min(360, parseInt(e.target.value, 10) || 15)) })}
                   className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:border-gray-900 focus:outline-none tabular-nums bg-white"
                 />
-                <span className="text-xs text-gray-600">minutes</span>
+                <span className="text-xs text-gray-600">{t('fw.minutes')}</span>
                 <button
                   onClick={() => {
                     setSweepingNow(true);
@@ -278,15 +280,15 @@ export const FeedWatcherView: React.FC = () => {
                     setTimeout(() => setSweepingNow(false), 12 * 60 * 1000);
                   }}
                   disabled={!extensionConnected || !anyOn || sweepingNow}
-                  className="ml-auto px-3 py-2 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-gray-700 disabled:opacity-40 flex items-center gap-1.5"
-                  title={!extensionConnected ? 'Extension not connected' : !anyOn ? 'Toggle at least one platform' : 'Run one sweep now'}
+                  className="ms-auto px-3 py-2 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-gray-700 disabled:opacity-40 flex items-center gap-1.5"
+                  title={!extensionConnected ? t('fw.sweep.titleDisconnected') : !anyOn ? t('fw.sweep.titleNoPlat') : t('fw.sweep.titleRun')}
                 >
                   {sweepingNow ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
-                  {sweepingNow ? 'Sweeping…' : 'Sweep now'}
+                  {sweepingNow ? t('fw.sweeping') : t('fw.sweepNow')}
                 </button>
               </div>
               <div className="text-[10px] text-gray-400 mt-1.5 italic">
-                Min 2 min, max 6 h. Each sweep scrolls every enabled feed until it hits your “Max posts per sweep” target or runs out of new posts.
+                {t('fw.poll.helper')}
               </div>
             </div>
           </div>
@@ -295,31 +297,31 @@ export const FeedWatcherView: React.FC = () => {
         {/* Status strip */}
         <div className="mt-4 rounded-xl border border-emerald-100 bg-white px-3 py-2.5 text-[11px] text-gray-700 flex items-center gap-3 flex-wrap">
           <Activity size={12} className="text-emerald-600" />
-          <span><span className="font-bold tabular-nums">{bufferCount}</span> in last scroll buffer</span>
+          <span><span className="font-bold tabular-nums">{bufferCount}</span> {t('fw.stat.buffer')}</span>
           <span className="text-gray-400">·</span>
-          <span><span className="font-bold tabular-nums">{status.scored}</span> scored</span>
+          <span><span className="font-bold tabular-nums">{status.scored}</span> {t('fw.stat.scored')}</span>
           <span className="text-gray-400">·</span>
-          <span><span className="font-bold tabular-nums text-emerald-700">{status.promoted}</span> promoted to tracker</span>
+          <span><span className="font-bold tabular-nums text-emerald-700">{status.promoted}</span> {t('fw.stat.promoted')}</span>
           {status.durationSec ? (
             <>
               <span className="text-gray-400">·</span>
-              <span className="text-gray-500">{status.durationSec}s of scrolling</span>
+              <span className="text-gray-500">{t('fw.stat.scrolling', { n: status.durationSec })}</span>
             </>
           ) : null}
           {status.lastAt && (
             <>
               <span className="text-gray-400">·</span>
-              <span className="text-gray-500">last sweep {new Date(status.lastAt).toLocaleTimeString()}</span>
+              <span className="text-gray-500">{t('fw.stat.lastSweep', { time: new Date(status.lastAt).toLocaleTimeString() })}</span>
             </>
           )}
           {status.err && (
-            <span className="ml-auto text-red-600 truncate" title={status.err}>{status.err}</span>
+            <span className="ms-auto text-red-600 truncate" title={status.err}>{status.err}</span>
           )}
           <button
             onClick={() => setShowDiag(s => !s)}
-            className="ml-auto text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-900 underline decoration-dotted"
+            className="ms-auto text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-900 underline decoration-dotted"
           >
-            {showDiag ? 'Hide diagnostics' : 'Why 0 posts? →'}
+            {showDiag ? t('fw.diag.hide') : t('fw.diag.show')}
           </button>
         </div>
 
@@ -327,7 +329,7 @@ export const FeedWatcherView: React.FC = () => {
         {showDiag && (
           <div className="mt-3 rounded-xl border border-gray-300 bg-gray-900 text-gray-100 p-4 text-[11px] font-mono leading-relaxed">
             {!diag ? (
-              <div className="text-gray-400">No sweep diagnostic yet. Click <span className="font-bold text-white">Sweep now</span> and the exact result appears here.</div>
+              <div className="text-gray-400">{t('fw.diag.none.a')} <span className="font-bold text-white">{t('fw.sweepNow')}</span> {t('fw.diag.none.b')}</div>
             ) : (
               <div className="space-y-2">
                 {/* Headline conclusion */}
