@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProject } from '../contexts/ProjectContext';
+import { useT } from '../contexts/I18nContext';
 import { AppMode } from '../types';
 import {
   Crosshair, Radar, Briefcase, TrendingUp, TrendingDown, ArrowUpRight,
@@ -79,11 +80,12 @@ const KPI: React.FC<{
   icon: React.ReactNode;
   onClick?: () => void;
 }> = ({ label, value, delta, hint, icon, onClick }) => {
+  const t = useT();
   const trend = delta === undefined ? null : (delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat');
   return (
     <button
       onClick={onClick}
-      aria-label={onClick ? `${label}: ${value}. Open` : undefined}
+      aria-label={onClick ? `${label}: ${value}. ${t('common.open')}` : undefined}
       className={`group text-left bg-white border border-gray-100 hover:border-gray-300 hover:shadow-sm rounded-2xl p-5
                   transition-all duration-200 ease-out active:scale-[0.99]
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
@@ -113,6 +115,7 @@ const KPI: React.FC<{
 
 // ─── Activity Chart — minimal area chart ────────────────────────────
 const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; total: number; avg: number }> = ({ buckets, total, avg }) => {
+  const t = useT();
   const W = 800, H = 200, PAD = 24;
   const max = Math.max(...buckets.map(b => b.count), 4);
 
@@ -127,17 +130,17 @@ const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; t
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h3 className="text-[15px] font-semibold text-gray-900 tracking-tight">Posts Tracker activity</h3>
-          <p className="text-[12px] text-gray-500 mt-0.5">Posts captured in the last 14 days.</p>
+          <h3 className="text-[15px] font-semibold text-gray-900 tracking-tight">{t('dash.activity.title')}</h3>
+          <p className="text-[12px] text-gray-500 mt-0.5">{t('dash.activity.subtitle')}</p>
         </div>
-        <div className="flex items-center gap-6 text-right">
+        <div className="flex items-center gap-6 text-start">
           <div>
             <div className="text-xl font-semibold text-gray-900 tabular-nums leading-none">{total}</div>
-            <div className="text-[11px] text-gray-500 mt-1">Total signals</div>
+            <div className="text-[11px] text-gray-500 mt-1">{t('dash.activity.total')}</div>
           </div>
           <div>
             <div className="text-xl font-semibold text-gray-900 tabular-nums leading-none">{avg.toFixed(1)}</div>
-            <div className="text-[11px] text-gray-500 mt-1">Daily avg</div>
+            <div className="text-[11px] text-gray-500 mt-1">{t('dash.activity.dailyAvg')}</div>
           </div>
         </div>
       </div>
@@ -148,7 +151,7 @@ const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; t
             otherwise distort into ovals under the non-uniform scale). */}
         <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
           role="img"
-          aria-label={`Posts captured per day over the last 14 days. ${total} total, ${avg.toFixed(1)} per day on average.`}>
+          aria-label={t('dash.activity.aria', { total, avg: avg.toFixed(1) })}>
           <defs>
             <linearGradient id="actGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#111827" stopOpacity="0.10" />
@@ -167,7 +170,7 @@ const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; t
 
           {[0, 6, 13].map(i => (
             <text key={i} x={xFor(i)} y={H - 6} fontSize={10} fill="#6b7280" textAnchor="middle">
-              {i === 13 ? 'Today' : i === 0 ? '14d ago' : '7d ago'}
+              {i === 13 ? t('dash.chart.today') : i === 0 ? t('dash.chart.14dAgo') : t('dash.chart.7dAgo')}
             </text>
           ))}
         </svg>
@@ -180,16 +183,17 @@ const ActivityChart: React.FC<{ buckets: Array<{ date: Date; count: number }>; t
 // A brand-new account lands here with all zeros and a flat chart. Instead of
 // that dead end, point them at the three moves that produce their first wins.
 const GetStarted: React.FC<{ setMode: (m: AppMode | 'DASHBOARD') => void }> = ({ setMode }) => {
+  const t = useT();
   const steps: Array<{ icon: React.ReactNode; title: string; desc: string; cta: string; mode: AppMode }> = [
-    { icon: <Crosshair size={18} />, title: 'Find accounts to track', desc: 'Pick creators in your niche — Viraholic watches their posts for you.', cta: 'Find accounts', mode: AppMode.ACCOUNT_FINDER },
-    { icon: <Rss size={18} />, title: 'Watch your feed', desc: 'Auto-surface buying-intent posts from your own home feed.', cta: 'Set up Feed Watcher', mode: AppMode.FEED_WATCHER },
-    { icon: <Sparkles size={18} />, title: 'Generate content', desc: 'Draft posts and replies in your voice that actually convert.', cta: 'Open Content Engine', mode: AppMode.CONTENT_ENGINE },
+    { icon: <Crosshair size={18} />, title: t('dash.step.find.title'), desc: t('dash.step.find.desc'), cta: t('dash.step.find.cta'), mode: AppMode.ACCOUNT_FINDER },
+    { icon: <Rss size={18} />, title: t('dash.step.watch.title'), desc: t('dash.step.watch.desc'), cta: t('dash.step.watch.cta'), mode: AppMode.FEED_WATCHER },
+    { icon: <Sparkles size={18} />, title: t('dash.step.generate.title'), desc: t('dash.step.generate.desc'), cta: t('dash.step.generate.cta'), mode: AppMode.CONTENT_ENGINE },
   ];
   return (
     <section className="space-y-4">
       <div>
-        <h3 className="text-[15px] font-semibold text-gray-900 tracking-tight">Get started</h3>
-        <p className="text-[12px] text-gray-500 mt-0.5">Three quick moves to your first wins — pick any to begin.</p>
+        <h3 className="text-[15px] font-semibold text-gray-900 tracking-tight">{t('dash.getStarted.title')}</h3>
+        <p className="text-[12px] text-gray-500 mt-0.5">{t('dash.getStarted.subtitle')}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         {steps.map((s, i) => (
@@ -221,6 +225,7 @@ const GetStarted: React.FC<{ setMode: (m: AppMode | 'DASHBOARD') => void }> = ({
 // ─── MAIN DASHBOARD — minimalist, 3 KPIs + 1 graph ──────────────────
 export const DashboardView: React.FC<Props> = ({ setMode, onEditProject }) => {
   const { project } = useProject();
+  const t = useT();
   const data = useDashboardData();
 
   const total = data.buckets14d.reduce((a, b) => a + b.count, 0);
@@ -240,19 +245,19 @@ export const DashboardView: React.FC<Props> = ({ setMode, onEditProject }) => {
         <button
           onClick={onEditProject}
           className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-white hover:border-gray-400 transition-all"
-          title="Edit project"
+          title={t('dash.badge.editTitle')}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <span className="text-xs font-semibold text-gray-900">{project.productName}</span>
           {project.stage && <span className="text-[10px] text-gray-500">· {project.stage}</span>}
-          <span className="text-[10px] text-gray-400 group-hover:text-gray-700 transition-colors">Edit</span>
+          <span className="text-[10px] text-gray-400 group-hover:text-gray-700 transition-colors">{t('common.edit')}</span>
         </button>
       )}
 
       {/* Header */}
       <header className="space-y-1">
-        <h2 className="text-2xl font-display font-semibold text-gray-900 tracking-tight">Dashboard</h2>
-        <p className="text-sm text-gray-600">A quick read on what's moving.</p>
+        <h2 className="text-2xl font-display font-semibold text-gray-900 tracking-tight">{t('section.dashboard.title')}</h2>
+        <p className="text-sm text-gray-600">{t('dash.header.subtitle')}</p>
       </header>
 
       {/* Profile-completion nudge — only when pitch/audience are missing */}
@@ -265,13 +270,13 @@ export const DashboardView: React.FC<Props> = ({ setMode, onEditProject }) => {
             <Sparkles size={15} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-gray-900">Sharpen your AI output</span>
+            <span className="block text-sm font-semibold text-gray-900">{t('dash.nudge.title')}</span>
             <span className="block text-xs text-gray-600">
-              Add your pitch{!project?.targetAudience?.trim() ? ' and target audience' : ''} so content and replies sound on-brand instead of generic.
+              {t('dash.nudge.body', { audience: !project?.targetAudience?.trim() ? t('dash.nudge.andAudience') : '' })}
             </span>
           </span>
           <span className="flex-shrink-0 text-xs font-semibold text-amber-700 inline-flex items-center gap-1">
-            Complete <ArrowRight size={13} />
+            {t('dash.nudge.cta')} <ArrowRight size={13} className="rtl:-scale-x-100" />
           </span>
         </button>
       )}
@@ -279,25 +284,25 @@ export const DashboardView: React.FC<Props> = ({ setMode, onEditProject }) => {
       {/* 3 KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <KPI
-          label="Tracked accounts"
+          label={t('dash.kpi.trackedAccounts')}
           value={data.tracked}
           icon={<Crosshair size={13} />}
-          hint={data.tracked === 0 ? 'Tap to find your first' : 'Being watched 24/7'}
+          hint={data.tracked === 0 ? t('dash.kpi.trackedAccounts.hint0') : t('dash.kpi.trackedAccounts.hint')}
           onClick={() => setMode(AppMode.ACCOUNT_FINDER)}
         />
         <KPI
-          label="Tracked posts · 7d"
+          label={t('dash.kpi.trackedPosts7d')}
           value={data.signals7d}
           delta={data.signals7d === 0 && data.signalsPrev7d === 0 ? undefined : data.signalsDelta}
           icon={<Radar size={13} />}
-          hint={`${data.signalsPrev7d} previous week`}
+          hint={t('dash.kpi.trackedPosts7d.hint', { n: data.signalsPrev7d })}
           onClick={() => setMode(AppMode.ANSWERLY_RADAR)}
         />
         <KPI
-          label="Answered posts"
+          label={t('dash.kpi.answered')}
           value={data.answered}
           icon={<Briefcase size={13} />}
-          hint={data.answered === 0 ? 'No replies posted yet' : 'Replies posted'}
+          hint={data.answered === 0 ? t('dash.kpi.answered.hint0') : t('dash.kpi.answered.hint')}
           onClick={() => setMode(AppMode.ANSWERLY_RADAR)}
         />
       </div>
