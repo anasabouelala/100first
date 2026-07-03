@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Loader2, Brain, AlertCircle, Zap, Twitter, Save, Bookmark, X, Plus } from 'lucide-react';
 import { useVoiceProfile } from '../hooks/useVoiceProfile';
 import { useProject, LANGUAGE_OPTIONS, type OutputLanguage } from '../contexts/ProjectContext';
+import { useT } from '../contexts/I18nContext';
 import { VoiceArchitectureSection, VoiceMatchQuiz } from './ContentEngineView';
 import { Section } from './ui/Section';
 
@@ -16,6 +17,7 @@ import { Section } from './ui/Section';
 export const ContentParametersView: React.FC = () => {
     const vp = useVoiceProfile();
     const { project, updateProject } = useProject();
+    const t = useT();
     const [quizOpen, setQuizOpen] = useState(false);
 
     // Calibration sample lets the user paste a writing sample so the AI
@@ -211,9 +213,9 @@ export const ContentParametersView: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white">
                 <div className="shrink-0">
                     <div className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-                        <span aria-hidden="true">🌐</span> Output language &amp; dialect
+                        <span aria-hidden="true">🌐</span> {t('vs.lang.title')}
                     </div>
-                    <div className="text-[11px] text-gray-500">Applies to every generated post, reply and message.</div>
+                    <div className="text-[11px] text-gray-500">{t('vs.lang.sub')}</div>
                 </div>
                 <select
                     value={project?.outputLanguage || 'en'}
@@ -234,10 +236,10 @@ export const ContentParametersView: React.FC = () => {
                 a tab replaces every dial; the active tab is highlighted. */}
             <div className="border-b border-gray-200">
                 <div className="flex items-end gap-1 flex-wrap">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 self-center mr-2 mb-2">Voices</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 self-center me-2 mb-2">{t('vs.voices')}</span>
                     {vp.library.length === 0 ? (
                         <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-gray-400 italic">
-                            <Bookmark size={12} /> No saved voices yet — tune the dials below and save one at the bottom.
+                            <Bookmark size={12} /> {t('vs.noVoices')}
                         </div>
                     ) : (
                         vp.library.map(p => {
@@ -278,7 +280,7 @@ export const ContentParametersView: React.FC = () => {
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 border-dashed border-gray-300 text-gray-500 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-all -mb-px ml-1"
                     >
                         <Plus size={13} />
-                        <span className="text-xs font-semibold whitespace-nowrap">New voice</span>
+                        <span className="text-xs font-semibold whitespace-nowrap">{t('vs.newVoice')}</span>
                     </button>
                 </div>
             </div>
@@ -292,16 +294,16 @@ export const ContentParametersView: React.FC = () => {
                 voice section below picks up the result the moment AI finishes.
             */}
             <Section
-                title="Steal a voice"
-                subtitle="One-click automation — drop a handle or paste writing, AI builds the entire profile below."
-                info="The engine clones their rhythm and structure, never their ideas — your topics stay yours."
+                title={t('vs.steal.title')}
+                subtitle={t('vs.steal.subtitle')}
+                info={t('vs.steal.info')}
             >
                 <div className="space-y-4">
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full text-[11px] font-bold text-amber-900 w-fit">
-                        <Zap size={12} /> One-click automation
+                        <Zap size={12} /> {t('vs.steal.badge')}
                     </div>
                     <p className="text-sm text-gray-700 leading-relaxed">
-                        Drop an <b>X / Twitter handle</b> — the agent opens their profile, reads their latest <b>original tweets</b>, and AI auto-builds your <b>entire voice profile below</b>: the 7 trait dials, rhythm, hook formula, amplifiers, closer, even your perspective. No manual setup. Tweak anything afterward.
+                        {t('vs.steal.body')}
                     </p>
 
                     {/* Handle row */}
@@ -310,7 +312,7 @@ export const ContentParametersView: React.FC = () => {
                             <Twitter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
                                 type="text"
-                                placeholder="@levelsio  —  paste any X / Twitter handle to clone"
+                                placeholder={t('vs.steal.handlePh')}
                                 value={stealHandle}
                                 onChange={e => { setStealHandle(e.target.value); setStealError(''); }}
                                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fetchHandleAndCalibrate(); } }}
@@ -324,14 +326,14 @@ export const ContentParametersView: React.FC = () => {
                             className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-medium disabled:opacity-40 transition-all"
                         >
                             {stealFetching ? <Loader2 size={12} className="animate-spin" /> : <Twitter size={12} />}
-                            {stealFetching ? 'Fetching…' : '𝕏 Fetch & build profile'}
+                            {stealFetching ? t('vs.steal.fetching') : t('vs.steal.fetchBtn')}
                         </button>
                     </div>
 
                     {/* Divider */}
                     <div className="flex items-center gap-3 text-[11px] text-gray-400 font-medium uppercase tracking-widest">
                         <div className="flex-1 h-px bg-gray-200"></div>
-                        <span>or paste writing instead</span>
+                        <span>{t('vs.steal.or')}</span>
                         <div className="flex-1 h-px bg-gray-200"></div>
                     </div>
 
@@ -341,7 +343,7 @@ export const ContentParametersView: React.FC = () => {
                     <textarea
                         ref={sampleRef}
                         rows={4}
-                        placeholder="Paste 3–10 posts, tweets, or paragraphs from the voice you want to emulate…"
+                        placeholder={t('vs.steal.pastePh')}
                         value={calibrationSample}
                         onChange={e => { setCalibrationSample(e.target.value); setSampleFlash(false); setStealError(''); }}
                         className={`w-full px-4 py-3 bg-white border rounded-xl text-sm outline-none resize-none leading-relaxed transition-all ${
@@ -352,7 +354,7 @@ export const ContentParametersView: React.FC = () => {
                     {/* Status + build button */}
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="text-[11px] text-gray-500 italic flex-1 min-w-0 truncate" title={stealStatus}>
-                            {vp.aiSuggesting ? 'Analyzing voice…' : stealStatus}
+                            {vp.aiSuggesting ? t('vs.steal.analyzing') : stealStatus}
                         </div>
                         <button
                             type="button"
@@ -361,7 +363,7 @@ export const ContentParametersView: React.FC = () => {
                             className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-medium disabled:opacity-40 transition-all"
                         >
                             {vp.aiSuggesting ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
-                            ✦ Build voice from this
+                            ✦ {t('vs.steal.buildBtn')}
                         </button>
                     </div>
 
@@ -373,7 +375,7 @@ export const ContentParametersView: React.FC = () => {
                     )}
 
                     <div className="text-[11px] text-gray-400 italic">
-                        The engine clones their <b>rhythm and structure</b>, never their ideas — your topics stay yours.
+                        {t('vs.steal.info')}
                     </div>
                 </div>
             </Section>
@@ -410,17 +412,17 @@ export const ContentParametersView: React.FC = () => {
                 separate from the voice dials above (which shape the writing
                 voice) so there's no redundancy — these shape intent & length. */}
             <Section
-                title="Comment defaults"
-                subtitle="How your replies should read — set once, every generated comment inherits it. No need to reconfigure per post."
-                info="These are reused by the Posts Tracker comment generator (single and batch). The voice dials above shape HOW you write; these shape the reply's intent and length budget."
+                title={t('vs.comment.title')}
+                subtitle={t('vs.comment.subtitle')}
+                info={t('vs.comment.info')}
             >
                 <div className="space-y-5">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         {/* Tone */}
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-2">Tone</label>
+                            <label className="block text-xs font-semibold text-gray-600 mb-2">{t('vs.comment.tone')}</label>
                             <div className="flex gap-2">
-                                {[['casual', 'Casual'], ['formal', 'Formal'], ['funny', 'Witty']].map(([val, label]) => (
+                                {[['casual', t('vs.tone.casual')], ['formal', t('vs.tone.formal')], ['funny', t('vs.tone.witty')]].map(([val, label]) => (
                                     <button key={val} type="button" onClick={() => vp.setCommentSpec({ tone: val })}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                                             vp.commentSpec.tone === val ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
@@ -430,23 +432,23 @@ export const ContentParametersView: React.FC = () => {
                         </div>
                         {/* Goal */}
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-2">What should each comment achieve?</label>
+                            <label className="block text-xs font-semibold text-gray-600 mb-2">{t('vs.comment.goalLabel')}</label>
                             <select
                                 value={vp.commentSpec.goal}
                                 onChange={e => vp.setCommentSpec({ goal: e.target.value })}
                                 className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-gray-400 bg-white"
                             >
-                                <option value="build_relationship">Start a real conversation</option>
-                                <option value="ask_question">Ask an interesting question</option>
-                                <option value="share_insight">Share a useful insight</option>
-                                <option value="get_noticed">Stand out from the crowd</option>
+                                <option value="build_relationship">{t('vs.goal.build')}</option>
+                                <option value="ask_question">{t('vs.goal.ask')}</option>
+                                <option value="share_insight">{t('vs.goal.share')}</option>
+                                <option value="get_noticed">{t('vs.goal.noticed')}</option>
                             </select>
                         </div>
                     </div>
                     {/* Length */}
                     <div>
                         <label className="block text-xs font-semibold text-gray-600 mb-2">
-                            Max comment length: <span className="text-gray-900">{vp.commentSpec.maxLength} characters</span>
+                            {t('vs.comment.lenLabel')} <span className="text-gray-900">{vp.commentSpec.maxLength} {t('vs.chars')}</span>
                         </label>
                         <input type="range" min={80} max={500} step={20}
                             value={vp.commentSpec.maxLength}
@@ -454,20 +456,20 @@ export const ContentParametersView: React.FC = () => {
                             className="w-full accent-gray-900"
                         />
                         <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                            <span>Short (80)</span><span>Tweet-length (250)</span><span>Long (500)</span>
+                            <span>{t('vs.len.short')}</span><span>{t('vs.len.tweet')}</span><span>{t('vs.len.long')}</span>
                         </div>
                     </div>
                     {/* Custom Instruction */}
                     <div>
-                        <label className="block text-xs font-semibold text-gray-600 mb-2">Standing angle for every comment <span className="font-normal text-gray-400">(optional)</span></label>
+                        <label className="block text-xs font-semibold text-gray-600 mb-2">{t('vs.comment.angleLabel')} <span className="font-normal text-gray-400">{t('vs.optional2')}</span></label>
                         <input type="text"
                             value={vp.commentSpec.customInstruction}
                             onChange={e => vp.setCommentSpec({ customInstruction: e.target.value })}
-                            placeholder='e.g. "Tie back to shipping fast" or "Always be empathetic first"'
+                            placeholder={t('vs.comment.anglePh')}
                             className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-gray-400"
                         />
                     </div>
-                    <p className="text-[11px] text-gray-400 italic">Saved into each voice profile — applying a saved voice also restores its comment defaults.</p>
+                    <p className="text-[11px] text-gray-400 italic">{t('vs.comment.footer')}</p>
                 </div>
             </Section>
 
@@ -476,32 +478,32 @@ export const ContentParametersView: React.FC = () => {
                 always visible — no toggle gymnastics. Saving adds a new
                 chip to the Saved profiles row at the top. */}
             <Section
-                title="Save voice profile"
-                subtitle="Bottle the current voice under a name. Reapply any time from the Saved profiles row at the top — or from Content Engine and the Posts Tracker comment generator."
-                info="Saves everything: the 7 trait axes, rhythm, hook, amplifiers, closer, and your perspective. Each saved profile can be applied with one click in any place that generates content."
+                title={t('vs.save.title')}
+                subtitle={t('vs.save.subtitle')}
+                info={t('vs.save.info')}
             >
                 <div ref={saveRef} className="space-y-3 p-4 bg-amber-50/50 border border-amber-200 rounded-2xl">
                     <div className="text-[11px] font-bold uppercase tracking-widest text-amber-900 flex items-center gap-1.5">
-                        <Save size={12} /> Save current voice profile
+                        <Save size={12} /> {t('vs.save.heading')}
                     </div>
                     <input
                         type="text"
                         value={saveName}
                         onChange={e => setSaveName(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && saveName.trim()) handleSaveCurrent(); }}
-                        placeholder="Profile name (e.g. 'Launch-week voice', 'B2B sober', 'Spicy founder')"
+                        placeholder={t('vs.save.namePh')}
                         className="w-full px-3 py-2 bg-white border border-amber-200 focus:border-amber-400 rounded-lg text-sm outline-none"
                     />
                     <input
                         type="text"
                         value={saveNote}
                         onChange={e => setSaveNote(e.target.value)}
-                        placeholder="Optional one-line note — appears on the chip's hover tooltip"
+                        placeholder={t('vs.save.notePh')}
                         className="w-full px-3 py-2 bg-white border border-amber-200 focus:border-amber-400 rounded-lg text-xs outline-none"
                     />
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="text-[11px] text-amber-900/70 italic">
-                            Snapshot: <b>{vp.activePreset ? `Preset · ${vp.activePreset}` : (vp.aiSuggestionReason || 'Custom voice')}</b>
+                            {t('vs.save.snapshot')} <b>{vp.activePreset ? `${t('vs.save.preset')} · ${vp.activePreset}` : (vp.aiSuggestionReason || t('vs.save.customVoice'))}</b>
                         </div>
                         <button
                             type="button"
@@ -509,7 +511,7 @@ export const ContentParametersView: React.FC = () => {
                             disabled={!saveName.trim()}
                             className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-bold disabled:opacity-40 transition-all"
                         >
-                            <Bookmark size={12} /> Save profile
+                            <Bookmark size={12} /> {t('vs.save.btn')}
                         </button>
                     </div>
                 </div>
