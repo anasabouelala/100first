@@ -10,19 +10,22 @@ import { ContentParametersView } from './components/ContentParametersView';
 import { AccountFinderView } from './components/AccountFinderView';
 import { FeedWatcherView } from './components/FeedWatcherView';
 import { DashboardView } from './components/DashboardView';
+import { ExtensionInstallBanner } from './components/ExtensionInstallBanner';
+import { useI18n, useT } from './contexts/I18nContext';
 import {
   Zap, Menu, Home, ShieldCheck,
   Sparkles, Trash2, Plus, Crosshair, Settings2, Rss,
-  LogOut, Loader2, ArrowUpRight, Clock
+  LogOut, Loader2, ArrowUpRight, Clock, Languages
 } from 'lucide-react';
 
-// Unified section titles — one simple header for every section.
-const SECTION_META: Record<string, { title: string; subtitle: string }> = {
-  [AppMode.ANSWERLY_RADAR]:       { title: 'Posts Tracker',       subtitle: 'New posts from the accounts you follow' },
-  [AppMode.ACCOUNT_FINDER]:       { title: 'Account Finder',      subtitle: 'Find and track creators in your niche' },
-  [AppMode.FEED_WATCHER]:         { title: 'Feed Watcher',        subtitle: 'Mine your home feed for opportunities, automatically' },
-  [AppMode.CONTENT_ENGINE]:       { title: 'Content Engine',      subtitle: 'Generate posts that convert' },
-  [AppMode.CONTENT_PARAMETERS]:   { title: 'Voice Studio',        subtitle: 'Tune your voice once. Every post inherits it.' },
+// Unified section headers — i18n keys resolved at render so the header follows
+// the active UI language.
+const SECTION_META: Record<string, { titleKey: string; subtitleKey: string }> = {
+  [AppMode.ANSWERLY_RADAR]:     { titleKey: 'section.postsTracker.title',  subtitleKey: 'section.postsTracker.subtitle' },
+  [AppMode.ACCOUNT_FINDER]:     { titleKey: 'section.accountFinder.title', subtitleKey: 'section.accountFinder.subtitle' },
+  [AppMode.FEED_WATCHER]:       { titleKey: 'section.feedWatcher.title',   subtitleKey: 'section.feedWatcher.subtitle' },
+  [AppMode.CONTENT_ENGINE]:     { titleKey: 'section.contentEngine.title', subtitleKey: 'section.contentEngine.subtitle' },
+  [AppMode.CONTENT_PARAMETERS]: { titleKey: 'section.voiceStudio.title',   subtitleKey: 'section.voiceStudio.subtitle' },
 };
 
 // ──────────────────────────────────────────────────────────────────
@@ -35,6 +38,7 @@ const SECTION_META: Record<string, { title: string; subtitle: string }> = {
 // to jump straight to the Posts Tracker.
 // ──────────────────────────────────────────────────────────────────
 const SidebarQuickStats: React.FC<{ onJump: () => void }> = ({ onJump }) => {
+  const t = useT();
   const [postsToday, setPostsToday] = useState(0);
   const [repliesToday, setRepliesToday] = useState(0);
 
@@ -99,24 +103,24 @@ const SidebarQuickStats: React.FC<{ onJump: () => void }> = ({ onJump }) => {
     <button
       type="button"
       onClick={onJump}
-      aria-label={`Open Tracked posts. ${postsToday} new posts and ${repliesToday} replies today.`}
-      className="w-full text-left rounded-2xl border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all p-3.5 group cursor-pointer"
-      title={`${postsToday} new posts · ${repliesToday} replies today — open Tracked posts`}
+      aria-label={t('stats.aria', { posts: postsToday, replies: repliesToday })}
+      className="w-full text-start rounded-2xl border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all p-3.5 group cursor-pointer"
+      title={t('stats.tooltip', { posts: postsToday, replies: repliesToday })}
     >
       <div className="flex items-center justify-between mb-2.5">
-        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-500">Today</span>
+        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-500">{t('stats.today')}</span>
         <span className="flex items-center gap-1 text-[9px] font-bold text-gray-400 group-hover:text-gray-700 transition-colors">
-          Open <ArrowUpRight size={9} aria-hidden="true" />
+          {t('stats.open')} <ArrowUpRight size={9} aria-hidden="true" />
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-2 divide-x divide-gray-100">
-        <div className="pr-1">
+      <div className="grid grid-cols-2 gap-2 divide-x divide-gray-100 rtl:divide-x-reverse">
+        <div className="pr-1 rtl:pr-0 rtl:pl-1">
           <div className="text-[20px] font-extrabold leading-none text-gray-900 tabular-nums">{postsToday}</div>
-          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1.5 font-bold">New posts</div>
+          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1.5 font-bold">{t('stats.newPosts')}</div>
         </div>
-        <div className="pl-3">
+        <div className="pl-3 rtl:pl-0 rtl:pr-3">
           <div className="text-[20px] font-extrabold leading-none text-emerald-600 tabular-nums">{repliesToday}</div>
-          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1.5 font-bold">Replies</div>
+          <div className="text-[9px] text-gray-500 uppercase tracking-wider mt-1.5 font-bold">{t('stats.replies')}</div>
         </div>
       </div>
     </button>
@@ -139,6 +143,7 @@ const SectionGlassHeader: React.FC<{ title: string; subtitle: string }> = ({ tit
 function AppInner() {
   const { project, isComplete, clearProject } = useProject();
   const auth = useAuth();
+  const { t, lang, toggle } = useI18n();
   const [mode, setMode] = useState<AppMode | 'DASHBOARD'>('DASHBOARD');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [editingProject, setEditingProject] = useState(false);
@@ -289,7 +294,7 @@ function AppInner() {
       <div className="min-h-screen flex items-center justify-center bg-base-200" role="status" aria-live="polite" aria-busy="true">
         <div className="flex items-center gap-2 text-gray-600">
           <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-          <span className="text-sm">Checking session…</span>
+          <span className="text-sm">{t('auth.checking')}</span>
         </div>
       </div>
     );
@@ -300,7 +305,7 @@ function AppInner() {
     }
     return (
       <div className="min-h-screen flex items-center justify-center bg-base-200" role="status" aria-live="polite">
-        <div className="text-sm text-gray-600">Redirecting to sign in…</div>
+        <div className="text-sm text-gray-600">{t('auth.redirecting')}</div>
       </div>
     );
   }
@@ -321,17 +326,14 @@ function AppInner() {
           <div className="w-14 h-14 mx-auto rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mb-5">
             <Clock size={26} className="text-amber-500" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Your 3-day trial has ended</h1>
-          <p className="text-gray-500 mt-3 leading-relaxed">
-            Thanks for trying Viraholic. Free access lasts 3 days per account. Log out
-            and create a new account (or sign in with a different one) to keep going.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('trial.title')}</h1>
+          <p className="text-gray-500 mt-3 leading-relaxed">{t('trial.body')}</p>
           <button
             type="button"
             onClick={logOut}
             className="mt-7 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gray-900 text-white font-semibold hover:bg-black transition-colors"
           >
-            <LogOut size={18} aria-hidden="true" /> Log out
+            <LogOut size={18} aria-hidden="true" /> {t('trial.logout')}
           </button>
         </div>
       </div>
@@ -349,24 +351,24 @@ function AppInner() {
 
   const navGroups = [
     {
-      title: 'Mission Control',
+      title: t('nav.group.missionControl'),
       items: [
-        { id: 'DASHBOARD', label: 'Dashboard', icon: <Home size={18} /> },
-        { id: AppMode.ANSWERLY_RADAR, label: 'Posts Tracker', icon: <ShieldCheck size={18} /> },
+        { id: 'DASHBOARD', label: t('nav.item.dashboard'), icon: <Home size={18} /> },
+        { id: AppMode.ANSWERLY_RADAR, label: t('section.postsTracker.title'), icon: <ShieldCheck size={18} /> },
       ]
     },
     {
-      title: 'Growth Ops',
+      title: t('nav.group.growthOps'),
       items: [
-        { id: AppMode.ACCOUNT_FINDER, label: 'Account Finder', icon: <Crosshair size={18} /> },
-        { id: AppMode.FEED_WATCHER,   label: 'Feed Watcher',   icon: <Rss size={18} /> },
+        { id: AppMode.ACCOUNT_FINDER, label: t('section.accountFinder.title'), icon: <Crosshair size={18} /> },
+        { id: AppMode.FEED_WATCHER,   label: t('section.feedWatcher.title'),   icon: <Rss size={18} /> },
       ]
     },
     {
-      title: 'Execution',
+      title: t('nav.group.execution'),
       items: [
-        { id: AppMode.CONTENT_ENGINE, label: 'Content Engine', icon: <Sparkles size={18} /> },
-        { id: AppMode.CONTENT_PARAMETERS, label: 'Voice Studio', icon: <Settings2 size={18} /> },
+        { id: AppMode.CONTENT_ENGINE, label: t('section.contentEngine.title'), icon: <Sparkles size={18} /> },
+        { id: AppMode.CONTENT_PARAMETERS, label: t('section.voiceStudio.title'), icon: <Settings2 size={18} /> },
       ]
     }
   ];
@@ -397,7 +399,7 @@ function AppInner() {
       <div className="drawer-content flex flex-col bg-transparent min-h-screen">
         <div className="w-full navbar glass-morphism lg:hidden shadow-sm">
           <div className="flex-none">
-            <label htmlFor="my-drawer-2" className="btn btn-square btn-ghost min-h-[44px] min-w-[44px]" aria-label="Open navigation menu">
+            <label htmlFor="my-drawer-2" className="btn btn-square btn-ghost min-h-[44px] min-w-[44px]" aria-label={t('sidebar.openMenu')}>
               <Menu aria-hidden="true" />
             </label>
           </div>
@@ -405,8 +407,9 @@ function AppInner() {
         </div>
 
         <main className="flex-1 p-4 lg:p-10 overflow-x-hidden">
+          <ExtensionInstallBanner />
           {SECTION_META[mode] && (
-            <SectionGlassHeader title={SECTION_META[mode].title} subtitle={SECTION_META[mode].subtitle} />
+            <SectionGlassHeader title={t(SECTION_META[mode].titleKey)} subtitle={t(SECTION_META[mode].subtitleKey)} />
           )}
           {renderContent()}
         </main>
@@ -423,6 +426,16 @@ function AppInner() {
               <div>
                 <h1 className="font-display font-bold text-xl leading-none tracking-tight text-gray-900">Viraholic</h1>
               </div>
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label={t('lang.switch')}
+                title={t('lang.switch')}
+                className="ms-auto inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              >
+                <Languages size={13} aria-hidden="true" />
+                {lang === 'ar' ? 'EN' : 'ع'}
+              </button>
             </div>
 
             {/* Active project pill in sidebar */}
@@ -465,14 +478,14 @@ function AppInner() {
               onClick={() => setNewProject(true)}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg text-sm font-medium transition-all duration-200 ease-out">
               <Plus size={15} />
-              <span>New project</span>
+              <span>{t('sidebar.newProject')}</span>
             </button>
 
             <button
               onClick={() => setConfirmingDelete(true)}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-all duration-200 ease-out">
               <Trash2 size={15} />
-              <span>Delete project</span>
+              <span>{t('sidebar.deleteProject')}</span>
             </button>
 
             {/* Account block — signed-in email + sign-out, separated from
@@ -481,7 +494,7 @@ function AppInner() {
             <div className="pt-4 mt-2 border-t border-gray-100">
               {auth.user?.email && (
                 <div className="px-3 mb-2">
-                  <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-0.5">Signed in as</div>
+                  <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-0.5">{t('sidebar.signedInAs')}</div>
                   <div className="text-[11px] text-gray-700 font-medium truncate" title={auth.user.email}>{auth.user.email}</div>
                 </div>
               )}
@@ -495,7 +508,7 @@ function AppInner() {
                 }}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg text-sm font-medium transition-all duration-200 ease-out">
                 <LogOut size={15} />
-                <span>Sign out</span>
+                <span>{t('sidebar.signOut')}</span>
               </button>
               <div className="pt-3 px-3 text-[10px] text-gray-400">
                 v1.1
@@ -523,22 +536,19 @@ function AppInner() {
           <div className="glass-panel rounded-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-3">
               <div className="bg-rose-100 text-rose-600 p-2 rounded-xl" aria-hidden="true"><Trash2 size={18} /></div>
-              <h2 id="del-proj-title" className="text-lg font-bold text-gray-900">Delete this project?</h2>
+              <h2 id="del-proj-title" className="text-lg font-bold text-gray-900">{t('delete.title')}</h2>
             </div>
-            <p className="text-sm text-gray-600 leading-relaxed mb-5">
-              This erases the project and all its data — personas, strategy, leads, tracked posts and content settings.
-              This can't be undone.
-            </p>
+            <p className="text-sm text-gray-600 leading-relaxed mb-5">{t('delete.body')}</p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setConfirmingDelete(false)}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={performDeleteProject}
                 className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors flex items-center gap-2">
-                <Trash2 size={14} /> Delete project
+                <Trash2 size={14} /> {t('sidebar.deleteProject')}
               </button>
             </div>
           </div>
