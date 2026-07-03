@@ -982,13 +982,15 @@ export const VoiceArchitectureSection: React.FC<{
     activePreset, applyPreset, voiceMix, customizeVoice, setVoiceMix, setActivePreset,
     hook, customizeHook, perspective, setPerspective, viral, toggleViral, closer, setCloser, variants, setVariants,
     onAiAutoSet, aiSuggesting, aiSuggestionReason, aiSuggestError, sourceContent, onOpenQuiz
-}) => (
+}) => {
+    const t = useT();
+    return (
     <Section
-        title="Voice"
+        title={t('ce.voice.title')}
         subtitle={
             aiSuggestionReason ? aiSuggestionReason :
-            activePreset ? `Preset · ${VOICE_PRESETS.find(p => p.id === activePreset)?.name}` :
-            'Custom voice profile — saved automatically.'
+            activePreset ? `${t('vs.save.preset')} · ${VOICE_PRESETS.find(p => p.id === activePreset)?.name}` :
+            t('va.customProfile')
         }
         aside={
             <>
@@ -998,7 +1000,7 @@ export const VoiceArchitectureSection: React.FC<{
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium transition-all"
                 >
                     <span>🎙️</span>
-                    Voice match
+                    {t('va.voiceMatch')}
                 </button>
                 {/* AI calibrate — always clickable. If a sample is missing,
                     the parent's onAiAutoSet handles the feedback (scroll +
@@ -1009,7 +1011,7 @@ export const VoiceArchitectureSection: React.FC<{
                     type="button"
                     onClick={onAiAutoSet}
                     disabled={aiSuggesting}
-                    title={!sourceContent.trim() ? 'Click to set up calibration — needs a writing sample' : 'Let AI calibrate the voice for your context'}
+                    title={!sourceContent.trim() ? t('va.calibrate.titleNeeds') : t('va.calibrate.titleReady')}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                         aiSuggesting
                             ? 'opacity-60 cursor-wait bg-white border-gray-200 text-gray-700'
@@ -1019,13 +1021,13 @@ export const VoiceArchitectureSection: React.FC<{
                     }`}
                 >
                     {aiSuggesting ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
-                    {aiSuggesting ? 'Analyzing…' : !sourceContent.trim() ? 'AI calibrate — needs sample' : 'AI calibrate'}
+                    {aiSuggesting ? t('va.analyzing') : !sourceContent.trim() ? t('va.calibrate.needs') : t('va.calibrate')}
                 </button>
                 <button
                     type="button"
                     onClick={() => { setVoiceMix(DEFAULT_VOICE_MIX); setActivePreset(null); }}
                     className="text-[11px] text-gray-400 hover:text-gray-700 transition-colors px-1"
-                >Reset</button>
+                >{t('va.reset')}</button>
             </>
         }
     >
@@ -1051,7 +1053,7 @@ export const VoiceArchitectureSection: React.FC<{
                         />
                     ))}
                 </div>
-                <p className="text-[11px] text-gray-400 mt-2">Hover any chip to see an example post in that voice.</p>
+                <p className="text-[11px] text-gray-400 mt-2">{t('va.hoverHint')}</p>
             </div>
 
             {/* INTERACTIVE POLYGON */}
@@ -1059,7 +1061,7 @@ export const VoiceArchitectureSection: React.FC<{
                 <div className="lg:col-span-3 flex flex-col items-center">
                     <InteractivePolygon mix={voiceMix} onChange={(patch) => customizeVoice(patch)} />
                     <p className="text-[11px] text-gray-400 mt-2 text-center">
-                        Each spoke is a trait (0–100). Drag any dot toward the edge for more, toward the center for less. Click an axis name to snap.
+                        {t('va.polygonHint')}
                     </p>
                 </div>
                 <div className="lg:col-span-2 space-y-3">
@@ -1071,13 +1073,13 @@ export const VoiceArchitectureSection: React.FC<{
             </div>
 
             {/* Rhythm */}
-            <SubSection title="Rhythm" hint="How sentences move." info="Sets the pacing of your writing — from short punchy bursts to long flowing momentum. Affects how every post reads aloud.">
+            <SubSection title={t('va.rhythm.title')} hint={t('va.rhythm.hint')} info={t('va.rhythm.info')}>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {([
-                        { id: 'staccato', label: 'Staccato', desc: 'Short. Bursts.' },
-                        { id: 'punchy', label: 'Punchy', desc: 'Short, sometimes long.' },
-                        { id: 'flowing', label: 'Flowing', desc: 'Long, momentum.' },
-                        { id: 'contemplative', label: 'Contemplative', desc: 'Paused, deliberate.' },
+                        { id: 'staccato', label: t('va.rhythm.staccato'), desc: t('va.rhythm.staccato.d') },
+                        { id: 'punchy', label: t('va.rhythm.punchy'), desc: t('va.rhythm.punchy.d') },
+                        { id: 'flowing', label: t('va.rhythm.flowing'), desc: t('va.rhythm.flowing.d') },
+                        { id: 'contemplative', label: t('va.rhythm.contemplative'), desc: t('va.rhythm.contemplative.d') },
                     ] as const).map(r => (
                         <button key={r.id} type="button" onClick={() => customizeVoice({ rhythm: r.id })}
                             className={`p-2.5 rounded-xl text-left text-xs border transition-all ${
@@ -1097,7 +1099,7 @@ export const VoiceArchitectureSection: React.FC<{
                 pieces as an editable English sentence. Each bracketed phrase
                 opens a dropdown chooser on click. Reads like prose, edits
                 like a form. */}
-            <SubSection title="Hook" hint="The first three lines decide everything." info="The first 3 lines decide whether anyone keeps reading. Build your opener: how it starts, what pulls the reader in, and what it promises. Click each chip to swap it.">
+            <SubSection title={t('va.hook.title')} hint={t('va.hook.hint')} info={t('va.hook.info')}>
                 <HookSentence hook={hook} onChange={customizeHook} />
             </SubSection>
 
@@ -1105,12 +1107,12 @@ export const VoiceArchitectureSection: React.FC<{
                 One bulb per amplifier: bright = active, dim = inactive. Hover
                 for the description. Click to toggle. Replaces the heavy
                 2-col grid of card-style toggles. */}
-            <SubSection title="Amplifiers" hint="Persuasion levers — tap a bulb to activate." info="Optional techniques layered into every post — tribal language, setup-and-reversal, curiosity loops, etc. Tap a bulb to turn one on. Use sparingly: 1–3 is plenty.">
+            <SubSection title={t('va.amp.title')} hint={t('va.amp.hint')} info={t('va.amp.info')}>
                 <AmplifierBulbs viral={viral} toggle={toggleViral} />
             </SubSection>
 
             {/* Closer */}
-            <SubSection title="Closer" hint="How the post lands." info="The last line is what people remember and act on. Pick a landing: an open question, a quotable punchline, a counterintuitive CTA, or a quiet reflective close.">
+            <SubSection title={t('va.closer.title')} hint={t('va.closer.hint')} info={t('va.closer.info')}>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {CLOSERS.filter(c => CLOSER_VISIBLE.has(c.id)).map(c => {
                         // Treat a legacy persisted closer as its migrated equivalent for the active highlight.
@@ -1135,13 +1137,13 @@ export const VoiceArchitectureSection: React.FC<{
                 Renders all four perspective fields as a single prose paragraph
                 with click-to-edit inline blanks. Feels like a character sheet
                 you read, not 4 generic textareas to fill. */}
-            <SubSection title="Perspective" hint="Reads like prose — click any blank to edit. Saved automatically." info="The lens behind the voice: your identity, the thing people get wrong, your proof/receipts, and what you'd never say. The AI writes from this point of view. Click any blank to fill it.">
+            <SubSection title={t('va.persp.title')} hint={t('va.persp.hint')} info={t('va.persp.info')}>
                 <PerspectiveParagraph perspective={perspective} setPerspective={setPerspective} />
             </SubSection>
 
             {/* Variants — last, since it's a generation-time knob rather than a
                 voice trait. Mirrors the reference's "Voice → then Generate" flow. */}
-            <SubSection title="Variants per platform" hint={`${variants} angle${variants > 1 ? 's' : ''} — same voice, different attack.`} info="How many different versions of each post the engine generates so you can pick the best one. Same voice, different angles.">
+            <SubSection title={t('va.variants.title')} hint={t('va.variants.hint', { n: variants })} info={t('va.variants.info')}>
                 <div className="flex items-center gap-4">
                     <input type="range" min={1} max={5} value={variants} onChange={e => setVariants(parseInt(e.target.value))}
                         className="flex-1 accent-gray-900" />
@@ -1150,7 +1152,8 @@ export const VoiceArchitectureSection: React.FC<{
             </SubSection>
         </div>
     </Section>
-);
+    );
+};
 
 // ────────────────────────────────────────────────────────────────────
 // PRESET CHIP — voice preset chip with a rich hover tooltip showing a
