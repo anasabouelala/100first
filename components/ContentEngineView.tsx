@@ -241,11 +241,12 @@ const AXIS_DESC: Record<keyof Omit<VoiceMix, 'rhythm'>, string> = {
 
 type OriginType = 'answer' | 'rephrase' | 'build_in_public' | 'fresh';
 
+// label/desc hold i18n keys resolved with t() at render.
 const ORIGINS: { id: OriginType; icon: React.ReactNode; label: string; desc: string; color: string }[] = [
-    { id: 'answer',           icon: <MessageSquarePlus size={28} />, label: 'Answer a Post',     desc: 'Craft a contextual reply to a social post',          color: 'blue' },
-    { id: 'rephrase',         icon: <RefreshCw size={28} />,         label: 'Rephrase a Post',   desc: 'Rewrite any post in your unique brand voice',         color: 'purple' },
-    { id: 'build_in_public',  icon: <Github size={28} />,            label: 'Build in Public',   desc: 'Turn GitHub commits into viral storytelling',          color: 'gray' },
-    { id: 'fresh',            icon: <Sparkles size={28} />,          label: 'Fresh Post',        desc: 'Start from a topic or keyword — pure creation',       color: 'amber' },
+    { id: 'answer',           icon: <MessageSquarePlus size={28} />, label: 'ce.origin.answer.label',   desc: 'ce.origin.answer.desc',   color: 'blue' },
+    { id: 'rephrase',         icon: <RefreshCw size={28} />,         label: 'ce.origin.rephrase.label', desc: 'ce.origin.rephrase.desc', color: 'purple' },
+    { id: 'build_in_public',  icon: <Github size={28} />,            label: 'ce.origin.build.label',    desc: 'ce.origin.build.desc',    color: 'gray' },
+    { id: 'fresh',            icon: <Sparkles size={28} />,          label: 'ce.origin.fresh.label',    desc: 'ce.origin.fresh.desc',    color: 'amber' },
 ];
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -472,15 +473,15 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${
                                         origin === o.id ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-400'
                                     }`}>{React.cloneElement(o.icon as React.ReactElement, { size: 18 })}</div>
-                                    <h4 className="font-medium text-sm text-gray-900">{o.label}</h4>
-                                    <p className="text-xs text-gray-500 mt-0.5 leading-snug">{o.desc}</p>
+                                    <h4 className="font-medium text-sm text-gray-900">{t(o.label)}</h4>
+                                    <p className="text-xs text-gray-500 mt-0.5 leading-snug">{t(o.desc)}</p>
                                 </button>
                             ))}
                         </div>
                     </Section>
 
                     {/* Source Input per origin */}
-                    <Section title={t('ce.source.title')} subtitle={originConfig.desc}>
+                    <Section title={t('ce.source.title')} subtitle={t(originConfig.desc)}>
                         {origin === 'build_in_public' ? (
                             <div className="space-y-3">
                                 <input
@@ -559,7 +560,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                 {(origin === 'answer' || origin === 'rephrase') && (
                                     <input
                                         type="text"
-                                        placeholder="Source URL (optional)"
+                                        placeholder={t('ce.source.urlPh')}
                                         value={sourceUrl}
                                         onChange={e => setSourceUrl(e.target.value)}
                                         className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -568,9 +569,9 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                 <textarea
                                     rows={5}
                                     placeholder={
-                                        origin === 'answer'   ? 'Paste the post you want to reply to...' :
-                                        origin === 'rephrase' ? 'Paste the post you want to rephrase...' :
-                                        'What topic or idea do you want to post about?'
+                                        origin === 'answer'   ? t('ce.source.answerPh') :
+                                        origin === 'rephrase' ? t('ce.source.rephrasePh') :
+                                        t('ce.source.freshPh')
                                     }
                                     value={sourceContent}
                                     onChange={e => setSourceContent(e.target.value)}
@@ -586,7 +587,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                             disabled={!sourceContent}
                             className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl font-medium text-sm disabled:opacity-40 hover:bg-gray-700 transition-all"
                         >
-                            Next <ChevronRight size={16} />
+                            {t('ce.next')} <ChevronRight size={16} className="rtl:-scale-x-100" />
                         </button>
                     </div>
                 </div>
@@ -599,7 +600,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                     {/* Context preview banner — slim, no uppercase */}
                     {sourceContent && (
                         <div className="border-l-2 border-gray-300 pl-3 text-xs text-gray-500 italic">
-                            <span className="text-gray-700 not-italic font-medium">{originConfig.label}:</span>{' '}
+                            <span className="text-gray-700 not-italic font-medium">{t(originConfig.label)}:</span>{' '}
                             {sourceContent.substring(0, 160)}{sourceContent.length > 160 ? '…' : ''}
                         </div>
                     )}
