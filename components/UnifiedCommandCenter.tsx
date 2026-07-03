@@ -1691,9 +1691,9 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-700 bg-white transition-colors"
             >
               <Check size={12} />
-              {pagedSignals.length > 0 && pagedSignals.every((it: any) => selectedPosts.has(postKey(it))) ? 'Deselect page' : 'Select page'}
+              {pagedSignals.length > 0 && pagedSignals.every((it: any) => selectedPosts.has(postKey(it))) ? t('uc.deselectPage') : t('uc.selectPage')}
             </button>
-            <span className="text-[11px] text-gray-400">{selectedPosts.size > 0 ? `${selectedPosts.size} selected` : 'Tick posts to batch-generate comments'}</span>
+            <span className="text-[11px] text-gray-400">{selectedPosts.size > 0 ? t('uc.selected', { n: selectedPosts.size }) : t('uc.tickHint')}</span>
 
             <div className="w-px h-5 bg-gray-200 mx-1" />
 
@@ -1704,19 +1704,19 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                 value={minFit}
                 onChange={e => setMinFit(Number(e.target.value))}
                 className="text-[11px] font-semibold border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:border-blue-400"
-                title="Only show posts at or above this profile fit"
+                title={t('uc.fitFilter.title')}
               >
-                <option value={0}>Any fit</option>
-                <option value={80}>≥ 80% · strong</option>
-                <option value={65}>≥ 65% · good</option>
-                <option value={50}>≥ 50% · moderate</option>
-                <option value={35}>≥ 35% · weak+</option>
+                <option value={0}>{t('uc.fit.any')}</option>
+                <option value={80}>{t('uc.fit.80')}</option>
+                <option value={65}>{t('uc.fit.65')}</option>
+                <option value={50}>{t('uc.fit.50')}</option>
+                <option value={35}>{t('uc.fit.35')}</option>
               </select>
             </div>
 
             {/* Platform filter */}
             <div className="flex items-center gap-1">
-              {([['all', 'All'], ['x', 'X'], ['linkedin', 'LinkedIn'], ['reddit', 'Reddit']] as const).map(([val, label]) => (
+              {([['all', t('uc.platform.all')], ['x', 'X'], ['linkedin', 'LinkedIn'], ['reddit', 'Reddit']] as const).map(([val, label]) => (
                 <button
                   key={val}
                   onClick={() => setPlatformFilter(val as any)}
@@ -1728,7 +1728,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
             </div>
 
             {(minFit > 0 || platformFilter !== 'all') && (
-              <span className="text-[11px] text-gray-400">{filteredSignals.length} / {influencerSignals.length} shown</span>
+              <span className="text-[11px] text-gray-400">{t('uc.shown', { n: filteredSignals.length, m: influencerSignals.length })}</span>
             )}
           </div>
         )}
@@ -1759,7 +1759,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                     <Zap size={16} />
                   </div>
                   <div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-600">Today's posts</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-600">{t('uc.todayPosts')}</span>
                     <div className="text-xl font-bold text-blue-900 leading-none">{todayPostsCount}</div>
                   </div>
                 </div>
@@ -1768,7 +1768,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                     <MessageSquarePlus size={16} />
                   </div>
                   <div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-violet-600">Replies today</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-violet-600">{t('uc.repliesToday')}</span>
                     <div className="text-xl font-bold text-violet-900 leading-none">{todayReplies}</div>
                   </div>
                 </div>
@@ -1863,20 +1863,20 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                 {filteredSignals.length > POSTS_PER_PAGE && (
                     <div className="flex items-center justify-between gap-3 pt-3 mt-2 border-t border-gray-100 text-[12px] text-gray-500">
                         <span className="tabular-nums">
-                            Showing {safePage * POSTS_PER_PAGE + 1}–{Math.min((safePage + 1) * POSTS_PER_PAGE, filteredSignals.length)} of {filteredSignals.length}
+                            {t('uc.showing', { a: safePage * POSTS_PER_PAGE + 1, b: Math.min((safePage + 1) * POSTS_PER_PAGE, filteredSignals.length), c: filteredSignals.length })}
                         </span>
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setPage(p => Math.max(0, p - 1))}
                                 disabled={safePage === 0}
                                 className="px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-gray-200 bg-white text-gray-600 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >← Prev</button>
-                            <span className="tabular-nums text-gray-500">Page {safePage + 1} / {pageCount}</span>
+                            >{t('uc.prev')}</button>
+                            <span className="tabular-nums text-gray-500">{t('uc.page', { a: safePage + 1, b: pageCount })}</span>
                             <button
                                 onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
                                 disabled={safePage >= pageCount - 1}
                                 className="px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-gray-200 bg-white text-gray-600 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >Next →</button>
+                            >{t('uc.next')}</button>
                         </div>
                     </div>
                 )}
@@ -2341,28 +2341,28 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
             Publish the batch. Queue-only — nothing posts until you press it. */}
         {selectedPosts.size > 0 && createPortal(
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] flex items-center gap-3 px-5 py-3 rounded-2xl bg-gray-900 text-white shadow-2xl border border-gray-700 max-w-[95vw] flex-wrap justify-center">
-                <span className="text-xs font-bold">{selectedPosts.size} post{selectedPosts.size > 1 ? 's' : ''} selected</span>
+                <span className="text-xs font-bold">{t('uc.batch.selected', { n: selectedPosts.size })}</span>
                 <div className="w-px h-5 bg-white/20" />
                 <button
                     onClick={generateBatchComments}
                     disabled={isBatchRunning}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-colors"
                 >
-                    {isBatchRunning ? <><RefreshCw size={13} className="animate-spin" /> Generating…</> : <><Sparkles size={13} /> Generate comments</>}
+                    {isBatchRunning ? <><RefreshCw size={13} className="animate-spin" /> {t('uc.batch.generating')}</> : <><Sparkles size={13} /> {t('uc.batch.generate')}</>}
                 </button>
                 <button
                     onClick={publishBatchComments}
                     disabled={selectedReadyCount === 0 || isBatchRunning}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-colors"
-                    title={selectedReadyCount === 0 ? 'Generate comments first' : `Queue ${selectedReadyCount} comment(s) for posting`}
+                    title={selectedReadyCount === 0 ? t('uc.batch.genFirst') : t('uc.batch.queueTitle', { n: selectedReadyCount })}
                 >
-                    <Send size={13} /> Publish selected{selectedReadyCount > 0 ? ` (${selectedReadyCount})` : ''}
+                    <Send size={13} /> {t('uc.batch.publish')}{selectedReadyCount > 0 ? ` (${selectedReadyCount})` : ''}
                 </button>
                 <button
                     onClick={clearBatchSelection}
                     className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
-                    title="Clear selection"
-                    aria-label="Clear selection"
+                    title={t('uc.batch.clear')}
+                    aria-label={t('uc.batch.clear')}
                 >
                     <X size={16} />
                 </button>
@@ -2383,7 +2383,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                     {/* Header */}
                     <div className="p-6 border-b border-gray-100 flex justify-between items-start flex-shrink-0">
                         <div>
-                            <h3 className="text-lg font-bold text-gray-900">Write a comment for @{commentingLead.title || commentingLead.creator}</h3>
+                            <h3 className="text-lg font-bold text-gray-900">{t('uc.modal.title', { name: commentingLead.title || commentingLead.creator })}</h3>
                             {commentingLead.postText && (
                                 <p className="text-xs text-gray-400 mt-1 line-clamp-1 italic">"{commentingLead.postText}"</p>
                             )}
@@ -2398,7 +2398,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                         Applying a profile here makes the next "Generate" use that voice. */}
                     {vp.library.length > 0 && (
                         <div className="px-6 py-3 border-b border-gray-100 bg-amber-50/50 flex items-center gap-2 flex-wrap flex-shrink-0">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-900 mr-1">Voice</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-900 mr-1">{t('uc.modal.voice')}</span>
                             {vp.library.map(p => {
                                 const tip = `${p.note ? p.note + ' — ' : ''}auth ${p.voiceMix.authority} · energy ${p.voiceMix.energy} · prov ${p.voiceMix.provocation}`;
                                 return (
@@ -2412,7 +2412,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                     </button>
                                 );
                             })}
-                            <span className="ml-auto text-[10px] text-amber-900/60 italic">Applied profile is used for the next generation.</span>
+                            <span className="ml-auto text-[10px] text-amber-900/60 italic">{t('uc.modal.applied')}</span>
                         </div>
                     )}
 
@@ -2425,33 +2425,33 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                             get, with a hint pointing to Voice Studio to change it. */}
                         <div className="p-6 border-b border-gray-50">
                             <div className="flex items-center justify-between mb-2">
-                                <label className="text-xs font-semibold text-gray-600">Comment style <span className="font-normal text-gray-400">— set in Voice Studio</span></label>
+                                <label className="text-xs font-semibold text-gray-600">{t('uc.modal.style')} <span className="font-normal text-gray-400">{t('uc.modal.styleSetIn')}</span></label>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-900 text-white capitalize">{vp.commentSpec.tone}</span>
+                                <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-900 text-white">{vp.commentSpec.tone === 'casual' ? t('vs.tone.casual') : vp.commentSpec.tone === 'formal' ? t('vs.tone.formal') : t('vs.tone.witty')}</span>
                                 <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-gray-100 text-gray-700">
-                                    {vp.commentSpec.goal === 'build_relationship' ? 'Start a conversation'
-                                        : vp.commentSpec.goal === 'ask_question' ? 'Ask a question'
-                                        : vp.commentSpec.goal === 'share_insight' ? 'Share insight'
-                                        : 'Stand out'}
+                                    {vp.commentSpec.goal === 'build_relationship' ? t('uc.goal.conversation')
+                                        : vp.commentSpec.goal === 'ask_question' ? t('uc.goal.question')
+                                        : vp.commentSpec.goal === 'share_insight' ? t('uc.goal.insight')
+                                        : t('uc.goal.standout')}
                                 </span>
-                                <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-gray-100 text-gray-700">≤ {vp.commentSpec.maxLength} chars</span>
+                                <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-gray-100 text-gray-700">{t('uc.modal.maxChars', { n: vp.commentSpec.maxLength })}</span>
                                 {vp.commentSpec.customInstruction.trim() && (
                                     <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200 max-w-full truncate" title={vp.commentSpec.customInstruction}>
                                         “{vp.commentSpec.customInstruction}”
                                     </span>
                                 )}
                             </div>
-                            <p className="text-[11px] text-gray-400 italic mt-2">Change tone, goal, length or your standing angle once in <b>Voice Studio → Comment defaults</b>.</p>
+                            <p className="text-[11px] text-gray-400 italic mt-2">{t('uc.modal.changeHint.a')} <b>{t('section.voiceStudio.title')} ← {t('vs.comment.title')}</b>.</p>
                         </div>
 
                         {/* Results */}
                         {smartComments && (
                             <div className="p-6 space-y-3">
                                 <div className="flex items-center justify-between mb-2">
-                                    <p className="text-xs font-semibold text-gray-500">Pick a comment to use — click to open the post and copy it</p>
+                                    <p className="text-xs font-semibold text-gray-500">{t('uc.pickComment')}</p>
                                     <button onClick={generateComments} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                                        <RefreshCw size={12} /> Regenerate
+                                        <RefreshCw size={12} /> {t('uc.regenerate')}
                                     </button>
                                 </div>
                                 {smartComments.options.map((opt, i) => {
@@ -2465,10 +2465,10 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 px-3 py-1 bg-blue-50 rounded-full">
-                                                        {opt.type === 'agreement' ? 'Agree & build' : opt.type === 'insight' ? 'Share insight' : 'Ask a question'}
+                                                        {opt.type === 'agreement' ? t('uc.opt.agree') : opt.type === 'insight' ? t('uc.opt.insight') : t('uc.opt.question')}
                                                     </span>
                                                     {(editedComments[i] !== undefined && editedComments[i] !== opt.body) && (
-                                                        <span className="text-[10px] text-amber-600 font-semibold">edited</span>
+                                                        <span className="text-[10px] text-amber-600 font-semibold">{t('uc.edited')}</span>
                                                     )}
                                                 </div>
                                                 {/* Editable comment — the user can always tweak the
@@ -2482,7 +2482,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                                 />
                                                 <div className="flex items-center justify-between mt-1.5">
                                                     <p className="text-[10px] text-gray-400 italic truncate pr-2">{opt.why}</p>
-                                                    <span className="text-[10px] text-gray-400 flex-shrink-0">{value.length} chars</span>
+                                                    <span className="text-[10px] text-gray-400 flex-shrink-0">{t('uc.chars', { n: value.length })}</span>
                                                 </div>
                                             </div>
 
@@ -2509,7 +2509,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                                     className="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95"
                                                 >
                                                     {engagementAction === 'quote' ? <Quote size={14} /> : <Sparkles size={14} />}
-                                                    {engagementAction === 'quote' ? 'Quote Now' : 'Send Now'}
+                                                    {engagementAction === 'quote' ? t('uc.quoteNow') : t('uc.sendNow')}
                                                 </button>
 
                                                 <button
@@ -2533,14 +2533,14 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                                                             // No capturable permalink — never bounce to localhost.
                                                             // The reply is saved + the post marked replied; open
                                                             // LinkedIn manually to paste it.
-                                                            alert("Ce post n'a pas de lien direct capturable depuis le fil LinkedIn. Ta réponse est enregistrée — ouvre le post sur LinkedIn pour la coller.");
+                                                            alert(t('uc.noLinkAlert'));
                                                         }
                                                         setCommentingLead(null);
                                                         setSmartComments(null);
                                                     }}
                                                     className="px-4 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 flex items-center justify-center gap-2 transition-all"
                                                 >
-                                                    <ExternalLink size={14} /> Open Manual
+                                                    <ExternalLink size={14} /> {t('uc.openManual')}
                                                 </button>
                                             </div>
                                         </div>
@@ -2562,8 +2562,8 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                             className="w-full py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                         >
                             {isGeneratingComment
-                                ? <><RefreshCw size={15} className="animate-spin" /> Generating...</>
-                                : <><Sparkles size={15} /> {smartComments ? 'Regenerate comments' : 'Generate comments'}</>}
+                                ? <><RefreshCw size={15} className="animate-spin" /> {t('uc.footer.generating')}</>
+                                : <><Sparkles size={15} /> {smartComments ? t('uc.footer.regenerate') : t('uc.footer.generate')}</>}
                         </button>
                     </div>
                 </div>
