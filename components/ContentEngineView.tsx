@@ -7,6 +7,7 @@ import {
 import { fetchRepoPulse, parseGitHubUrl } from '../services/githubService';
 import { Section, SubSection } from './ui/Section';
 import { useVoiceProfile } from '../hooks/useVoiceProfile';
+import { useT } from '../contexts/I18nContext';
 import { AppMode } from '../types';
 
 // ────────────────────────────────────────────────────────────────────
@@ -264,6 +265,7 @@ const PLATFORM_ICONS: Record<string, React.ReactNode> = {
 // Section/SubSection now live in ui/Section.tsx — shared across all views.
 
 export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({ onOpenParameters }) => {
+    const t = useT();
     const [step, setStep] = useState<1 | 2 | 3>(1);
     const [origin, setOrigin] = useState<OriginType>('fresh');
     const [sourceContent, setSourceContent] = useState('');
@@ -447,15 +449,15 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                         {s < 3 && <div className={`flex-1 h-px transition-all ${step > s ? 'bg-gray-300' : 'bg-gray-100'}`} />}
                     </React.Fragment>
                 ))}
-                <span className="ml-2 text-xs text-gray-400">
-                    {step === 1 ? 'Origin' : step === 2 ? 'Parameters' : 'Drafts'}
+                <span className="ms-2 text-xs text-gray-400">
+                    {step === 1 ? t('ce.step.origin') : step === 2 ? t('ce.step.parameters') : t('ce.step.drafts')}
                 </span>
             </div>
 
             {/* ─── STEP 1: Origin ───────────────────────────────────────── */}
             {step === 1 && (
                 <div className="space-y-8 animate-fade-in">
-                    <Section title="Where does this post come from?" subtitle="Pick an origin — the engine adapts its voice to it.">
+                    <Section title={t('ce.origin.title')} subtitle={t('ce.origin.subtitle')}>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {ORIGINS.map((o) => (
                                 <button
@@ -478,7 +480,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                     </Section>
 
                     {/* Source Input per origin */}
-                    <Section title="Source" subtitle={originConfig.desc}>
+                    <Section title={t('ce.source.title')} subtitle={originConfig.desc}>
                         {origin === 'build_in_public' ? (
                             <div className="space-y-3">
                                 <input
@@ -606,14 +608,14 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
 
                         {/* Target Platforms */}
                         <Section
-                            title="Target platforms"
-                            subtitle="One draft per platform, length-adapted to each.">
+                            title={t('ce.platforms.title')}
+                            subtitle={t('ce.platforms.subtitle')}>
                             <div className="grid grid-cols-2 gap-3">
                                 {[
-                                    { id: 'X',        icon: <Twitter size={18} />,       limit: '280 chars',   color: 'bg-gray-900 border-gray-900 text-white' },
-                                    { id: 'LinkedIn', icon: <Linkedin size={18} />,      limit: '3,000 chars', color: 'bg-blue-600 border-blue-600 text-white' },
-                                    { id: 'Reddit',   icon: <MessageCircle size={18} />, limit: 'No limit',    color: 'bg-orange-500 border-orange-500 text-white' },
-                                    { id: 'Threads',  icon: <Hash size={18} />,          limit: '500 chars',   color: 'bg-purple-600 border-purple-600 text-white' },
+                                    { id: 'X',        icon: <Twitter size={18} />,       limit: t('ce.limit.chars', { n: 280 }),   color: 'bg-gray-900 border-gray-900 text-white' },
+                                    { id: 'LinkedIn', icon: <Linkedin size={18} />,      limit: t('ce.limit.chars', { n: '3,000' }), color: 'bg-blue-600 border-blue-600 text-white' },
+                                    { id: 'Reddit',   icon: <MessageCircle size={18} />, limit: t('ce.limit.none'),    color: 'bg-orange-500 border-orange-500 text-white' },
+                                    { id: 'Threads',  icon: <Hash size={18} />,          limit: t('ce.limit.chars', { n: 500 }),   color: 'bg-purple-600 border-purple-600 text-white' },
                                 ].map(p => (
                                     <button
                                         type="button"
@@ -639,18 +641,18 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                 ))}
                             </div>
                             {targetPlatforms.length > 0 && (
-                                <p className="text-[11px] text-gray-400">Generating {targetPlatforms.length} draft{targetPlatforms.length > 1 ? 's' : ''} — one per platform, length-adapted.</p>
+                                <p className="text-[11px] text-gray-400">{t('ce.platforms.generating', { n: targetPlatforms.length })}</p>
                             )}
                         </Section>
 
                         {/* Format */}
-                        <Section title="Format" subtitle="The shape the post takes.">
+                        <Section title={t('ce.format.title')} subtitle={t('ce.format.subtitle')}>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                 {([
-                                    { id: 'single',   label: 'Single post',  icon: '📝' },
-                                    { id: 'thread',   label: 'Thread',       icon: '🧵' },
-                                    { id: 'longform', label: 'Long-form',    icon: '📰' },
-                                    { id: 'comment',  label: 'Comment',      icon: '💬' },
+                                    { id: 'single',   label: t('ce.format.single'),   icon: '📝' },
+                                    { id: 'thread',   label: t('ce.format.thread'),   icon: '🧵' },
+                                    { id: 'longform', label: t('ce.format.longform'), icon: '📰' },
+                                    { id: 'comment',  label: t('ce.format.comment'),  icon: '💬' },
                                 ] as const).map(f => (
                                     <button type="button" key={f.id} onClick={() => setFormat(f.id)}
                                         className={`py-2.5 px-3 rounded-xl text-xs font-medium border transition-all flex items-center gap-2 ${
@@ -666,11 +668,11 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
 
                         {/* Voice summary — linked to Voice Studio */}
                         <Section
-                            title="Voice"
+                            title={t('ce.voice.title')}
                             subtitle={
                                 activePreset
-                                    ? `Preset · ${VOICE_PRESETS.find(p => p.id === activePreset)?.name} · ${variants} variant${variants > 1 ? 's' : ''}`
-                                    : `Custom profile · ${variants} variant${variants > 1 ? 's' : ''} per platform`
+                                    ? `${t('vs.save.preset')} · ${VOICE_PRESETS.find(p => p.id === activePreset)?.name} · ${t('ce.voice.variants', { n: variants })}`
+                                    : `${t('vs.save.customVoice')} · ${t('ce.voice.variantsPer', { n: variants })}`
                             }
                             aside={
                                 onOpenParameters ? (
@@ -679,7 +681,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                         onClick={onOpenParameters}
                                         className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 hover:border-gray-400 bg-white text-gray-700 rounded-lg text-xs font-medium transition-all duration-200 ease-out active:scale-[0.97]"
                                     >
-                                        <Settings2 size={12} /> Adjust voice
+                                        <Settings2 size={12} /> {t('ce.voice.adjust')}
                                     </button>
                                 ) : null
                             }
@@ -714,10 +716,10 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                                 <Sparkles size={14} />
                                             </span>
                                             <span className="flex flex-col items-start leading-tight text-left flex-1 min-w-0">
-                                                <span className="text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">Voice for generation</span>
+                                                <span className="text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">{t('ce.voice.forGen')}</span>
                                                 <span className="text-[13px] font-bold leading-none mt-0.5 text-gray-900 truncate">{activeEmoji} {activeName}</span>
                                             </span>
-                                            <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 border border-gray-200">Change</span>
+                                            <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 border border-gray-200">{t('ce.voice.change')}</span>
                                             <span className={`text-[10px] text-gray-400 transition-transform ${voicePickerOpen ? 'rotate-180' : ''}`} aria-hidden="true">▾</span>
                                         </button>
                                         {voicePickerOpen && (
@@ -725,7 +727,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                                 <div className="fixed inset-0 z-40" onClick={() => setVoicePickerOpen(false)} />
                                                 <div className="absolute left-0 right-0 top-full mt-2 z-50 max-h-[60vh] overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl p-4 animate-fade-in">
                                                     {/* Built-in archetypes */}
-                                                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">Built-in archetypes</div>
+                                                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">{t('ce.voice.builtin')}</div>
                                                     <div className="grid grid-cols-1 gap-1.5 mb-3">
                                                         {VOICE_PRESETS.map(p => {
                                                             const isActive = activePreset === p.id;
@@ -748,7 +750,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                                     {/* Saved voices */}
                                                     {vp.library.length > 0 && (
                                                         <>
-                                                            <div className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2 mt-3">Your saved voices</div>
+                                                            <div className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2 mt-3">{t('ce.voice.saved')}</div>
                                                             <div className="grid grid-cols-1 gap-1.5">
                                                                 {vp.library.map(s => (
                                                                     <button
@@ -777,24 +779,23 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                 );
                             })()}
                             <p className="text-[12px] text-gray-500 leading-relaxed">
-                                Voice mix, hook, viral physics, closer and perspective are managed in{' '}
+                                {t('ce.voice.managedA')}{' '}
                                 <button
                                     type="button"
                                     onClick={onOpenParameters}
                                     className="text-gray-900 underline underline-offset-2 hover:text-gray-700 transition-colors"
-                                >Voice Studio</button>.
-                                Changes there apply to the next generation automatically.
+                                >{t('section.voiceStudio.title')}</button>. {t('ce.voice.managedB')}
                             </p>
                         </Section>
 
                         {/* CTA */}
-                        <Section title="Call to action" subtitle="How hard you push at the end.">
+                        <Section title={t('ce.cta.title')} subtitle={t('ce.cta.subtitle')}>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                 {([
-                                    { id: 'none',   label: 'None',     sub: 'Pure content' },
-                                    { id: 'soft',   label: 'Soft',     sub: 'Spark discussion' },
-                                    { id: 'medium', label: 'Medium',   sub: 'Learn more' },
-                                    { id: 'hard',   label: 'Strong',   sub: 'Trial / signup' },
+                                    { id: 'none',   label: t('ce.cta.none.label'),   sub: t('ce.cta.none.sub') },
+                                    { id: 'soft',   label: t('ce.cta.soft.label'),   sub: t('ce.cta.soft.sub') },
+                                    { id: 'medium', label: t('ce.cta.medium.label'), sub: t('ce.cta.medium.sub') },
+                                    { id: 'hard',   label: t('ce.cta.hard.label'),   sub: t('ce.cta.hard.sub') },
                                 ] as const).map(c => (
                                     <button type="button" key={c.id} onClick={() => setCtaType(c.id)}
                                         className={`py-2.5 px-3 rounded-xl border text-xs font-medium flex flex-col items-start gap-0.5 transition-all ${ctaType === c.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
@@ -811,7 +812,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                     {styleInspiration && (
                         <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
                             <Wand2 size={11} className="text-gray-400" />
-                            Style inspiration loaded ({styleInspiration.length.toLocaleString()} chars) — managed in Parameters.
+                            {t('ce.styleLoaded', { n: styleInspiration.length.toLocaleString() })}
                         </p>
                     )}
 
@@ -819,27 +820,27 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                     {dnaString && (
                         <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
                             <Zap size={11} className="text-amber-500" fill="currentColor" />
-                            Brand DNA loaded — voice will apply automatically.
+                            {t('ce.dnaLoaded')}
                         </p>
                     )}
 
                     <div className="flex justify-between pt-2">
                         <button onClick={() => setStep(1)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-900 transition-all">
-                            <ChevronLeft size={16} /> Back
+                            <ChevronLeft size={16} className="rtl:-scale-x-100" /> {t('ce.back')}
                         </button>
                         <button
                             onClick={handleGenerate}
                             disabled={generating || targetPlatforms.length === 0}
                             className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-medium text-sm disabled:opacity-40 transition-all"
                         >
-                            {generating ? <><Loader2 size={16} className="animate-spin" /> Drafting…</> : <><Sparkles size={16} /> Generate</>}
+                            {generating ? <><Loader2 size={16} className="animate-spin" /> {t('ce.drafting')}</> : <><Sparkles size={16} /> {t('ce.generate')}</>}
                         </button>
                     </div>
                     {generationError && (
                         <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2 text-xs">
                             <AlertCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
                             <div className="text-red-800">
-                                <span className="font-bold">Generation failed.</span> {generationError}
+                                <span className="font-bold">{t('ce.genFailed')}</span> {generationError}
                             </div>
                         </div>
                     )}
@@ -850,12 +851,12 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
             {step === 3 && (
                 <div className="space-y-8 animate-fade-in">
                     <Section
-                        title="Drafts"
-                        subtitle={`${drafts.length} platform-adapted post${drafts.length === 1 ? '' : 's'}.`}
+                        title={t('ce.step.drafts')}
+                        subtitle={t('ce.drafts.subtitle', { n: drafts.length })}
                         aside={
                             <>
                                 <button onClick={() => setStep(2)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-900 transition-all">
-                                    <ChevronLeft size={13} /> Tweak
+                                    <ChevronLeft size={13} className="rtl:-scale-x-100" /> {t('ce.tweak')}
                                 </button>
                                 <button
                                     onClick={handleGenerate}
@@ -863,7 +864,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-all"
                                 >
                                     {generating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                                    Regenerate
+                                    {t('ce.regenerate')}
                                 </button>
                             </>
                         }
@@ -871,7 +872,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                         {generating && (
                             <div className="flex items-center justify-center py-16 text-gray-500 gap-3">
                                 <Loader2 size={20} className="animate-spin" />
-                                <span className="text-sm">Crafting your drafts…</span>
+                                <span className="text-sm">{t('ce.crafting')}</span>
                             </div>
                         )}
 
