@@ -685,6 +685,7 @@ const RadarPostCard: React.FC<{
 
 export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }) => {
   const { project } = useProject();
+  const t = useT();
   const [radarHistory, setRadarHistory] = useState<any[]>([]);
   // ── Real DeepSeek profile-fit scores, cached by post key (url|uuid) ──
   // Replaces the fake flat "100%" the extension used to stamp on every post.
@@ -1565,8 +1566,8 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
       <div className="py-2 animate-fade-in max-w-[1600px] mx-auto px-1 sm:px-2">
         <header className="flex items-start justify-between mb-6 gap-4 flex-wrap">
           <div>
-            <h2 className="text-2xl font-display font-medium text-gray-900 tracking-tight">Tracked posts</h2>
-            <p className="text-sm text-gray-500 mt-0.5">New posts from accounts you follow — be first to engage.</p>
+            <h2 className="text-2xl font-display font-medium text-gray-900 tracking-tight">{t('uc.title')}</h2>
+            <p className="text-sm text-gray-500 mt-0.5">{t('uc.subtitle')}</p>
 
             {/* ── Comment-voice control ──
                 The Avg-Fit KPI that used to sit here was removed: it duplicated
@@ -1582,13 +1583,13 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                   aria-haspopup="listbox"
                   aria-expanded={voiceEditorOpen}
                   className="group flex items-center gap-2.5 pl-2 pr-3.5 py-2 rounded-full bg-white border border-gray-200 hover:border-violet-300 hover:shadow-md shadow-sm transition-all text-gray-800"
-                  title="Comments in the tracker are generated with this voice. Click to switch or fine-tune it."
+                  title={t('uc.voicePill.title')}
                 >
                   <span className="flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-sm" aria-hidden="true">
                     <Sparkles size={15} />
                   </span>
                   <span className="flex flex-col items-start leading-tight text-left">
-                    <span className="text-[8px] font-black uppercase tracking-[0.18em] text-gray-400">Comment voice</span>
+                    <span className="text-[8px] font-black uppercase tracking-[0.18em] text-gray-400">{t('uc.commentVoice')}</span>
                     <span className="text-[13px] font-bold leading-none mt-0.5 text-gray-900">{activeVoice.emoji} {activeVoice.name}</span>
                   </span>
                   <span className={`ml-1 text-[10px] text-gray-400 group-hover:text-violet-500 transition-transform ${voiceEditorOpen ? 'rotate-180' : ''}`} aria-hidden="true">▾</span>
@@ -1599,7 +1600,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                   <div className="fixed inset-0 z-40" onClick={() => setVoiceEditorOpen(false)} />
                   <div className="absolute left-0 top-full mt-2 z-50 w-[360px] max-h-[72vh] overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl p-4 text-left animate-fade-in">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">Voice for comments</span>
+                      <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">{t('uc.voiceForComments')}</span>
                       <button onClick={() => setVoiceEditorOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={14} /></button>
                     </div>
 
@@ -1609,7 +1610,7 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                         is always one you authored. Picking one calls
                         vp.applySavedProfile, which updates the voiceMix/spec
                         that generation reads. */}
-                    <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1.5">Your saved voices</p>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1.5">{t('uc.savedVoices')}</p>
                     {vp.library.length > 0 ? (
                       <div className="space-y-1.5 mb-3">
                         {vp.library.map(s => {
@@ -1632,13 +1633,13 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                       </div>
                     ) : (
                       <div className="mb-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-3 py-4 text-center">
-                        <p className="text-[12px] font-semibold text-gray-600">No saved voices yet</p>
-                        <p className="text-[11px] text-gray-400 leading-snug mt-1">Build and save a voice in <span className="font-semibold">Voice Studio</span>, then pick it here to write every comment in it.</p>
+                        <p className="text-[12px] font-semibold text-gray-600">{t('uc.noSavedVoices')}</p>
+                        <p className="text-[11px] text-gray-400 leading-snug mt-1">{t('uc.noSavedVoices.body.a')} <span className="font-semibold">{t('section.voiceStudio.title')}</span>{t('uc.noSavedVoices.body.b')}</p>
                       </div>
                     )}
 
                     <p className="text-[10px] text-gray-400 leading-snug">
-                      Comments in the tracker are written in your selected saved voice. Create or fine-tune voices in <span className="font-semibold">Voice Studio</span>.
+                      {t('uc.voiceNote.a')} <span className="font-semibold">{t('section.voiceStudio.title')}</span>{t('uc.voiceNote.b')}
                     </p>
                   </div>
                 </>
@@ -1651,20 +1652,20 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
               <button
                 onClick={handleClearPosts}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-2xl text-[10px] font-black uppercase tracking-tighter border border-gray-200 text-gray-500 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors"
-                title="Remove every post from the tracker"
+                title={t('uc.clearAll.title')}
               >
-                <Trash2 size={12} /> Clear all
+                <Trash2 size={12} /> {t('uc.clearAll')}
               </button>
             )}
             {!extensionConnected ? (
                 <div className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-500 rounded-2xl text-[10px] font-black uppercase tracking-tighter border border-rose-100 animate-pulse">
                     <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    Disconnected
+                    {t('uc.disconnected')}
                 </div>
             ) : (
                 <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-500 rounded-2xl text-[10px] font-black uppercase tracking-tighter border border-emerald-100">
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    Active
+                    {t('uc.active')}
                 </div>
             )}
           </div>
@@ -1787,9 +1788,9 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                         <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gray-900/5 flex items-center justify-center">
                             <Radar size={26} className="text-gray-400" />
                         </div>
-                        <h3 className="text-base font-semibold text-gray-700">No new posts yet</h3>
+                        <h3 className="text-base font-semibold text-gray-700">{t('uc.empty.title')}</h3>
                         <p className="text-[13px] text-gray-400 mt-1.5 max-w-sm mx-auto leading-relaxed">
-                            When an account you track posts something, it lands here. Add accounts in the Account Finder and keep this tab open.
+                            {t('uc.empty.body')}
                         </p>
                     </div>
                 ) : filteredSignals.length === 0 ? (
