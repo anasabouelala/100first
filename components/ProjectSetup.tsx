@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useProject, ProjectConfig } from '../contexts/ProjectContext';
+import { useT } from '../contexts/I18nContext';
 import {
   Rocket, ChevronDown, ChevronUp, Check, Sparkles, Target, Users, Tag,
   DollarSign, Swords, TrendingUp, Globe, Flag, X
@@ -15,11 +16,12 @@ const CATEGORY_PRESETS = [
   'Fintech', 'E-commerce', 'Vertical SaaS', 'Mobile App', 'Other'
 ];
 
+// label/desc hold i18n keys resolved with t() at render.
 const STAGE_OPTIONS: Array<{ value: ProjectConfig['stage']; label: string; desc: string }> = [
-  { value: 'idea',        label: 'Idea',        desc: "Pre-build, validating" },
-  { value: 'pre-launch',  label: 'Pre-launch',  desc: "Building, waitlist open" },
-  { value: 'launched',    label: 'Launched',    desc: "Live, getting first users" },
-  { value: 'scaling',     label: 'Scaling',     desc: "Real revenue, growing" }
+  { value: 'idea',        label: 'ps.stage.idea.label',      desc: 'ps.stage.idea.desc' },
+  { value: 'pre-launch',  label: 'ps.stage.prelaunch.label', desc: 'ps.stage.prelaunch.desc' },
+  { value: 'launched',    label: 'ps.stage.launched.label',  desc: 'ps.stage.launched.desc' },
+  { value: 'scaling',     label: 'ps.stage.scaling.label',   desc: 'ps.stage.scaling.desc' }
 ];
 
 // Only the product name is required to get in. Pitch / category / audience are
@@ -29,6 +31,7 @@ const REQUIRED_FIELDS: (keyof ProjectConfig)[] = ['productName'];
 
 export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) => {
   const { project, setProject } = useProject();
+  const t = useT();
   // 'new' mode starts blank (replacing current project); 'edit' starts with current values.
   const [form, setForm] = useState<Partial<ProjectConfig>>(
     mode === 'new' ? { stage: 'pre-launch' } : (project || { stage: 'pre-launch' })
@@ -123,24 +126,24 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
   const pitchField = (
     <FieldRow
       icon={<Sparkles size={14} />}
-      label="Elevator pitch"
-      hint="What does it do, who is it for, and why does it matter? 1-2 sentences.">
+      label={t('ps.pitch.label')}
+      hint={t('ps.pitch.hint')}>
       <textarea
         value={form.pitch || ''}
         onChange={e => update('pitch', e.target.value)}
-        placeholder="e.g. Viraholic turns every social platform into a customer-acquisition engine for SaaS founders by surfacing buying-intent conversations across X and LinkedIn, then drafting on-brand replies."
+        placeholder={t('ps.pitch.ph')}
         rows={3}
         className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-sm leading-relaxed resize-none transition-colors" />
     </FieldRow>
   );
 
   const categoryField = (
-    <FieldRow icon={<Target size={14} />} label="Category">
+    <FieldRow icon={<Target size={14} />} label={t('ps.category.label')}>
       <div className="space-y-2">
         <input
           value={form.category || ''}
           onChange={e => update('category', e.target.value)}
-          placeholder="e.g. B2B SaaS"
+          placeholder={t('ps.category.ph')}
           className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-base font-medium transition-colors" />
         <div className="flex flex-wrap gap-1.5">
           {CATEGORY_PRESETS.map(c => (
@@ -161,12 +164,12 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
   const audienceField = (
     <FieldRow
       icon={<Users size={14} />}
-      label="Target audience"
-      hint="Who pays for this? Be specific — job title, company stage, or persona.">
+      label={t('ps.audience.label')}
+      hint={t('ps.audience.hint')}>
       <input
         value={form.targetAudience || ''}
         onChange={e => update('targetAudience', e.target.value)}
-        placeholder="e.g. Solo SaaS founders & Heads of Demand Gen at Series A-B B2B SaaS"
+        placeholder={t('ps.audience.ph')}
         className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-base transition-colors" />
     </FieldRow>
   );
@@ -191,20 +194,18 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
             <Rocket size={20} />
           </div>
           <div className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">
-            {mode === 'edit' ? 'Edit project' : mode === 'new' ? 'New project' : 'Quick start'}
+            {mode === 'edit' ? t('ps.eyebrow.edit') : mode === 'new' ? t('ps.eyebrow.new') : t('ps.eyebrow.quick')}
           </div>
         </div>
         <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight">
-          {mode === 'edit' ? 'Update your project'
-            : mode === 'new' ? 'Set up a new project'
-            : 'What are you working on?'}
+          {mode === 'edit' ? t('ps.title.edit')
+            : mode === 'new' ? t('ps.title.new')
+            : t('ps.title.first')}
         </h1>
         <p className="text-gray-500 mt-2 leading-relaxed">
-          {mode === 'edit'
-            ? 'Changes apply to every section — account finder, feed watcher, content engine.'
-            : mode === 'new'
-              ? 'You can only have one active project at a time, so this replaces your current one — its tracked accounts, posts and voice are cleared, and the new project starts fresh. You stay signed in.'
-              : 'Just a name to get started. Add your pitch and audience anytime — they sharpen what the AI writes, but you can jump straight in.'}
+          {mode === 'edit' ? t('ps.desc.edit')
+            : mode === 'new' ? t('ps.desc.new')
+            : t('ps.desc.first')}
         </p>
 
         {/* Progress — only meaningful when more than one field is required */}
@@ -223,13 +224,13 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
       <div className={`bg-white ${!isFirstTime ? 'mx-8' : ''} rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5`}>
         <FieldRow
           icon={<Tag size={14} />}
-          label="Product name"
+          label={t('ps.productName.label')}
           required
           error={errors.productName}>
           <input
             value={form.productName || ''}
             onChange={e => update('productName', e.target.value)}
-            placeholder="e.g. Viraholic"
+            placeholder={t('ps.productName.ph')}
             autoFocus
             onKeyDown={e => { if (e.key === 'Enter' && isFirstTime) handleSubmit(); }}
             className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-base font-medium transition-colors" />
@@ -252,8 +253,8 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
         style={mode === 'edit' ? { width: 'calc(100% - 4rem)' } : {}}>
         <span className="flex items-center gap-2">
           <Sparkles size={14} className="text-amber-500" />
-          <span className="text-sm font-bold text-gray-700">{isFirstTime ? 'Add details now' : 'Optional details'}</span>
-          <span className="text-[10px] text-gray-400 font-medium hidden sm:inline">— sharpens AI output (you can do this later)</span>
+          <span className="text-sm font-bold text-gray-700">{isFirstTime ? t('ps.optional.addNow') : t('ps.optional.optional')}</span>
+          <span className="text-[10px] text-gray-400 font-medium hidden sm:inline">{t('ps.optional.hint')}</span>
         </span>
         {showOptional ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
       </button>
@@ -270,48 +271,48 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
             </>
           )}
 
-          <FieldRow icon={<Swords size={14} />} label="Unique value / wedge">
+          <FieldRow icon={<Swords size={14} />} label={t('ps.value.label')}>
             <textarea
               value={form.valueProposition || ''}
               onChange={e => update('valueProposition', e.target.value)}
-              placeholder="e.g. The only inbound-radar that works without Twitter/LinkedIn API keys (uses a stealth browser extension)."
+              placeholder={t('ps.value.ph')}
               rows={2}
               className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-sm resize-none transition-colors" />
           </FieldRow>
 
-          <FieldRow icon={<DollarSign size={14} />} label="Pricing model">
+          <FieldRow icon={<DollarSign size={14} />} label={t('ps.pricing.label')}>
             <input
               value={form.pricingModel || ''}
               onChange={e => update('pricingModel', e.target.value)}
-              placeholder="e.g. Free tier + $29/mo Pro · $99/mo Team"
+              placeholder={t('ps.pricing.ph')}
               className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-sm transition-colors" />
           </FieldRow>
 
-          <FieldRow icon={<Swords size={14} />} label="Known competitors (comma-separated)">
+          <FieldRow icon={<Swords size={14} />} label={t('ps.competitors.label')}>
             <input
               value={form.competitors || ''}
               onChange={e => update('competitors', e.target.value)}
-              placeholder="e.g. Common Room, Apollo, Clay"
+              placeholder={t('ps.competitors.ph')}
               className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-sm transition-colors" />
           </FieldRow>
 
-          <FieldRow icon={<TrendingUp size={14} />} label="Current stage">
+          <FieldRow icon={<TrendingUp size={14} />} label={t('ps.stage.label')}>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {STAGE_OPTIONS.map(s => (
                 <button key={s.value} type="button" onClick={() => update('stage', s.value)}
-                  className={`text-left p-3 rounded-xl border-2 transition-all ${
+                  className={`text-start p-3 rounded-xl border-2 transition-all ${
                     form.stage === s.value
                       ? 'border-primary bg-primary/5'
                       : 'border-gray-200 hover:border-gray-300 bg-white'
                   }`}>
-                  <div className={`text-sm font-bold ${form.stage === s.value ? 'text-primary' : 'text-gray-900'}`}>{s.label}</div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">{s.desc}</div>
+                  <div className={`text-sm font-bold ${form.stage === s.value ? 'text-primary' : 'text-gray-900'}`}>{t(s.label)}</div>
+                  <div className="text-[10px] text-gray-500 mt-0.5">{t(s.desc)}</div>
                 </button>
               ))}
             </div>
           </FieldRow>
 
-          <FieldRow icon={<Globe size={14} />} label="Website / landing URL">
+          <FieldRow icon={<Globe size={14} />} label={t('ps.website.label')}>
             <input
               value={form.websiteUrl || ''}
               onChange={e => update('websiteUrl', e.target.value)}
@@ -319,11 +320,11 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
               className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-sm font-mono transition-colors" />
           </FieldRow>
 
-          <FieldRow icon={<Flag size={14} />} label="Primary goal (next 90 days)">
+          <FieldRow icon={<Flag size={14} />} label={t('ps.goal.label')}>
             <input
               value={form.primaryGoal || ''}
               onChange={e => update('primaryGoal', e.target.value)}
-              placeholder="e.g. Reach 100 paying users at $29/mo MRR"
+              placeholder={t('ps.goal.ph')}
               className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:border-primary focus:bg-white text-sm transition-colors" />
           </FieldRow>
         </div>
@@ -334,20 +335,20 @@ export const ProjectSetup: React.FC<Props> = ({ mode = 'first-time', onClose }) 
         {!isFirstTime && onClose && (
           <button onClick={onClose}
             className="px-6 py-3 text-gray-500 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
-            Cancel
+            {t('common.cancel')}
           </button>
         )}
         <button onClick={handleSubmit}
           className="flex-1 flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-primary to-blue-600 text-white font-bold text-base rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:scale-[1.01] active:scale-100 transition-all">
           <Check size={18} />
-          {mode === 'edit' ? 'Save changes' : mode === 'new' ? 'Create project' : 'Start'}
+          {mode === 'edit' ? t('ps.submit.edit') : mode === 'new' ? t('ps.submit.new') : t('ps.submit.first')}
         </button>
       </div>
 
       {/* Footer hint — only on first-time */}
       {isFirstTime && (
         <p className="text-[11px] text-gray-400 text-center mt-4 font-medium">
-          Everything is stored locally — never sent anywhere except to the AI sections you trigger manually.
+          {t('ps.footerHint')}
         </p>
       )}
     </>
@@ -379,7 +380,9 @@ const FieldRow: React.FC<{
   required?: boolean;
   error?: boolean;
   children: React.ReactNode;
-}> = ({ icon, label, hint, required, error, children }) => (
+}> = ({ icon, label, hint, required, error, children }) => {
+  const t = useT();
+  return (
   <div>
     <div className="flex items-center justify-between mb-1.5">
       <label className="flex items-center gap-1.5 text-xs font-black tracking-widest uppercase text-gray-600">
@@ -387,16 +390,18 @@ const FieldRow: React.FC<{
         {label}
         {required && <span className="text-rose-500">*</span>}
       </label>
-      {error && <span className="text-[10px] text-rose-500 font-bold">Required</span>}
+      {error && <span className="text-[10px] text-rose-500 font-bold">{t('ps.required')}</span>}
     </div>
     {hint && <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">{hint}</p>}
     <div className={error ? 'ring-2 ring-rose-200 rounded-xl' : ''}>{children}</div>
   </div>
-);
+  );
+};
 
 // ─── Compact project summary card (used in sidebar / dashboard) ───────
 export const ProjectSummaryCard: React.FC<{ onEdit: () => void; compact?: boolean }> = ({ onEdit, compact }) => {
   const { project } = useProject();
+  const t = useT();
   if (!project) return null;
 
   if (compact) {
@@ -410,10 +415,10 @@ export const ProjectSummaryCard: React.FC<{ onEdit: () => void; compact?: boolea
             </div>
             <div className="min-w-0 flex-1">
               <div className="font-bold text-sm text-gray-900 truncate leading-tight">{project.productName}</div>
-              <div className="text-[10px] text-gray-500 font-medium truncate leading-tight">{project.category || 'Add details'}</div>
+              <div className="text-[10px] text-gray-500 font-medium truncate leading-tight">{project.category || t('ps.summary.addDetails')}</div>
             </div>
           </div>
-          <span className="text-[9px] font-black tracking-widest uppercase text-primary opacity-0 group-hover:opacity-100 transition-opacity">Edit</span>
+          <span className="text-[9px] font-black tracking-widest uppercase text-primary opacity-0 group-hover:opacity-100 transition-opacity">{t('common.edit')}</span>
         </div>
       </button>
     );
@@ -426,14 +431,14 @@ export const ProjectSummaryCard: React.FC<{ onEdit: () => void; compact?: boolea
       className="group inline-flex items-center gap-2 px-3 py-1.5 mb-6 rounded-full border border-gray-200 bg-white
                  hover:border-gray-400 hover:shadow-sm
                  transition-all duration-200 ease-out active:scale-[0.98]"
-      title="Edit project"
+      title={t('dash.badge.editTitle')}
     >
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
       <span className="text-xs font-medium text-gray-900">{project.productName}</span>
       {project.stage && (
         <span className="text-[10px] text-gray-400">· {project.stage}</span>
       )}
-      <span className="text-[10px] text-gray-300 group-hover:text-gray-600 transition-colors duration-200">Edit</span>
+      <span className="text-[10px] text-gray-300 group-hover:text-gray-600 transition-colors duration-200">{t('common.edit')}</span>
     </button>
   );
 };
