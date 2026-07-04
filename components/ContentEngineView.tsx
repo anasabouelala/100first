@@ -676,7 +676,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                             title={t('ce.voice.title')}
                             subtitle={
                                 activePreset
-                                    ? `${t('vs.save.preset')} · ${VOICE_PRESETS.find(p => p.id === activePreset)?.name} · ${t('ce.voice.variants', { n: variants })}`
+                                    ? `${t('vs.save.preset')} · ${t('va.preset.' + activePreset)} · ${t('ce.voice.variants', { n: variants })}`
                                     : `${t('vs.save.customVoice')} · ${t('ce.voice.variantsPer', { n: variants })}`
                             }
                             aside={
@@ -700,10 +700,10 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                 / vp.applyPreset that Voice Studio writes to. */}
                             {(() => {
                                 const activeName = activePreset
-                                    ? VOICE_PRESETS.find(p => p.id === activePreset)?.name || 'Preset'
+                                    ? t('va.preset.' + activePreset)
                                     : (vp.aiSuggestionReason?.startsWith('Saved profile · ')
                                         ? vp.aiSuggestionReason.replace('Saved profile · ', '')
-                                        : 'Custom profile');
+                                        : t('ce.voice.customShort'));
                                 const activeEmoji = activePreset
                                     ? VOICE_PRESETS.find(p => p.id === activePreset)?.emoji || '🎙️'
                                     : '🎙️';
@@ -745,7 +745,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                                                 >
                                                                     <span className="flex items-center gap-2 min-w-0">
                                                                         <span>{p.emoji}</span>
-                                                                        <span className="text-[12px] font-bold truncate">{p.name}</span>
+                                                                        <span className="text-[12px] font-bold truncate">{t('va.preset.' + p.id)}</span>
                                                                     </span>
                                                                     {isActive && <Check size={12} className="text-white flex-shrink-0" />}
                                                                 </button>
@@ -993,7 +993,7 @@ export const VoiceArchitectureSection: React.FC<{
         title={t('ce.voice.title')}
         subtitle={
             aiSuggestionReason ? aiSuggestionReason :
-            activePreset ? `${t('vs.save.preset')} · ${VOICE_PRESETS.find(p => p.id === activePreset)?.name}` :
+            activePreset ? `${t('vs.save.preset')} · ${t('va.preset.' + activePreset)}` :
             t('va.customProfile')
         }
         aside={
@@ -1170,6 +1170,7 @@ const PresetChip: React.FC<{
     active: boolean;
     onApply: () => void;
 }> = ({ preset, active, onApply }) => {
+    const t = useT();
     const [hover, setHover] = React.useState(false);
     return (
         <span
@@ -1186,7 +1187,7 @@ const PresetChip: React.FC<{
                         : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
                 }`}
             >
-                <span>{preset.emoji}</span> {preset.name}
+                <span>{preset.emoji}</span> {t('va.preset.' + preset.id)}
             </button>
             {hover && (
                 <div
@@ -1194,12 +1195,12 @@ const PresetChip: React.FC<{
                     className="absolute left-0 top-full mt-2 z-40 w-80 max-w-[20rem] p-3 bg-gray-900 text-white rounded-xl shadow-2xl pointer-events-none animate-fade-in"
                 >
                     <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-amber-300 mb-1.5">
-                        <span>{preset.emoji}</span> Example in this voice
+                        <span>{preset.emoji}</span> {t('va.preset.example')}
                     </div>
-                    <p className="text-[11px] text-white/60 mb-2 italic">{preset.tagline}</p>
+                    <p className="text-[11px] text-white/60 mb-2 italic">{t('va.preset.' + preset.id + '.t')}</p>
                     <pre className="text-[12px] text-white/90 whitespace-pre-wrap leading-relaxed font-sans">{preset.example}</pre>
                     <div className="mt-2 pt-2 border-t border-white/10 text-[10px] uppercase tracking-widest text-white/40">
-                        Click chip to apply
+                        {t('va.preset.apply')}
                     </div>
                 </div>
             )}
