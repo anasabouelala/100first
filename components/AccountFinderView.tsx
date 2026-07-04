@@ -156,10 +156,10 @@ function computeInfluence(a: DiscoveredAccount): number {
 }
 
 function influenceLabel(score: number): { label: string; tone: string } {
-  if (score >= 80) return { label: 'Heavyweight', tone: 'text-rose-600' };
-  if (score >= 60) return { label: 'Strong',      tone: 'text-orange-600' };
-  if (score >= 40) return { label: 'Solid',       tone: 'text-amber-600' };
-  return { label: 'Light', tone: 'text-gray-500' };
+  if (score >= 80) return { label: 'af.inf.heavyweight', tone: 'text-rose-600' };
+  if (score >= 60) return { label: 'af.inf.strong',      tone: 'text-orange-600' };
+  if (score >= 40) return { label: 'af.inf.solid',       tone: 'text-amber-600' };
+  return { label: 'af.inf.light', tone: 'text-gray-500' };
 }
 
 // Tier from final score 0..100.
@@ -292,11 +292,11 @@ export const AccountFinderView: React.FC = () => {
   const runAIFinder = async () => {
     setSearchError(null);
     if (!niche.trim() && keywords.length === 0) {
-      setSearchError('Add a niche description or at least one keyword to search for.');
+      setSearchError(t('af.err.noNiche'));
       return;
     }
     if (!isGeminiConfigured()) {
-      setSearchError('AI client is not configured. Check services/geminiService.ts.');
+      setSearchError(t('af.err.notConfigured'));
       return;
     }
     setSearching(true);
@@ -324,11 +324,11 @@ export const AccountFinderView: React.FC = () => {
         return [...fresh, ...prev].slice(0, 500);
       });
       if (mapped.length === 0) {
-        setSearchError('The AI returned no matches. Try broadening your niche or relaxing the engagement bar.');
+        setSearchError(t('af.err.noMatches'));
       }
     } catch (e: any) {
       console.error('[AccountFinder] AI search failed:', e);
-      setSearchError(e?.message || 'AI search failed. Check the console for details.');
+      setSearchError(e?.message || t('af.err.failed'));
     } finally {
       setSearching(false);
     }
@@ -405,7 +405,7 @@ export const AccountFinderView: React.FC = () => {
   // Lets users watch accounts the discovery search didn't surface.
   const addManualAccount = (platform: DiscoveryPlatform, input: string): { ok: boolean; error?: string } => {
     const cleaned = input.trim();
-    if (!cleaned) return { ok: false, error: 'Enter a handle or URL' };
+    if (!cleaned) return { ok: false, error: t('af.err.enterHandle') };
 
     let handle = '';
     let url = '';
@@ -414,13 +414,13 @@ export const AccountFinderView: React.FC = () => {
         const m = cleaned.match(/(?:x\.com|twitter\.com)\/(@?)([A-Za-z0-9_]{1,15})/i)
               ||  cleaned.match(/^@?([A-Za-z0-9_]{1,15})$/);
         handle = (m && (m[2] || m[1])) || '';
-        if (!handle) return { ok: false, error: 'Invalid X handle' };
+        if (!handle) return { ok: false, error: t('af.err.invalidX') };
         url = `https://x.com/${handle}`;
       } else if (platform === 'LinkedIn') {
         const m = cleaned.match(/linkedin\.com\/in\/([^/?#\s]+)/i)
               ||  cleaned.match(/^([A-Za-z0-9-]{3,})$/);
         handle = (m && m[1]) || '';
-        if (!handle) return { ok: false, error: 'Use the full /in/ URL or the slug' };
+        if (!handle) return { ok: false, error: t('af.err.invalidLinkedIn') };
         url = `https://www.linkedin.com/in/${handle}/`;
       } else if (platform === 'Reddit') {
         // Reddit tracking targets subreddits, so accept r/name or full URL
@@ -428,14 +428,14 @@ export const AccountFinderView: React.FC = () => {
               ||  cleaned.match(/^r\/([^/\s]+)$/i)
               ||  cleaned.match(/^([A-Za-z0-9_]{3,})$/);
         const name = (m && m[1]) || '';
-        if (!name) return { ok: false, error: 'Use r/name or the subreddit URL' };
+        if (!name) return { ok: false, error: t('af.err.invalidReddit') };
         handle = `r/${name}`;
         url = `https://www.reddit.com/r/${name}/`;
       } else {
-        return { ok: false, error: 'Unsupported platform' };
+        return { ok: false, error: t('af.err.unsupported') };
       }
     } catch {
-      return { ok: false, error: 'Could not parse input' };
+      return { ok: false, error: t('af.err.parse') };
     }
 
     // Avoid duplicates — if the URL already exists, just (re-)track it.
@@ -458,7 +458,7 @@ export const AccountFinderView: React.FC = () => {
       authorityScore: 50,
       nicheMatch: 50,
       finalScore: 50,
-      matchedSignals: ['Manually added'],
+      matchedSignals: [t('af.err.manuallyAdded')],
       tier: 'B' as AccountTier,
       discoveredAt: now,
       trackingStatus: 'untracked'
@@ -629,7 +629,7 @@ export const AccountFinderView: React.FC = () => {
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-medium bg-white text-gray-800 outline-none hover:border-gray-400 focus:border-gray-400 transition-colors"
               >
                 {COUNTRY_OPTIONS.map(c => (
-                  <option key={c.id} value={c.id}>{c.id === 'any' ? t('af.country.worldwide') : c.label}</option>
+                  <option key={c.id} value={c.id}>{c.id === 'any' ? t('af.country.worldwide') : t('af.country.opt.' + c.id)}</option>
                 ))}
               </select>
               {country === 'custom' && (
@@ -800,6 +800,7 @@ export const AccountFinderView: React.FC = () => {
 const ManualAddForm: React.FC<{
   onAdd: (platform: DiscoveryPlatform, input: string) => { ok: boolean; error?: string };
 }> = ({ onAdd }) => {
+  const t = useT();
   const [platform, setPlatform] = useState<DiscoveryPlatform>('X');
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
@@ -813,7 +814,7 @@ const ManualAddForm: React.FC<{
       setSuccess(true);
       setTimeout(() => setSuccess(false), 1500);
     } else {
-      setError(res.error || 'Could not add');
+      setError(res.error || t('af.manual.error'));
     }
   };
 
@@ -844,11 +845,11 @@ const ManualAddForm: React.FC<{
           disabled={!input.trim()}
           className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-lg text-xs font-medium transition-all duration-200 ease-out active:scale-[0.97]"
         >
-          <Plus size={13} /> Add &amp; track
+          <Plus size={13} /> {t('af.manual.add')}
         </button>
       </div>
       {error && <div className="text-[11px] text-rose-600 flex items-center gap-1.5"><AlertTriangle size={11} /> {error}</div>}
-      {success && <div className="text-[11px] text-emerald-700 flex items-center gap-1.5"><Check size={11} /> Added — first scan will run shortly.</div>}
+      {success && <div className="text-[11px] text-emerald-700 flex items-center gap-1.5"><Check size={11} /> {t('af.manual.added')}</div>}
     </div>
   );
 };
@@ -1150,6 +1151,7 @@ const ConfigurationPanel: React.FC<any> = ({
 const LiveMissionConsole: React.FC<{ mission: DiscoveryMission; onPause: () => void; onResume: () => void; onAbort: () => void }> = ({
   mission, onPause, onResume, onAbort
 }) => {
+  const t = useT();
   const progressPct = mission.progress.totalQueriesPlanned > 0
     ? Math.round((mission.progress.queriesCompleted / mission.progress.totalQueriesPlanned) * 100)
     : 0;
@@ -1161,11 +1163,11 @@ const LiveMissionConsole: React.FC<{ mission: DiscoveryMission; onPause: () => v
     <div className="space-y-4">
       {/* Top Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatCard label="Doing" value={mission.progress.phase || 'Waiting'} icon={<Activity size={16} />} primary />
-        <StatCard label="Looked at" value={mission.progress.candidatesScanned.toString()} icon={<FileSearch size={16} />} />
-        <StatCard label="Found" value={mission.progress.matched.toString()} icon={<Target size={16} />} accent />
-        <StatCard label="Skipped" value={mission.progress.rejected.toString()} icon={<X size={16} />} />
-        <StatCard label="Time" value={`${minutes}:${seconds.toString().padStart(2, '0')}`} icon={<Clock size={16} />} />
+        <StatCard label={t('af.live.doing')} value={mission.progress.phase || t('af.live.waiting')} icon={<Activity size={16} />} primary />
+        <StatCard label={t('af.live.lookedAt')} value={mission.progress.candidatesScanned.toString()} icon={<FileSearch size={16} />} />
+        <StatCard label={t('af.live.found')} value={mission.progress.matched.toString()} icon={<Target size={16} />} accent />
+        <StatCard label={t('af.live.skipped')} value={mission.progress.rejected.toString()} icon={<X size={16} />} />
+        <StatCard label={t('af.live.time')} value={`${minutes}:${seconds.toString().padStart(2, '0')}`} icon={<Clock size={16} />} />
       </div>
 
       {/* Progress Bar */}
@@ -1174,22 +1176,22 @@ const LiveMissionConsole: React.FC<{ mission: DiscoveryMission; onPause: () => v
           <div className="flex items-center gap-3">
             <div className="bg-primary/10 p-2 rounded-xl"><Loader2 size={16} className="text-primary animate-spin" /></div>
             <div>
-              <div className="font-bold text-sm">Searching "{mission.name}"</div>
+              <div className="font-bold text-sm">{t('af.live.searching', { name: mission.name })}</div>
               <div className="text-[10px] text-gray-500 uppercase tracking-widest">{mission.mode} · {mission.filters.platforms.join(' + ')}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {mission.status === 'paused' ? (
               <button onClick={onResume} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-emerald-700">
-                <Play size={14} /> Resume
+                <Play size={14} /> {t('af.live.resume')}
               </button>
             ) : (
               <button onClick={onPause} className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-amber-600">
-                <Pause size={14} /> Pause
+                <Pause size={14} /> {t('af.live.pause')}
               </button>
             )}
             <button onClick={onAbort} className="px-4 py-2 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-red-100">
-              <StopCircle size={14} /> Stop
+              <StopCircle size={14} /> {t('af.live.stop')}
             </button>
           </div>
         </div>
@@ -1200,7 +1202,7 @@ const LiveMissionConsole: React.FC<{ mission: DiscoveryMission; onPause: () => v
           />
         </div>
         <div className="flex justify-between mt-2 text-[10px] uppercase tracking-widest font-bold text-gray-500">
-          <span>{mission.progress.queriesCompleted} / {mission.progress.totalQueriesPlanned} searches done</span>
+          <span>{t('af.live.searchesDone', { done: mission.progress.queriesCompleted, total: mission.progress.totalQueriesPlanned })}</span>
           <span>{progressPct}%</span>
         </div>
       </div>
@@ -1212,16 +1214,16 @@ const LiveMissionConsole: React.FC<{ mission: DiscoveryMission; onPause: () => v
           <div className="flex items-center justify-between mb-3 flex-shrink-0">
             <div className="flex items-center gap-2">
               <Terminal size={16} className="text-emerald-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Live Activity</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">{t('af.live.activity')}</span>
             </div>
-            <div className="text-[10px] text-gray-500 font-mono">{mission.logs.length} events</div>
+            <div className="text-[10px] text-gray-500 font-mono">{t('af.live.events', { n: mission.logs.length })}</div>
           </div>
           <div className="flex-1 overflow-y-auto font-mono text-[11px] space-y-1 pr-2">
             {mission.logs.slice(-100).map((log, idx) => (
               <LogLine key={idx} log={log} />
             ))}
             {mission.logs.length === 0 && (
-              <div className="text-gray-600 italic">Waiting for the search to start...</div>
+              <div className="text-gray-600 italic">{t('af.live.waitingStart')}</div>
             )}
             <div ref={(el) => { if (el) el.scrollIntoView(); }} />
           </div>
@@ -1232,6 +1234,7 @@ const LiveMissionConsole: React.FC<{ mission: DiscoveryMission; onPause: () => v
 };
 
 const StealthPanel: React.FC<{ stealth: StealthState; status: MissionStatus }> = ({ stealth, status }) => {
+  const t = useT();
   const score = stealth.humanizedBehaviorScore;
   const scoreColor = score > 80 ? 'emerald' : score > 60 ? 'amber' : 'red';
   return (
@@ -1239,24 +1242,24 @@ const StealthPanel: React.FC<{ stealth: StealthState; status: MissionStatus }> =
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           {stealth.detected ? <ShieldOff size={16} className="text-red-400" /> : <ShieldCheck size={16} className="text-emerald-400" />}
-          <span className="text-[10px] font-black uppercase tracking-widest">{stealth.detected ? 'Risk detected' : 'Account safe'}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest">{stealth.detected ? t('af.stealth.risk') : t('af.stealth.safe')}</span>
         </div>
       </div>
       <div className="text-center mb-4">
         <div className={`text-5xl font-display font-bold text-${scoreColor}-400`}>{score}</div>
-        <div className="text-[9px] uppercase tracking-widest text-gray-400 mt-1">Safety score</div>
+        <div className="text-[9px] uppercase tracking-widest text-gray-400 mt-1">{t('af.stealth.score')}</div>
       </div>
       <div className="space-y-2 text-[11px]">
-        <StealthMetric label="Actions per minute" value={`${stealth.actionsThisMinute} / ${stealth.rateLimit}`} />
-        <StealthMetric label="Total actions" value={stealth.actionsThisSession.toString()} />
-        <StealthMetric label="Next action in" value={stealth.nextActionInMs > 0 ? `${(stealth.nextActionInMs / 1000).toFixed(1)}s` : 'now'} />
+        <StealthMetric label={t('af.stealth.actionsPerMin')} value={`${stealth.actionsThisMinute} / ${stealth.rateLimit}`} />
+        <StealthMetric label={t('af.stealth.totalActions')} value={stealth.actionsThisSession.toString()} />
+        <StealthMetric label={t('af.stealth.nextAction')} value={stealth.nextActionInMs > 0 ? `${(stealth.nextActionInMs / 1000).toFixed(1)}s` : t('af.stealth.now')} />
         {stealth.cooldownUntil && stealth.cooldownUntil > Date.now() && (
-          <StealthMetric label="Resting for" value={`${Math.ceil((stealth.cooldownUntil - Date.now()) / 1000)}s`} alert />
+          <StealthMetric label={t('af.stealth.resting')} value={`${Math.ceil((stealth.cooldownUntil - Date.now()) / 1000)}s`} alert />
         )}
       </div>
       {stealth.patternsDetected.length > 0 && (
         <div className="mt-4 pt-4 border-t border-white/10">
-          <div className="text-[9px] uppercase tracking-widest text-amber-400 font-bold mb-2">Patterns Detected</div>
+          <div className="text-[9px] uppercase tracking-widest text-amber-400 font-bold mb-2">{t('af.stealth.patterns')}</div>
           {stealth.patternsDetected.map((p, i) => (
             <div key={i} className="text-[10px] text-amber-200">• {p}</div>
           ))}
@@ -1264,7 +1267,7 @@ const StealthPanel: React.FC<{ stealth: StealthState; status: MissionStatus }> =
       )}
       {stealth.detected && stealth.detectionReason && (
         <div className="mt-4 pt-4 border-t border-red-700/50">
-          <div className="text-[9px] uppercase tracking-widest text-red-300 font-bold mb-2">Reason</div>
+          <div className="text-[9px] uppercase tracking-widest text-red-300 font-bold mb-2">{t('af.stealth.reason')}</div>
           <div className="text-[10px] text-red-200">{stealth.detectionReason}</div>
         </div>
       )}
@@ -1298,6 +1301,7 @@ const LogLine: React.FC<{ log: MissionLog }> = ({ log }) => {
 };
 
 const CompletedMissionBanner: React.FC<{ mission: DiscoveryMission; onDismiss: () => void }> = ({ mission, onDismiss }) => {
+  const t = useT();
   const isSuccess = mission.status === 'completed';
   return (
     <div className={`p-6 rounded-3xl border-2 ${
@@ -1309,16 +1313,16 @@ const CompletedMissionBanner: React.FC<{ mission: DiscoveryMission; onDismiss: (
         </div>
         <div>
           <div className="font-bold text-base">
-            Search {mission.status === 'completed' ? 'finished' : mission.status === 'aborted' ? 'stopped' : 'failed'}
+            {mission.status === 'completed' ? t('af.done.finished') : mission.status === 'aborted' ? t('af.done.stopped') : t('af.done.failed')}
           </div>
           <div className="text-sm text-gray-600">
-            <span className="font-bold">{mission.results.length}</span> accounts found ·
-            <span className="font-bold ml-1">{mission.progress.queriesCompleted}</span> searches done
+            <span className="font-bold">{mission.results.length}</span> {t('af.done.accountsFound')} ·
+            <span className="font-bold ml-1">{mission.progress.queriesCompleted}</span> {t('af.done.searchesDone')}
           </div>
         </div>
       </div>
       <button onClick={onDismiss} className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold hover:bg-gray-50">
-        Close
+        {t('af.done.close')}
       </button>
     </div>
   );
@@ -1340,6 +1344,7 @@ const ResultsPanel: React.FC<{
   onToggleAutoReply: (a: DiscoveredAccount, enabled: boolean) => void;
   onRefreshAccount: (a: DiscoveredAccount) => void;
 }> = ({ results, totalCount, resultFilter, setResultFilter, resultSort, setResultSort, onTrack, onDismiss, onUntrack, onInspect, onTrackBatch, autoReplyByUrl, onToggleAutoReply, onRefreshAccount }) => {
+  const t = useT();
   const tierCounts = useMemo(() => ({
     S: results.filter(r => r.tier === 'S').length,
     A: results.filter(r => r.tier === 'A').length,
@@ -1353,8 +1358,8 @@ const ResultsPanel: React.FC<{
         <div className="flex items-center gap-3">
           <div className="bg-gray-900 p-2 rounded-xl"><Users size={18} className="text-white" /></div>
           <div>
-            <h2 className="font-bold text-lg">Accounts found</h2>
-            <p className="text-xs text-gray-500">{totalCount} total · {results.length} shown</p>
+            <h2 className="font-bold text-lg">{t('af.res.title')}</h2>
+            <p className="text-xs text-gray-500">{t('af.res.count', { total: totalCount, shown: results.length })}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1362,30 +1367,30 @@ const ResultsPanel: React.FC<{
             onClick={() => onTrackBatch(results.filter(r => r.trackingStatus === 'untracked').slice(0, 10))}
             className="px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-gray-800"
           >
-            <Radar size={14} /> Track top 10
+            <Radar size={14} /> {t('af.res.trackTop')}
           </button>
         </div>
       </div>
 
       {/* Filter Tabs */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
-        <FilterChip active={resultFilter === 'all'} onClick={() => setResultFilter('all')} label="All" count={results.length} />
-        <FilterChip active={resultFilter === 'untracked'} onClick={() => setResultFilter('untracked')} label="Not tracked" />
-        <FilterChip active={resultFilter === 'S'} onClick={() => setResultFilter('S')} label="Best" count={tierCounts.S} color="purple" />
-        <FilterChip active={resultFilter === 'A'} onClick={() => setResultFilter('A')} label="Great" count={tierCounts.A} color="indigo" />
-        <FilterChip active={resultFilter === 'B'} onClick={() => setResultFilter('B')} label="Good" count={tierCounts.B} color="blue" />
-        <FilterChip active={resultFilter === 'C'} onClick={() => setResultFilter('C')} label="Maybe" count={tierCounts.C} color="gray" />
+        <FilterChip active={resultFilter === 'all'} onClick={() => setResultFilter('all')} label={t('af.filter.all')} count={results.length} />
+        <FilterChip active={resultFilter === 'untracked'} onClick={() => setResultFilter('untracked')} label={t('af.filter.untracked')} />
+        <FilterChip active={resultFilter === 'S'} onClick={() => setResultFilter('S')} label={t('af.filter.best')} count={tierCounts.S} color="purple" />
+        <FilterChip active={resultFilter === 'A'} onClick={() => setResultFilter('A')} label={t('af.filter.great')} count={tierCounts.A} color="indigo" />
+        <FilterChip active={resultFilter === 'B'} onClick={() => setResultFilter('B')} label={t('af.filter.good')} count={tierCounts.B} color="blue" />
+        <FilterChip active={resultFilter === 'C'} onClick={() => setResultFilter('C')} label={t('af.filter.maybe')} count={tierCounts.C} color="gray" />
         <div className="ml-auto">
           <select
             value={resultSort}
             onChange={(e) => setResultSort(e.target.value as typeof resultSort)}
             className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white"
           >
-            <option value="score">Sort: Best match</option>
-            <option value="influence">Sort: Influence</option>
-            <option value="engagement">Sort: Engagement</option>
-            <option value="lastpost">Sort: Most recently active</option>
-            <option value="recent">Sort: Newest discovery</option>
+            <option value="score">{t('af.sort.score')}</option>
+            <option value="influence">{t('af.sort.influence')}</option>
+            <option value="engagement">{t('af.sort.engagement')}</option>
+            <option value="lastpost">{t('af.sort.lastpost')}</option>
+            <option value="recent">{t('af.sort.recent')}</option>
           </select>
         </div>
       </div>
@@ -1395,12 +1400,12 @@ const ResultsPanel: React.FC<{
         {/* Sticky column header — labels every numeric KPI and the action column. */}
         <div className="hidden md:grid sticky top-0 z-10 bg-gray-50 border-b border-gray-200 text-[9px] font-bold uppercase tracking-widest text-gray-500"
              style={{ gridTemplateColumns: '1fr 130px 110px 400px', columnGap: '0px' }}>
-          <div className="px-4 py-2.5">Account</div>
-          <div className="px-3 py-2.5 text-center">Match</div>
-          <div className="px-3 py-2.5 text-center" title="Influence = engagement-per-post (50%) + niche match (30%) + reach authority (20%). Higher = more impact when they engage with you.">
-            Influence
+          <div className="px-4 py-2.5">{t('af.col.account')}</div>
+          <div className="px-3 py-2.5 text-center">{t('af.col.match')}</div>
+          <div className="px-3 py-2.5 text-center" title={t('af.col.influence.title')}>
+            {t('af.col.influence')}
           </div>
-          <div className="px-3 py-2.5 text-center">Actions</div>
+          <div className="px-3 py-2.5 text-center">{t('af.col.actions')}</div>
         </div>
         <ul className="divide-y divide-gray-100">
           {results.map(account => (
@@ -1423,7 +1428,7 @@ const ResultsPanel: React.FC<{
       {results.length === 0 && (
         <div className="text-center py-12 text-gray-400">
           <FileSearch size={32} className="mx-auto mb-3 opacity-40" />
-          <div className="text-sm font-bold">No accounts match this filter</div>
+          <div className="text-sm font-bold">{t('af.res.noMatch')}</div>
         </div>
       )}
     </div>
@@ -1447,6 +1452,7 @@ const AccountRow: React.FC<{
   onToggleAutoReply: (enabled: boolean) => void;
   onRefresh: () => void;
 }> = ({ account, onTrack, onDismiss, onUntrack, onInspect, autoReply, onToggleAutoReply, onRefresh }) => {
+  const t = useT();
   const tierConfig: Record<AccountTier, { gradient: string }> = {
     S: { gradient: 'from-purple-500 to-pink-500' },
     A: { gradient: 'from-indigo-500 to-blue-500' },
@@ -1472,10 +1478,10 @@ const AccountRow: React.FC<{
     account.finalScore >= 45 ? '🔥' :
     '';
   const fireLabel =
-    account.finalScore >= 85 ? 'Top match' :
-    account.finalScore >= 65 ? 'Strong match' :
-    account.finalScore >= 45 ? 'Decent match' :
-    'Low match';
+    account.finalScore >= 85 ? t('af.match.top') :
+    account.finalScore >= 65 ? t('af.match.strong') :
+    account.finalScore >= 45 ? t('af.match.decent') :
+    t('af.match.low');
 
   const rowBg =
     isTracked    ? 'bg-emerald-50/70 hover:bg-emerald-50' :
@@ -1503,17 +1509,17 @@ const AccountRow: React.FC<{
               <span className="font-bold text-sm text-gray-900 truncate">{account.displayName || account.handle}</span>
               {account.verified && <Verified size={11} className="text-blue-500 flex-shrink-0" />}
               {isTracked && (
-                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Tracking</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">{t('af.row.tracking')}</span>
               )}
               {isPreliminary && (
                 <span className="text-[9px] font-black uppercase tracking-widest text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded flex items-center gap-1"
-                      title="Score from search card only — will refine after profile visit">
-                  <Loader2 size={8} className="animate-spin" /> Preliminary
+                      title={t('af.row.preliminary.title')}>
+                  <Loader2 size={8} className="animate-spin" /> {t('af.row.preliminary')}
                 </span>
               )}
               {isIncomplete && (
                 <span className="text-[9px] font-black uppercase tracking-widest text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded"
-                      title="Visited profile but post data was unreadable">Incomplete</span>
+                      title={t('af.row.incomplete.title')}>{t('af.row.incomplete')}</span>
               )}
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mt-0.5 flex-wrap">
@@ -1532,7 +1538,7 @@ const AccountRow: React.FC<{
                   className="ml-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold"
                   title={`Reachable Audience: ~${fmt(account.reachableAudience)} of their viewers fit your ICP per post. (followers × ICP match × visibility)`}
                 >
-                  <Target size={9} aria-hidden="true" /> {fmt(account.reachableAudience)} your ppl
+                  <Target size={9} aria-hidden="true" /> {fmt(account.reachableAudience)} {t('af.row.yourPpl')}
                 </span>
               )}
               {/* ── Spotlight Window chip — the urgency cue. */}
@@ -1545,7 +1551,7 @@ const AccountRow: React.FC<{
                   }`}
                   title={`Spotlight Window: ~${account.spotlightWindowMin}m to grab the top-comment slot before replies become invisible.`}
                 >
-                  <Clock size={9} aria-hidden="true" /> {account.spotlightWindowMin}m window
+                  <Clock size={9} aria-hidden="true" /> {t('af.row.window', { n: account.spotlightWindowMin })}
                 </span>
               )}
             </div>
@@ -1554,7 +1560,7 @@ const AccountRow: React.FC<{
 
         {/* ── Match strength ── */}
         <div className="px-3 py-2 md:py-3 flex md:flex-col items-center md:items-center justify-between md:justify-center gap-2 md:gap-0.5">
-          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Match</span>
+          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">{t('af.col.match')}</span>
           <div className="flex flex-col items-center">
             <div className="text-base leading-none">{fires || <span className="text-gray-300">·</span>}</div>
             <div className={`text-[9px] uppercase tracking-widest font-bold mt-0.5 ${
@@ -1568,14 +1574,14 @@ const AccountRow: React.FC<{
 
         {/* ── Influence ── composite signal of audience pull */}
         <div className="px-3 py-2 md:py-3 flex md:flex-col items-center md:items-center justify-between md:justify-center gap-2 md:gap-0.5">
-          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">Influence</span>
+          <span className="md:hidden text-[9px] uppercase tracking-widest font-bold text-gray-400">{t('af.col.influence')}</span>
           {(() => {
             const inf = computeInfluence(account);
             const meta = influenceLabel(inf);
             return (
-              <div className="flex flex-col items-center" title={`Influence ${inf}/100 — engagement-per-post (50%) + niche match (30%) + reach authority (20%)`}>
+              <div className="flex flex-col items-center" title={t('af.col.influence.title')}>
                 <div className={`text-sm font-black tabular-nums ${meta.tone}`}>{inf}</div>
-                <div className={`text-[9px] uppercase tracking-widest font-bold ${meta.tone}`}>{meta.label}</div>
+                <div className={`text-[9px] uppercase tracking-widest font-bold ${meta.tone}`}>{t(meta.label)}</div>
               </div>
             );
           })()}
@@ -1599,47 +1605,47 @@ const AccountRow: React.FC<{
                     ? 'bg-violet-600 text-white border-violet-700 hover:bg-violet-700 shadow-violet-300/40'
                     : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 hover:border-violet-400'
                 }`}
-                title={autoReply ? 'Auto-reply ON — drafts a reply for each new post (you approve before posting). Click to turn off.' : 'Auto-reply OFF — click to draft replies for this account\'s new posts'}
+                title={autoReply ? t('af.row.autoReply.onTitle') : t('af.row.autoReply.offTitle')}
               >
                 <Sparkles size={13} className="flex-shrink-0" />
-                <span>Auto-reply</span>
+                <span>{t('af.row.autoReply')}</span>
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${autoReply ? 'bg-white/25 text-white' : 'bg-violet-200/70 text-violet-800'}`}>
-                  {autoReply ? 'ON' : 'OFF'}
+                  {autoReply ? t('af.row.on') : t('af.row.off')}
                 </span>
               </button>
               <button
                 onClick={onUntrack}
                 className="group/untrack h-8 px-3 bg-emerald-600 text-white rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-rose-600 transition-colors whitespace-nowrap"
-                title="Stop tracking this account"
+                title={t('af.row.untrack.title')}
               >
                 <CheckCircle2 size={12} className="group-hover/untrack:hidden flex-shrink-0" />
                 <X size={12} className="hidden group-hover/untrack:inline flex-shrink-0" />
-                <span className="group-hover/untrack:hidden">Tracking</span>
-                <span className="hidden group-hover/untrack:inline">Untrack</span>
+                <span className="group-hover/untrack:hidden">{t('af.row.tracking')}</span>
+                <span className="hidden group-hover/untrack:inline">{t('af.row.untrack')}</span>
               </button>
               </>
             ) : isDismissed ? (
               <button
                 onClick={onTrack}
                 className="flex-1 md:w-[100px] h-8 px-2 bg-gray-100 text-gray-500 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-gray-200 transition-colors"
-                title="Restore (track this account)"
+                title={t('af.row.restore.title')}
               >
-                <Radar size={12} /> Skipped
+                <Radar size={12} /> {t('af.row.skipped')}
               </button>
             ) : (
               <>
                 <button
                   onClick={onTrack}
                   className="flex-1 md:w-[68px] h-8 px-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-                  title="Watch this account for new posts"
+                  title={t('af.row.track.title')}
                 >
-                  <Radar size={12} /> Track
+                  <Radar size={12} /> {t('af.row.track')}
                 </button>
                 <button
                   onClick={onDismiss}
                   className="w-[28px] h-8 flex-shrink-0 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center justify-center"
-                  title="Skip"
-                  aria-label="Skip"
+                  title={t('af.row.skip')}
+                  aria-label={t('af.row.skip')}
                 >
                   <X size={13} />
                 </button>
@@ -1654,17 +1660,17 @@ const AccountRow: React.FC<{
                 : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'
             }`}
             title={(!account.followers || account.followers === 0)
-              ? "Followers missing — click to re-fetch metrics (log in to the platform in this browser first if it's behind a login wall)"
-              : "Refresh metrics (followers, verified, name)"}
-            aria-label="Refresh metrics"
+              ? t('af.row.refresh.missingTitle')
+              : t('af.row.refresh.title')}
+            aria-label={t('af.row.refresh')}
           >
             <RotateCw size={13} />
           </button>
           <button
             onClick={onInspect}
             className="w-[28px] h-8 flex-shrink-0 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center justify-center"
-            title="Inspect details"
-            aria-label="Inspect"
+            title={t('af.row.inspect.title')}
+            aria-label={t('af.row.inspect')}
           >
             <Eye size={13} />
           </button>
@@ -1673,8 +1679,8 @@ const AccountRow: React.FC<{
             target="_blank"
             rel="noopener noreferrer"
             className="w-[28px] h-8 flex-shrink-0 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center justify-center"
-            title="Open profile in new tab"
-            aria-label="Open profile"
+            title={t('af.row.openProfile.title')}
+            aria-label={t('af.row.openProfile')}
           >
             <ExternalLink size={13} />
           </a>
@@ -1690,6 +1696,7 @@ const AccountCard: React.FC<{
   onDismiss: () => void;
   onInspect: () => void;
 }> = ({ account, onTrack, onDismiss, onInspect }) => {
+  const t = useT();
   const tierConfig: Record<AccountTier, { color: string; gradient: string }> = {
     S: { color: 'purple', gradient: 'from-purple-500 to-pink-500' },
     A: { color: 'indigo', gradient: 'from-indigo-500 to-blue-500' },
@@ -1715,10 +1722,10 @@ const AccountCard: React.FC<{
   // an arbitrary 0-100 number. Below 45 we drop fire entirely so weak
   // matches are clearly differentiated from strong ones.
   const matchStrength =
-    account.finalScore >= 85 ? { fires: '🔥🔥🔥', label: 'Top match',  tone: 'text-rose-600' } :
-    account.finalScore >= 65 ? { fires: '🔥🔥',   label: 'Strong match', tone: 'text-orange-600' } :
-    account.finalScore >= 45 ? { fires: '🔥',     label: 'Decent match', tone: 'text-amber-600' } :
-                                { fires: '',       label: 'Low match',    tone: 'text-gray-400' };
+    account.finalScore >= 85 ? { fires: '🔥🔥🔥', label: t('af.match.top'),  tone: 'text-rose-600' } :
+    account.finalScore >= 65 ? { fires: '🔥🔥',   label: t('af.match.strong'), tone: 'text-orange-600' } :
+    account.finalScore >= 45 ? { fires: '🔥',     label: t('af.match.decent'), tone: 'text-amber-600' } :
+                                { fires: '',       label: t('af.match.low'),    tone: 'text-gray-400' };
 
   // Card surface: tracked accounts get a solid emerald fill so they pop
   // out of a long list. Dismissed accounts fade. Untracked stays clean white.
@@ -1743,7 +1750,7 @@ const AccountCard: React.FC<{
           {isTracked && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-              Tracking
+              {t('af.row.tracking')}
             </span>
           )}
           <span className={`px-2 py-0.5 rounded-lg bg-gradient-to-br ${tc.gradient} text-white text-[10px] font-black tracking-widest`}>
@@ -1755,10 +1762,10 @@ const AccountCard: React.FC<{
           <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${
             isPreliminary ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-orange-100 text-orange-800 border border-orange-200'
           }`}
-            title={isPreliminary ? 'Score from search card only — will refine after profile visit' : 'Visited profile but post data was unreadable'}
+            title={isPreliminary ? t('af.row.preliminary.title') : t('af.row.incomplete.title')}
           >
             {isPreliminary ? <Loader2 size={9} className="animate-spin" /> : null}
-            {isPreliminary ? 'Preliminary' : 'Incomplete'}
+            {isPreliminary ? t('af.row.preliminary') : t('af.row.incomplete')}
           </span>
         )}
       </div>
@@ -1792,17 +1799,17 @@ const AccountCard: React.FC<{
         {/* Match strength — the headline KPI, replaces numeric score */}
         <div className="flex items-center justify-between pb-3 border-b border-gray-200">
           <div>
-            <div className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-0.5">Match strength</div>
+            <div className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-0.5">{t('af.card.matchStrength')}</div>
             <div className={`text-sm font-black ${matchStrength.tone}`}>{matchStrength.label}</div>
           </div>
-          <div className="text-2xl leading-none" aria-label={`${matchStrength.label}, ${matchStrength.fires.length / 2} out of 3`}>
+          <div className="text-2xl leading-none" aria-label={`${matchStrength.label}, ${t('af.card.outOf3', { n: matchStrength.fires.length / 2 })}`}>
             {matchStrength.fires || <span className="text-gray-300">·</span>}
           </div>
         </div>
         {/* numeric KPIs */}
         <div className="grid grid-cols-2 gap-3">
-          <KpiCell label="Influence" value={`${computeInfluence(account)}/100`} />
-          <KpiCell label="Engagement" value={`${account.engagementRate?.toFixed(1) || '—'}%`} />
+          <KpiCell label={t('af.insp.stat.influence')} value={`${computeInfluence(account)}/100`} />
+          <KpiCell label={t('af.insp.stat.engagement')} value={`${account.engagementRate?.toFixed(1) || '—'}%`} />
         </div>
       </div>
 
@@ -1811,7 +1818,7 @@ const AccountCard: React.FC<{
         <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-800"
           title={account.filterMismatchReasons?.join(' · ')}
         >
-          <span className="font-bold">Doesn't match all filters:</span> {account.filterMismatchReasons!.slice(0, 2).join(', ')}
+          <span className="font-bold">{t('af.card.mismatch')}</span> {account.filterMismatchReasons!.slice(0, 2).join(', ')}
           {(account.filterMismatchReasons?.length || 0) > 2 ? ` +${account.filterMismatchReasons!.length - 2}` : ''}
         </div>
       )}
@@ -1823,36 +1830,36 @@ const AccountCard: React.FC<{
       <div className="grid grid-cols-3 gap-2 mt-1">
         {isTracked ? (
           <div className="col-span-2 h-10 px-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-200">
-            <Radar size={14} className="animate-pulse" /> Tracking
+            <Radar size={14} className="animate-pulse" /> {t('af.row.tracking')}
           </div>
         ) : isDismissed ? (
           <div className="col-span-2 h-10 px-3 bg-gray-100 text-gray-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
-            <X size={14} /> Skipped
+            <X size={14} /> {t('af.row.skipped')}
           </div>
         ) : (
           <>
             <button
               onClick={onTrack}
               className="h-10 px-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              title="Watch this account for new posts. They'll show up in the Pipeline."
+              title={t('af.card.track.title')}
             >
-              <Radar size={14} /> Track
+              <Radar size={14} /> {t('af.row.track')}
             </button>
             <button
               onClick={onDismiss}
               className="h-10 px-3 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 flex items-center justify-center gap-1.5 transition-colors"
-              title="Skip"
+              title={t('af.row.skip')}
             >
-              <X size={14} /> Skip
+              <X size={14} /> {t('af.row.skip')}
             </button>
           </>
         )}
         <button
           onClick={onInspect}
           className="h-10 px-3 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 flex items-center justify-center gap-1.5 transition-colors"
-          title="Inspect details"
+          title={t('af.row.inspect.title')}
         >
-          <Eye size={14} /> Details
+          <Eye size={14} /> {t('af.card.details')}
         </button>
       </div>
     </div>
@@ -1873,7 +1880,9 @@ const InspectModal: React.FC<{
   onClose: () => void;
   onTrack: () => void;
   onDismiss: () => void;
-}> = ({ account, onClose, onTrack, onDismiss }) => (
+}> = ({ account, onClose, onTrack, onDismiss }) => {
+  const t = useT();
+  return (
   <div
     className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
     onClick={onClose}
@@ -1901,7 +1910,7 @@ const InspectModal: React.FC<{
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Close inspector"
+            aria-label={t('af.insp.close')}
           >
             <X size={20} aria-hidden="true" />
           </button>
@@ -1920,12 +1929,12 @@ const InspectModal: React.FC<{
                 <div className="absolute -top-6 -right-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl" aria-hidden="true" />
                 <div className="flex items-center gap-1.5 mb-2 relative">
                   <Target size={12} className="text-emerald-600" aria-hidden="true" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Reachable audience</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">{t('af.insp.reachable')}</span>
                 </div>
                 <div className="text-2xl font-extrabold text-emerald-700 tabular-nums leading-none relative">
                   {account.reachableAudience.toLocaleString()}
                 </div>
-                <div className="text-[11px] text-gray-600 mt-1.5 leading-snug relative">of their viewers fit your ICP per post</div>
+                <div className="text-[11px] text-gray-600 mt-1.5 leading-snug relative">{t('af.insp.reachable.sub')}</div>
               </div>
             )}
             {/* ICP Match Rate */}
@@ -1934,15 +1943,15 @@ const InspectModal: React.FC<{
                 <div className="absolute -top-6 -right-6 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl" aria-hidden="true" />
                 <div className="flex items-center gap-1.5 mb-2 relative">
                   <Users size={12} className="text-indigo-600" aria-hidden="true" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700">ICP match rate</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700">{t('af.insp.icp')}</span>
                 </div>
                 <div className="text-2xl font-extrabold text-indigo-700 tabular-nums leading-none relative">{account.icpMatchRate}%</div>
                 <div className="text-[11px] text-gray-600 mt-1.5 leading-snug relative">
-                  of their commenters look like your buyers
+                  {t('af.insp.icp.sub')}
                 </div>
                 {(account.icpMatchSamples?.length || 0) > 0 && (
                   <div className="text-[10px] text-indigo-700/80 mt-2 truncate relative" title={account.icpMatchSamples!.join(', ')}>
-                    e.g. {account.icpMatchSamples!.slice(0, 3).join(', ')}
+                    {t('af.insp.eg')} {account.icpMatchSamples!.slice(0, 3).join(', ')}
                   </div>
                 )}
               </div>
@@ -1969,17 +1978,17 @@ const InspectModal: React.FC<{
                     account.spotlightWindowMin <= 30 ? 'text-rose-700'
                     : account.spotlightWindowMin <= 90 ? 'text-amber-700'
                     : 'text-gray-700'
-                  }`}>Spotlight window</span>
+                  }`}>{t('af.insp.window')}</span>
                 </div>
                 <div className={`text-2xl font-extrabold tabular-nums leading-none relative ${
                   account.spotlightWindowMin <= 30 ? 'text-rose-700'
                   : account.spotlightWindowMin <= 90 ? 'text-amber-700'
                   : 'text-gray-700'
                 }`}>
-                  ~{account.spotlightWindowMin}m
+                  ~{account.spotlightWindowMin}{t('af.insp.minutes')}
                 </div>
                 <div className="text-[11px] text-gray-600 mt-1.5 leading-snug relative">
-                  to grab the top-comment slot before replies sink
+                  {t('af.insp.window.sub')}
                 </div>
               </div>
             )}
@@ -1988,29 +1997,29 @@ const InspectModal: React.FC<{
 
         {account.bio && (
           <div className="mb-6 p-4 bg-gray-50 rounded-2xl">
-            <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Bio</div>
+            <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">{t('af.insp.bio')}</div>
             <p className="text-sm leading-relaxed">{account.bio}</p>
           </div>
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <BigStat label="Influence" value={`${computeInfluence(account)}/100`} />
-          <BigStat label="Engagement" value={`${account.engagementRate?.toFixed(2) || '—'}%`} />
-          <BigStat label="Reach score" value={`${account.authorityScore}/100`} />
-          <BigStat label="Topic match" value={`${account.nicheMatch}/100`} />
+          <BigStat label={t('af.insp.stat.influence')} value={`${computeInfluence(account)}/100`} />
+          <BigStat label={t('af.insp.stat.engagement')} value={`${account.engagementRate?.toFixed(2) || '—'}%`} />
+          <BigStat label={t('af.insp.stat.reach')} value={`${account.authorityScore}/100`} />
+          <BigStat label={t('af.insp.stat.topic')} value={`${account.nicheMatch}/100`} />
         </div>
 
         {/* Influence explainer — surfaced in the modal so the score isn't a black box */}
         <div className="mb-6 p-3 bg-indigo-50/70 border border-indigo-100 rounded-2xl text-[11px] text-indigo-900 leading-relaxed">
-          <span className="font-bold uppercase tracking-widest text-[9px] text-indigo-700">What is Influence?</span>
-          <p className="mt-1">A composite signal of real audience pull. We weight engagement-per-post the heaviest (50%), then how well their content matches your niche (30%), then reach authority (20%). A high score means their attention actually moves the needle for you — not just a big follower number.</p>
+          <span className="font-bold uppercase tracking-widest text-[9px] text-indigo-700">{t('af.insp.whatIs')}</span>
+          <p className="mt-1">{t('af.insp.whatIs.body')}</p>
         </div>
 
         {/* LinkedIn post signals — surface in the inspector so the user can judge cadence */}
         {account.platform === 'LinkedIn' && typeof account.recentPostCount === 'number' && (
           <div className="grid grid-cols-1 gap-3 mb-6">
             <BigStat
-              label="Posts last 7d"
+              label={t('af.insp.posts7d')}
               value={`${account.recentPostCount}`}
             />
           </div>
@@ -2019,7 +2028,7 @@ const InspectModal: React.FC<{
         {/* Filter mismatch reasons — non-blocking, informational */}
         {(account.filterMismatchReasons?.length || 0) > 0 && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
-            <div className="text-[10px] uppercase tracking-widest text-amber-800 font-bold mb-2">Doesn't match all your filters</div>
+            <div className="text-[10px] uppercase tracking-widest text-amber-800 font-bold mb-2">{t('af.insp.mismatch')}</div>
             <ul className="space-y-1">
               {account.filterMismatchReasons!.map((r, i) => (
                 <li key={i} className="text-sm text-amber-900 flex items-start gap-2">
@@ -2034,13 +2043,13 @@ const InspectModal: React.FC<{
         {account.verificationStatus === 'preliminary' && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-900 flex items-center gap-2">
             <Loader2 size={14} className="animate-spin" />
-            Preliminary score from search results. Will refine once we visit the profile.
+            {t('af.insp.prelim')}
           </div>
         )}
 
         {account.topTopics && account.topTopics.length > 0 && (
           <div className="mb-6">
-            <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Top Topics</div>
+            <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">{t('af.insp.topTopics')}</div>
             <div className="flex flex-wrap gap-2">
               {account.topTopics.map((t, i) => (
                 <span key={i} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold">
@@ -2053,7 +2062,7 @@ const InspectModal: React.FC<{
 
         {account.matchedSignals.length > 0 && (
           <div className="mb-6">
-            <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Why This Account</div>
+            <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">{t('af.insp.why')}</div>
             <ul className="space-y-1">
               {account.matchedSignals.map((s, i) => (
                 <li key={i} className="text-sm flex items-start gap-2">
@@ -2067,7 +2076,7 @@ const InspectModal: React.FC<{
 
         {account.sampleHooks && account.sampleHooks.length > 0 && (
           <div className="mb-6">
-            <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Recent Post Hooks</div>
+            <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">{t('af.insp.hooks')}</div>
             <div className="space-y-2">
               {account.sampleHooks.map((h, i) => (
                 <div key={i} className="p-3 bg-gray-50 rounded-xl text-xs leading-relaxed border border-gray-100">
@@ -2085,7 +2094,7 @@ const InspectModal: React.FC<{
             rel="noopener noreferrer"
             className="flex-1 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
           >
-            <ExternalLink size={14} /> Open Profile
+            <ExternalLink size={14} /> {t('af.insp.openProfile')}
           </a>
           {account.trackingStatus !== 'tracking' && (
             <>
@@ -2093,13 +2102,13 @@ const InspectModal: React.FC<{
                 onClick={onDismiss}
                 className="px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold hover:bg-gray-50"
               >
-                Dismiss
+                {t('af.insp.dismiss')}
               </button>
               <button
                 onClick={onTrack}
                 className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-gray-800"
               >
-                <Radar size={14} /> Track this account
+                <Radar size={14} /> {t('af.insp.trackThis')}
               </button>
             </>
           )}
@@ -2107,19 +2116,23 @@ const InspectModal: React.FC<{
       </div>
     </div>
   </div>
-);
+  );
+};
 
-const EmptyState: React.FC = () => (
+const EmptyState: React.FC = () => {
+  const t = useT();
+  return (
   <div className="bg-white p-16 rounded-[2rem] border border-gray-100 text-center">
     <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
       <Crosshair size={32} className="text-gray-400" />
     </div>
-    <h3 className="font-bold text-lg mb-2">No accounts yet</h3>
+    <h3 className="font-bold text-lg mb-2">{t('af.empty.title')}</h3>
     <p className="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
-      Describe your niche above and tap <b>Find accounts</b>. The AI will suggest real accounts to follow with high engagement in your space.
+      {t('af.empty.body.a')} <b>{t('af.find.cta')}</b>{t('af.empty.body.b')}
     </p>
   </div>
-);
+  );
+};
 
 // ============================================================
 // MICRO COMPONENTS
@@ -2302,6 +2315,7 @@ const CampaignLauncher: React.FC<{
   mode: DiscoveryMode;
   disabled: boolean;
 }> = ({ onOneShot, filters, mode, disabled }) => {
+  const t = useT();
   const [campaignMode, setCampaignMode] = useState(false);
   const [intervalHours, setIntervalHours] = useState(4);
   const [durationDays, setDurationDays] = useState(7);
@@ -2315,7 +2329,7 @@ const CampaignLauncher: React.FC<{
 
   const launchCampaign = () => {
     if (!filters.platforms.length || !filters.keywords.length) {
-      alert('Add at least one platform and one keyword.');
+      alert(t('af.camp.alert'));
       return;
     }
     const config = {
@@ -2342,7 +2356,7 @@ const CampaignLauncher: React.FC<{
             !campaignMode ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-900'
           }`}
         >
-          <Zap size={12} /> Run once
+          <Zap size={12} /> {t('af.camp.runOnce')}
         </button>
         <button
           onClick={() => setCampaignMode(true)}
@@ -2350,7 +2364,7 @@ const CampaignLauncher: React.FC<{
             campaignMode ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-900'
           }`}
         >
-          <Repeat size={12} /> Run on a schedule
+          <Repeat size={12} /> {t('af.camp.runSchedule')}
         </button>
       </div>
 
@@ -2360,7 +2374,7 @@ const CampaignLauncher: React.FC<{
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className="text-[9px] font-black uppercase tracking-widest text-indigo-700 block mb-1">
-                Run every (hours)
+                {t('af.camp.every')}
               </span>
               <input
                 type="number" min={1} max={24} value={intervalHours}
@@ -2370,7 +2384,7 @@ const CampaignLauncher: React.FC<{
             </label>
             <label className="block">
               <span className="text-[9px] font-black uppercase tracking-widest text-indigo-700 block mb-1">
-                Keep going (days)
+                {t('af.camp.duration')}
               </span>
               <input
                 type="number" min={1} max={30} value={durationDays}
@@ -2381,7 +2395,7 @@ const CampaignLauncher: React.FC<{
           </div>
           <div className="text-[10px] text-indigo-700 leading-relaxed">
             <CalendarClock size={10} className="inline mr-1" />
-            Will run ~{Math.floor((durationDays * 24) / intervalHours)} times · keeps adding new accounts as it runs.
+            {t('af.camp.willRun', { n: Math.floor((durationDays * 24) / intervalHours) })}
           </div>
         </div>
       )}
@@ -2397,9 +2411,9 @@ const CampaignLauncher: React.FC<{
         } disabled:opacity-40 disabled:cursor-not-allowed`}
       >
         {campaignMode ? (
-          <><Repeat size={20} /> Start scheduled search</>
+          <><Repeat size={20} /> {t('af.camp.startScheduled')}</>
         ) : (
-          <><Play size={20} /> Start search</>
+          <><Play size={20} /> {t('af.camp.startSearch')}</>
         )}
       </button>
 
@@ -2407,7 +2421,7 @@ const CampaignLauncher: React.FC<{
       {activeCampaigns.length > 0 && (
         <div className="space-y-2 pt-2">
           <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 px-1">
-            Running searches ({activeCampaigns.length})
+            {t('af.camp.running', { n: activeCampaigns.length })}
           </div>
           {activeCampaigns.map(c => <CampaignChip key={c.id} campaign={c} />)}
         </div>
@@ -2417,6 +2431,7 @@ const CampaignLauncher: React.FC<{
 };
 
 const CampaignChip: React.FC<{ campaign: DiscoveryCampaign }> = ({ campaign }) => {
+  const t = useT();
   const isActive = campaign.status === 'active';
   const nextIn = campaign.nextTickAt ? Math.max(0, Math.floor((new Date(campaign.nextTickAt).getTime() - Date.now()) / 60000)) : 0;
   const daysLeft = Math.max(0, Math.floor((new Date(campaign.endsAt).getTime() - Date.now()) / 86400000));
@@ -2429,16 +2444,16 @@ const CampaignChip: React.FC<{ campaign: DiscoveryCampaign }> = ({ campaign }) =
           <div className="text-xs font-bold text-gray-900 truncate">{campaign.name}</div>
         </div>
         <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-          {campaign.results.length} found
+          {t('af.chip.found', { n: campaign.results.length })}
         </span>
       </div>
       <div className="grid grid-cols-3 gap-1 text-[10px]">
-        <div className="text-gray-500"><span className="font-bold text-gray-700">{campaign.ticksCompleted}</span> runs done</div>
-        <div className="text-gray-500"><span className="font-bold text-gray-700">{daysLeft}d</span> left</div>
+        <div className="text-gray-500"><span className="font-bold text-gray-700">{campaign.ticksCompleted}</span> {t('af.chip.runsDone')}</div>
+        <div className="text-gray-500"><span className="font-bold text-gray-700">{daysLeft}{t('af.chip.daySuffix')}</span> {t('af.chip.left')}</div>
         <div className="text-gray-500">
           {isActive
-            ? 'next in ' + (nextIn > 60 ? `${Math.round(nextIn/60)}h` : `${nextIn}min`)
-            : campaign.status === 'paused' ? 'paused' : campaign.status}
+            ? t('af.chip.nextIn') + ' ' + (nextIn > 60 ? `${Math.round(nextIn/60)}${t('af.chip.hourSuffix')}` : `${nextIn}${t('af.chip.minSuffix')}`)
+            : campaign.status === 'paused' ? t('af.chip.paused') : campaign.status}
         </div>
       </div>
       <div className="flex gap-1">
@@ -2446,26 +2461,26 @@ const CampaignChip: React.FC<{ campaign: DiscoveryCampaign }> = ({ campaign }) =
           onClick={() => window.dispatchEvent(new CustomEvent('discovery_campaign_run_now', { detail: { id: campaign.id } }))}
           className="flex-1 py-1.5 px-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-700 flex items-center justify-center gap-1"
         >
-          <RotateCw size={10} /> Run now
+          <RotateCw size={10} /> {t('af.chip.runNow')}
         </button>
         {isActive ? (
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('discovery_campaign_pause', { detail: { id: campaign.id } }))}
             className="flex-1 py-1.5 px-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
           >
-            <Pause size={10} /> Pause
+            <Pause size={10} /> {t('af.chip.pause')}
           </button>
         ) : (
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('discovery_campaign_resume', { detail: { id: campaign.id } }))}
             className="flex-1 py-1.5 px-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
           >
-            <Play size={10} /> Resume
+            <Play size={10} /> {t('af.chip.resume')}
           </button>
         )}
         <button
           onClick={() => {
-            if (confirm('Stop and delete this scheduled search?')) {
+            if (confirm(t('af.chip.deleteConfirm'))) {
               window.dispatchEvent(new CustomEvent('discovery_campaign_abort', { detail: { id: campaign.id } }));
               window.dispatchEvent(new CustomEvent('discovery_campaign_delete', { detail: { id: campaign.id } }));
             }
@@ -2489,6 +2504,7 @@ type TrackingSettings = {
 };
 
 const TrackingSettingsCard: React.FC = () => {
+  const t = useT();
   const [settings, setSettings] = useState<TrackingSettings>({
     intervalMinutes: 15, respectOffHours: true, jitterPercent: 0.25
   });
@@ -2561,9 +2577,9 @@ const TrackingSettingsCard: React.FC = () => {
             <Eye size={16} className="text-emerald-600" />
           </div>
           <div className="text-left min-w-0">
-            <div className="text-sm font-bold text-gray-900">Watching tracked accounts</div>
+            <div className="text-sm font-bold text-gray-900">{t('af.track.title')}</div>
             <div className="text-[10px] text-gray-500">
-              {trackedCount === 0 ? 'No accounts tracked yet' : `${trackedCount} account${trackedCount > 1 ? 's' : ''} · check every ${interval} min`}
+              {trackedCount === 0 ? t('af.track.none') : t('af.track.summary', { n: trackedCount, m: interval })}
             </div>
           </div>
         </div>
@@ -2574,7 +2590,7 @@ const TrackingSettingsCard: React.FC = () => {
         <div className="px-4 pb-4 space-y-4 border-t border-gray-100 pt-4">
           {trackedCount === 0 && (
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-[11px] text-gray-600 leading-relaxed">
-              When you follow an account from the search results, the bot will start watching it for new posts. New posts show up in the <b>Posts Tracker</b> so you can comment on them.
+              {t('af.track.hint.a')}<b>{t('af.track.postsTracker')}</b>{t('af.track.hint.b')}
             </div>
           )}
 
@@ -2583,7 +2599,7 @@ const TrackingSettingsCard: React.FC = () => {
           {trackedCount > 0 && (
             <div>
               <div className="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-2">
-                Currently watching ({trackedCount})
+                {t('af.track.watching', { n: trackedCount })}
               </div>
               <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                 {tracked.map((c: any) => (
@@ -2592,15 +2608,15 @@ const TrackingSettingsCard: React.FC = () => {
                       <div className="text-xs font-bold text-gray-900 truncate">{c.label || c.url}</div>
                       <div className="text-[10px] text-gray-400 truncate">
                         {c.platform}
-                        {c.lastStatus ? ` · ${c.lastStatus}` : ' · not checked yet'}
+                        {c.lastStatus ? ` · ${c.lastStatus}` : ` · ${t('af.track.notChecked')}`}
                       </div>
                     </div>
                     <button
                       onClick={() => removeTracked(c.url)}
                       className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-rose-600 hover:bg-rose-50 border border-rose-100 transition-colors flex items-center gap-1.5"
-                      title="Stop tracking this account"
+                      title={t('af.row.untrack.title')}
                     >
-                      <X size={12} /> Remove
+                      <X size={12} /> {t('af.track.remove')}
                     </button>
                   </div>
                 ))}
@@ -2612,9 +2628,9 @@ const TrackingSettingsCard: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">
-                Check for new posts every
+                {t('af.track.every')}
               </span>
-              <span className="text-xs font-bold text-gray-900">{interval} min</span>
+              <span className="text-xs font-bold text-gray-900">{interval} {t('af.track.min')}</span>
             </div>
             <input
               type="range" min={5} max={120} step={5}
@@ -2623,11 +2639,11 @@ const TrackingSettingsCard: React.FC = () => {
               className="w-full accent-gray-900"
             />
             <div className="flex justify-between text-[9px] text-gray-400 mt-1 font-bold uppercase tracking-wider">
-              <span>5 min (more posts)</span>
-              <span>2 hours (safer)</span>
+              <span>{t('af.track.sliderMin')}</span>
+              <span>{t('af.track.sliderMax')}</span>
             </div>
             <div className="text-[10px] text-gray-500 mt-1.5">
-              That's about {checksPerHour} check{checksPerHour > 1 ? 's' : ''} per hour, with random timing to avoid patterns.
+              {t('af.track.perHour', { n: checksPerHour })}
             </div>
           </div>
 
@@ -2640,9 +2656,9 @@ const TrackingSettingsCard: React.FC = () => {
               className="mt-0.5 accent-gray-900"
             />
             <div>
-              <div className="text-xs font-bold text-gray-900">Pause at night (11pm – 8am)</div>
+              <div className="text-xs font-bold text-gray-900">{t('af.track.offHours')}</div>
               <div className="text-[10px] text-gray-500 mt-0.5">
-                Most platforms flag accounts that stay active 24/7. Recommended.
+                {t('af.track.offHours.sub')}
               </div>
             </div>
           </label>
@@ -2650,14 +2666,14 @@ const TrackingSettingsCard: React.FC = () => {
           {/* Status / Run now */}
           <div className="flex items-center justify-between pt-2 border-t border-gray-100">
             <div className="text-[10px] text-gray-400">
-              {saved === 'saving' ? 'Saving…' : saved === 'saved' ? '✓ Saved' : 'Changes save automatically'}
+              {saved === 'saving' ? t('af.track.saving') : saved === 'saved' ? t('af.track.saved') : t('af.track.autoSave')}
             </div>
             <button
               onClick={runNow}
               disabled={trackedCount === 0}
               className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5"
             >
-              <RotateCw size={10} /> Check now
+              <RotateCw size={10} /> {t('af.track.checkNow')}
             </button>
           </div>
         </div>
