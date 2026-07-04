@@ -110,12 +110,12 @@ export const VOICE_PRESETS: Array<{
 // HOOK SLOTS — option lists mirrored from the reference Voice Studio.
 // Slot 1 — Open with a …
 const PATTERN_INTERRUPTS: Array<{ id: HookArchitecture['patternInterrupt']; label: string; example: string }> = [
-  { id: 'taboo_confession',    label: 'Taboo confession',    example: 'Admit the thing nobody says out loud.' },
-  { id: 'spicy_claim',         label: 'Spicy claim',         example: 'A statement that picks a fight.' },
-  { id: 'contrarian_take',     label: 'Contrarian take',     example: 'Reverse the conventional wisdom.' },
-  { id: 'surprising_number',   label: 'Surprising number',   example: 'Lead with a stat that breaks expectations.' },
-  { id: 'fortune_cookie',      label: 'Fortune cookie',      example: 'A tiny truth dressed as wisdom.' },
-  { id: 'inside_baseball',     label: 'Inside baseball',     example: "Speak the tribe's language from sentence one." },
+  { id: 'taboo_confession',    label: 'va.hk.pi.taboo.l',      example: 'va.hk.pi.taboo.e' },
+  { id: 'spicy_claim',         label: 'va.hk.pi.spicy.l',      example: 'va.hk.pi.spicy.e' },
+  { id: 'contrarian_take',     label: 'va.hk.pi.contrarian.l', example: 'va.hk.pi.contrarian.e' },
+  { id: 'surprising_number',   label: 'va.hk.pi.number.l',     example: 'va.hk.pi.number.e' },
+  { id: 'fortune_cookie',      label: 'va.hk.pi.fortune.l',    example: 'va.hk.pi.fortune.e' },
+  { id: 'inside_baseball',     label: 'va.hk.pi.inside.l',     example: 'va.hk.pi.inside.e' },
   // Legacy ids — hidden from the dropdown but kept on the type so persisted
   // profiles render. New profiles default to the merged-in equivalents above.
   { id: 'shocking_number',     label: 'Shocking number',     example: '(legacy → surprising_number)' },
@@ -126,10 +126,10 @@ const PATTERN_INTERRUPTS: Array<{ id: HookArchitecture['patternInterrupt']; labe
 ];
 // Slot 2 — , pull readers in by …
 const TENSION_MECHANISMS: Array<{ id: HookArchitecture['tensionMechanism']; label: string; desc: string }> = [
-  { id: 'pain_mirror',           label: 'pain mirror',       desc: "Name the reader's exact frustration." },
-  { id: 'curiosity_gap',         label: 'curiosity gap',     desc: 'Tease information they need to keep reading.' },
-  { id: 'status_quo',            label: 'status quo attack', desc: "Tear down what they've been told." },
-  { id: 'gentle_question',       label: 'gentle question',   desc: "Ask the question they're afraid to ask themselves." },
+  { id: 'pain_mirror',           label: 'va.hk.tm.pain.l',      desc: 'va.hk.tm.pain.d' },
+  { id: 'curiosity_gap',         label: 'va.hk.tm.curiosity.l', desc: 'va.hk.tm.curiosity.d' },
+  { id: 'status_quo',            label: 'va.hk.tm.statusquo.l', desc: 'va.hk.tm.statusquo.d' },
+  { id: 'gentle_question',       label: 'va.hk.tm.gentle.l',    desc: 'va.hk.tm.gentle.d' },
   // Legacy ids
   { id: 'cognitive_dissonance',  label: 'cognitive dissonance', desc: '(legacy → status_quo)' },
   { id: 'status_threat',         label: 'status threat',     desc: '(legacy → status_quo)' },
@@ -137,12 +137,12 @@ const TENSION_MECHANISMS: Array<{ id: HookArchitecture['tensionMechanism']; labe
 ];
 // Slot 3 — , and promise them …
 const PROMISE_PAYOFFS: Array<{ id: HookArchitecture['promisePayoff']; label: string; desc: string }> = [
-  { id: 'what_to_feel',    label: 'what to feel',    desc: 'Lead them toward an emotional payoff.' },
-  { id: 'what_to_do',      label: 'what to do',      desc: 'Promise a concrete next action.' },
-  { id: 'what_to_think',   label: 'what to think',   desc: 'Reframe how they see the topic.' },
-  { id: 'what_to_unlearn', label: 'what to unlearn', desc: 'Show them what to throw away.' },
-  { id: 'what_to_measure', label: 'what to measure', desc: 'Promise a metric they should track.' },
-  { id: 'what_to_know',    label: 'what to know',    desc: "Promise an insider truth they're missing." },
+  { id: 'what_to_feel',    label: 'va.hk.pp.feel.l',    desc: 'va.hk.pp.feel.d' },
+  { id: 'what_to_do',      label: 'va.hk.pp.do.l',      desc: 'va.hk.pp.do.d' },
+  { id: 'what_to_think',   label: 'va.hk.pp.think.l',   desc: 'va.hk.pp.think.d' },
+  { id: 'what_to_unlearn', label: 'va.hk.pp.unlearn.l', desc: 'va.hk.pp.unlearn.d' },
+  { id: 'what_to_measure', label: 'va.hk.pp.measure.l', desc: 'va.hk.pp.measure.d' },
+  { id: 'what_to_know',    label: 'va.hk.pp.know.l',    desc: 'va.hk.pp.know.d' },
   // Legacy
   { id: 'what_to_learn',   label: 'what to learn',   desc: '(legacy → what_to_know)' },
   { id: 'what_to_avoid',   label: 'what to avoid',   desc: '(legacy → what_to_unlearn)' },
@@ -1218,38 +1218,39 @@ const HookSentence: React.FC<{
     hook: HookArchitecture;
     onChange: (patch: Partial<HookArchitecture>) => void;
 }> = ({ hook, onChange }) => {
-    const patternLabel = PATTERN_INTERRUPTS.find(p => p.id === hook.patternInterrupt)?.label || '—';
-    const tensionLabel = TENSION_MECHANISMS.find(t => t.id === hook.tensionMechanism)?.label || '—';
-    const payoffLabel = PROMISE_PAYOFFS.find(p => p.id === hook.promisePayoff)?.label || '—';
+    const t = useT();
+    const patternLabel = PATTERN_INTERRUPTS.find(p => p.id === hook.patternInterrupt)?.label;
+    const tensionLabel = TENSION_MECHANISMS.find(tm => tm.id === hook.tensionMechanism)?.label;
+    const payoffLabel = PROMISE_PAYOFFS.find(p => p.id === hook.promisePayoff)?.label;
 
     return (
         <div className="p-5 bg-gray-50/60 border border-gray-200 rounded-2xl">
             {/* The sentence — readable, with inline chips. */}
             <p className="text-base md:text-lg leading-relaxed text-gray-800 font-medium flex flex-wrap gap-2 items-baseline">
-                <span>Open with a</span>
+                <span>{t('va.hk.open')}</span>
                 <HookPill
-                    label={patternLabel}
-                    options={PATTERN_INTERRUPTS.filter(o => HOOK_VISIBLE.open.has(o.id)).map(o => ({ id: o.id, label: o.label, hint: o.example }))}
+                    label={patternLabel ? t(patternLabel) : '—'}
+                    options={PATTERN_INTERRUPTS.filter(o => HOOK_VISIBLE.open.has(o.id)).map(o => ({ id: o.id, label: t(o.label), hint: t(o.example) }))}
                     value={hook.patternInterrupt}
                     onSelect={(v) => onChange({ patternInterrupt: v as HookArchitecture['patternInterrupt'] })}
                 />
-                <span>, pull readers in by</span>
+                <span>{t('va.hk.pull')}</span>
                 <HookPill
-                    label={tensionLabel.toLowerCase()}
-                    options={TENSION_MECHANISMS.filter(o => HOOK_VISIBLE.pull.has(o.id)).map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
+                    label={tensionLabel ? t(tensionLabel) : '—'}
+                    options={TENSION_MECHANISMS.filter(o => HOOK_VISIBLE.pull.has(o.id)).map(o => ({ id: o.id, label: t(o.label), hint: t(o.desc) }))}
                     value={hook.tensionMechanism}
                     onSelect={(v) => onChange({ tensionMechanism: v as HookArchitecture['tensionMechanism'] })}
                 />
-                <span>, and promise them</span>
+                <span>{t('va.hk.promise')}</span>
                 <HookPill
-                    label={payoffLabel.toLowerCase()}
-                    options={PROMISE_PAYOFFS.filter(o => HOOK_VISIBLE.promise.has(o.id)).map(o => ({ id: o.id, label: o.label, hint: o.desc }))}
+                    label={payoffLabel ? t(payoffLabel) : '—'}
+                    options={PROMISE_PAYOFFS.filter(o => HOOK_VISIBLE.promise.has(o.id)).map(o => ({ id: o.id, label: t(o.label), hint: t(o.desc) }))}
                     value={hook.promisePayoff}
                     onSelect={(v) => onChange({ promisePayoff: v as HookArchitecture['promisePayoff'] })}
                 />
                 <span>.</span>
             </p>
-            <p className="text-[11px] text-gray-400 mt-3">Click any chip to swap. The first three lines decide everything.</p>
+            <p className="text-[11px] text-gray-400 mt-3">{t('va.hk.foot')}</p>
         </div>
     );
 };
@@ -1381,41 +1382,44 @@ const AmplifierBulbs: React.FC<{
 const PerspectiveParagraph: React.FC<{
     perspective: PerspectiveInjector;
     setPerspective: React.Dispatch<React.SetStateAction<PerspectiveInjector>>;
-}> = ({ perspective, setPerspective }) => (
+}> = ({ perspective, setPerspective }) => {
+    const t = useT();
+    return (
     <div className="p-5 bg-gray-50/60 border border-gray-200 rounded-2xl">
         <p className="text-base leading-loose text-gray-800 font-medium">
-            <span>I'm someone who </span>
+            <span>{t('va.persp.s1')}</span>
             <PerspectiveBlank
                 value={perspective.uniqueAngle}
-                placeholder="ships 47 failed products before this one"
+                placeholder={t('va.persp.ph1')}
                 color="emerald"
                 onChange={v => setPerspective(p => ({ ...p, uniqueAngle: v }))}
             />
-            <span>. Most people get </span>
+            <span>{t('va.persp.s2')}</span>
             <PerspectiveBlank
                 value={perspective.contrarian}
-                placeholder="PMF is a lie — it's just retention with better marketing"
+                placeholder={t('va.persp.ph2')}
                 color="rose"
                 onChange={v => setPerspective(p => ({ ...p, contrarian: v }))}
             />
-            <span> wrong. My receipts: </span>
+            <span>{t('va.persp.s3')}</span>
             <PerspectiveBlank
                 value={perspective.receipts}
-                placeholder="$2,847 MRR, 18 months bootstrap, 4 failed launches"
+                placeholder={t('va.persp.ph3')}
                 color="indigo"
                 onChange={v => setPerspective(p => ({ ...p, receipts: v }))}
             />
-            <span>. Never write: </span>
+            <span>{t('va.persp.s4')}</span>
             <PerspectiveBlank
                 value={perspective.forbiddenTakes}
-                placeholder="'Hustle culture is essential', 'Move fast and break things'"
+                placeholder={t('va.persp.ph4')}
                 color="amber"
                 onChange={v => setPerspective(p => ({ ...p, forbiddenTakes: v }))}
             />
             <span>.</span>
         </p>
     </div>
-);
+    );
+};
 
 // Inline contenteditable-style blank used inside PerspectiveParagraph.
 // Renders as a colored underline-pill when filled, dashed placeholder
@@ -1426,6 +1430,7 @@ const PerspectiveBlank: React.FC<{
     color: 'emerald' | 'rose' | 'indigo' | 'amber';
     onChange: (v: string) => void;
 }> = ({ value, placeholder, color, onChange }) => {
+    const t = useT();
     const [editing, setEditing] = React.useState(false);
     const ref = React.useRef<HTMLTextAreaElement>(null);
 
@@ -1465,7 +1470,7 @@ const PerspectiveBlank: React.FC<{
                     : `bg-white ${c.empty} italic hover:bg-gray-50`
             }`}
         >
-            {value || `[ click to add — e.g. ${placeholder.slice(0, 40)}${placeholder.length > 40 ? '…' : ''} ]`}
+            {value || `[ ${t('va.persp.clickAdd')} ${placeholder.slice(0, 40)}${placeholder.length > 40 ? '…' : ''} ]`}
         </button>
     );
 };
