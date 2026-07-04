@@ -436,8 +436,8 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
 
             {/* Header — minimalist, no icon box, no colored word */}
             <header className="space-y-1">
-                <h2 className="text-2xl font-display font-medium text-gray-900 tracking-tight">Content Engine</h2>
-                <p className="text-gray-500 text-sm">From a source idea to platform-native drafts.</p>
+                <h2 className="text-2xl font-display font-medium text-gray-900 tracking-tight">{t('ce.header.title')}</h2>
+                <p className="text-gray-500 text-sm">{t('ce.header.sub')}</p>
             </header>
 
             {/* Step indicator — thin, discreet */}
@@ -1072,7 +1072,7 @@ export const VoiceArchitectureSection: React.FC<{
                 <div className="lg:col-span-2 space-y-3">
                     {VOICE_DIMENSIONS.map(dim => (
                         <PolygonValueRow key={dim.key} label={t(dim.label)} value={voiceMix[dim.key]}
-                            tag={axisTag(dim.key, voiceMix[dim.key])} />
+                            tag={t('va.tag.' + axisTag(dim.key, voiceMix[dim.key]))} />
                     ))}
                 </div>
             </div>

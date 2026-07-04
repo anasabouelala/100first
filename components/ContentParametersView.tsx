@@ -154,17 +154,17 @@ export const ContentParametersView: React.FC = () => {
                 } catch { /* try next */ }
             }
             if (text.length < 200) {
-                throw new Error(`Couldn't read @${h}'s tweets. Install the Viraholic extension or paste 3–10 of their posts below and click "Build voice from this".`);
+                throw new Error(t('vs.msg.readFail', { h }));
             }
-            setStealStatus(`Read ~${text.length.toLocaleString()} chars from @${h} — calibrating voice…`);
+            setStealStatus(t('vs.msg.readOk', { n: text.length.toLocaleString(), h }));
             setCalibrationSample(text.slice(0, 6000));
             setSaveName(`@${h}`);
-            setSaveNote(`Cloned via proxy on ${new Date().toLocaleDateString()}`);
+            setSaveNote(t('vs.msg.cloned', { date: new Date().toLocaleDateString() }));
             await vp.aiCalibrate(text.slice(0, 6000));
-            setStealStatus(`✓ Voice rebuilt from @${h}'s posts. Name it below and save.`);
+            setStealStatus(t('vs.msg.rebuilt', { h }));
         } catch (e: any) {
-            setStealError(e?.message || 'Fetch failed.');
-            setStealStatus('Fetch failed — paste writing instead.');
+            setStealError(e?.message || t('vs.msg.fetchFail'));
+            setStealStatus(t('vs.msg.fetchFailPaste'));
         } finally {
             setStealFetching(false);
         }
@@ -198,11 +198,11 @@ export const ContentParametersView: React.FC = () => {
 
     const stealFromPaste = () => {
         if (!calibrationSample.trim()) {
-            setStealError('Paste at least a few posts in the box below first.');
+            setStealError(t('vs.msg.pasteFirst'));
             return;
         }
         setStealError('');
-        setStealStatus(`Calibrating voice from ${calibrationSample.length.toLocaleString()} chars of pasted writing…`);
+        setStealStatus(t('vs.msg.calibrating', { n: calibrationSample.length.toLocaleString() }));
         vp.aiCalibrate(calibrationSample);
     };
 
@@ -221,12 +221,15 @@ export const ContentParametersView: React.FC = () => {
                     value={project?.outputLanguage || 'en'}
                     onChange={(e) => updateProject({ outputLanguage: e.target.value as OutputLanguage })}
                     dir="auto"
-                    aria-label="Output language and dialect"
+                    aria-label={t('vs.lang.aria')}
                     className="sm:ml-auto w-full sm:w-auto rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-gray-900 focus:outline-none"
                 >
-                    {LANGUAGE_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value}>{o.label} — {o.note}</option>
-                    ))}
+                    {LANGUAGE_OPTIONS.map(o => {
+                        const note = t('vs.lang.note.' + o.value);
+                        return (
+                        <option key={o.value} value={o.value}>{note ? `${o.label} — ${note}` : o.label}</option>
+                        );
+                    })}
                 </select>
             </div>
 
@@ -245,7 +248,7 @@ export const ContentParametersView: React.FC = () => {
                         vp.library.map(p => {
                             const isActive = activeProfileId === p.id;
                             const fp = `auth ${p.voiceMix.authority} · energy ${p.voiceMix.energy} · prov ${p.voiceMix.provocation} · humor ${p.voiceMix.humor} · warmth ${p.voiceMix.warmth}`;
-                            const tip = `${p.note ? p.note + ' — ' : ''}${fp}\nSaved ${new Date(p.savedAt).toLocaleString()}`;
+                            const tip = `${p.note ? p.note + ' — ' : ''}${fp}\n${t('vs.saved')} ${new Date(p.savedAt).toLocaleString()}`;
                             return (
                                 <div
                                     key={p.id}
@@ -261,8 +264,8 @@ export const ContentParametersView: React.FC = () => {
                                     <span className="text-xs font-medium whitespace-nowrap">{p.name}</span>
                                     <button
                                         type="button"
-                                        onClick={(e) => { e.stopPropagation(); if (confirm(`Delete saved voice "${p.name}"?`)) { vp.deleteSavedProfile(p.id); if (activeProfileId === p.id) setActiveProfileId(null); } }}
-                                        title="Delete this voice"
+                                        onClick={(e) => { e.stopPropagation(); if (confirm(t('vs.deleteConfirm', { name: p.name }))) { vp.deleteSavedProfile(p.id); if (activeProfileId === p.id) setActiveProfileId(null); } }}
+                                        title={t('vs.deleteVoice')}
                                         className="ml-0.5 text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
                                     >
                                         <X size={11} />
@@ -276,7 +279,7 @@ export const ContentParametersView: React.FC = () => {
                     <button
                         type="button"
                         onClick={handleNewVoice}
-                        title="Start a blank new voice — reset every dial, then save it as a new profile"
+                        title={t('vs.newVoice.title')}
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 border-dashed border-gray-300 text-gray-500 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-all -mb-px ml-1"
                     >
                         <Plus size={13} />
