@@ -129,13 +129,13 @@ const SidebarQuickStats: React.FC<{ onJump: () => void }> = ({ onJump }) => {
 
 // Single frosted-glass title bar shared by all sections.
 const SectionGlassHeader: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => (
-  <div className="glass-header px-6 py-4 mb-6 flex items-center gap-3">
-    <div className="bg-gray-900/90 text-white p-2 rounded-xl flex-shrink-0">
-      <Zap size={18} />
+  <div className="glass-header px-4 py-3 sm:px-6 sm:py-4 mb-5 sm:mb-6 flex items-center gap-2.5 sm:gap-3">
+    <div className="bg-gray-900/90 text-white p-1.5 sm:p-2 rounded-lg sm:rounded-xl flex-shrink-0">
+      <Zap size={16} className="sm:w-[18px] sm:h-[18px]" />
     </div>
     <div className="min-w-0">
-      <h1 className="font-display text-2xl font-bold text-gray-900 tracking-tight leading-none truncate">{title}</h1>
-      <p className="text-xs text-gray-500 mt-1 truncate">{subtitle}</p>
+      <h1 className="font-display text-lg sm:text-2xl font-bold text-gray-900 tracking-tight leading-tight sm:leading-none truncate">{title}</h1>
+      <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">{subtitle}</p>
     </div>
   </div>
 );
@@ -406,7 +406,7 @@ function AppInner() {
           <div className="flex-1 px-2 mx-2 font-display font-bold text-xl">Viraholic</div>
         </div>
 
-        <main className="flex-1 p-4 lg:p-10 overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10 overflow-x-hidden">
           <ExtensionInstallBanner />
           {SECTION_META[mode] && (
             <SectionGlassHeader title={t(SECTION_META[mode].titleKey)} subtitle={t(SECTION_META[mode].subtitleKey)} />
