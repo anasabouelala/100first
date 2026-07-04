@@ -169,15 +169,17 @@ const AMPLIFIER_GROUPS: Array<{ id: string; label: string; desc: string; keys: A
 
 // CLOSER — option list mirrored from the reference. Old ids are accepted via
 // CLOSER_MIGRATE on load so persisted profiles still work.
+// label/desc hold i18n keys resolved with t() at render (only the 4 in
+// CLOSER_VISIBLE are shown in the picker).
 const CLOSERS: Array<{ id: CloserStrategy; label: string; desc: string }> = [
-  { id: 'open_invitation', label: 'Open invitation', desc: 'A specific, answerable question OR a teased next post (not "thoughts?").' },
-  { id: 'punchline',       label: 'Punchline',       desc: 'Quotable one-liner. Mic-drop.' },
-  { id: 'reverse_cta',     label: 'Reverse CTA',     desc: '"Don\'t X if Y" — counterintuitive.' },
-  { id: 'soft_landing',    label: 'Soft landing',    desc: 'One reflective sentence, no ask. Let it breathe.' },
+  { id: 'open_invitation', label: 'va.closer.open.l',    desc: 'va.closer.open.d' },
+  { id: 'punchline',       label: 'va.closer.punch.l',   desc: 'va.closer.punch.d' },
+  { id: 'reverse_cta',     label: 'va.closer.reverse.l', desc: 'va.closer.reverse.d' },
+  { id: 'soft_landing',    label: 'va.closer.soft.l',    desc: 'va.closer.soft.d' },
   // Legacy ids kept so old profiles render; not shown in the picker by default.
-  { id: 'open_question',   label: 'Open question',   desc: '(legacy → open_invitation)' },
-  { id: 'soft_proof',      label: 'Soft proof',      desc: '(legacy → soft_landing)' },
-  { id: 'open_loop',       label: 'Open loop',       desc: '(legacy → open_invitation)' },
+  { id: 'open_question',   label: 'va.closer.open.l',    desc: 'va.closer.open.d' },
+  { id: 'soft_proof',      label: 'va.closer.soft.l',    desc: 'va.closer.soft.d' },
+  { id: 'open_loop',       label: 'va.closer.open.l',    desc: 'va.closer.open.d' },
 ];
 const CLOSER_VISIBLE = new Set<CloserStrategy>(['open_invitation', 'punchline', 'reverse_cta', 'soft_landing']);
 // Auto-rewrite legacy closer ids to the new ones at load/render time.
@@ -189,14 +191,16 @@ export const CLOSER_MIGRATE: Partial<Record<CloserStrategy, CloserStrategy>> = {
 // 7 polygon axes shown in the panel. (`vulnerability` and `intimacy` stay on
 // VoiceMix for backward compat with persisted profiles + AI prompts, but they
 // don't appear as vertices on the chart any more — the screenshot's design.)
+// label holds an i18n key (display only — resolved with t() at each render
+// site). key/low/high stay as-is; the AI prompt uses `key` + axisTag, not label.
 const VOICE_DIMENSIONS: Array<{ key: keyof Omit<VoiceMix, 'rhythm'>; label: string; low: string; high: string }> = [
-  { key: 'authority',   label: 'Authority',   low: 'humble student',    high: 'unquestionable expert' },
-  { key: 'energy',      label: 'Energy',      low: 'zen contemplative', high: 'electric urgency' },
-  { key: 'provocation', label: 'Provocation', low: 'agreeable',         high: 'sharp & controversial' },
-  { key: 'specificity', label: 'Specificity', low: 'poetic & vague',    high: 'forensic & numeric' },
-  { key: 'humor',       label: 'Humor',       low: 'serious',           high: 'playfully witty' },
-  { key: 'warmth',      label: 'Warmth',      low: 'clinical',          high: 'hearth-warm' },
-  { key: 'optimism',    label: 'Optimism',    low: 'gritty realist',    high: 'evangelist' },
+  { key: 'authority',   label: 'va.dim.authority',   low: 'humble student',    high: 'unquestionable expert' },
+  { key: 'energy',      label: 'va.dim.energy',      low: 'zen contemplative', high: 'electric urgency' },
+  { key: 'provocation', label: 'va.dim.provocation', low: 'agreeable',         high: 'sharp & controversial' },
+  { key: 'specificity', label: 'va.dim.specificity', low: 'poetic & vague',    high: 'forensic & numeric' },
+  { key: 'humor',       label: 'va.dim.humor',       low: 'serious',           high: 'playfully witty' },
+  { key: 'warmth',      label: 'va.dim.warmth',      low: 'clinical',          high: 'hearth-warm' },
+  { key: 'optimism',    label: 'va.dim.optimism',    low: 'gritty realist',    high: 'evangelist' },
 ];
 
 // Adjective tag rendered next to each axis. Mirrors the reference Voice Studio
@@ -1066,7 +1070,7 @@ export const VoiceArchitectureSection: React.FC<{
                 </div>
                 <div className="lg:col-span-2 space-y-3">
                     {VOICE_DIMENSIONS.map(dim => (
-                        <PolygonValueRow key={dim.key} label={dim.label} value={voiceMix[dim.key]}
+                        <PolygonValueRow key={dim.key} label={t(dim.label)} value={voiceMix[dim.key]}
                             tag={axisTag(dim.key, voiceMix[dim.key])} />
                     ))}
                 </div>
@@ -1125,8 +1129,8 @@ export const VoiceArchitectureSection: React.FC<{
                                       ? 'bg-gray-900 text-white border-gray-900'
                                       : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
                                 }`}>
-                                <div className="font-medium">{c.label}</div>
-                                <div className={`text-[10px] mt-0.5 ${selected ? 'text-white/60' : 'text-gray-400'}`}>{c.desc}</div>
+                                <div className="font-medium">{t(c.label)}</div>
+                                <div className={`text-[10px] mt-0.5 ${selected ? 'text-white/60' : 'text-gray-400'}`}>{t(c.desc)}</div>
                             </button>
                         );
                     })}
@@ -1514,6 +1518,7 @@ const PerspectiveField: React.FC<{ label: string; placeholder: string; icon: Rea
 // INTERACTIVE POLYGON — drag vertices to adjust voice mix values
 // ──────────────────────────────────────────────────────────────
 const InteractivePolygon: React.FC<{ mix: VoiceMix; onChange: (patch: Partial<VoiceMix>) => void }> = ({ mix, onChange }) => {
+    const t = useT();
     const dims = VOICE_DIMENSIONS;
     const size = 320;
     const center = size / 2;
@@ -1663,7 +1668,7 @@ const InteractivePolygon: React.FC<{ mix: VoiceMix; onChange: (patch: Partial<Vo
                     <text key={i} x={lx} y={ly} fontSize={10} fontWeight={isActive ? 800 : 700}
                         fill={isActive ? '#111827' : '#475569'}
                         textAnchor="middle" dominantBaseline="middle">
-                        {d.label}
+                        {t(d.label)}
                     </text>
                 );
             })}
@@ -2235,6 +2240,7 @@ export const VoiceMatchQuiz: React.FC<{ onClose: () => void; onComplete: (result
 
 // Animated reveal of the matched persona
 const RevealScreen: React.FC<{ result: ReturnType<typeof computePersonaResult>; onLockIn: () => void; onRedo: () => void }> = ({ result, onLockIn, onRedo }) => {
+    const t = useT();
     const [drawProgress, setDrawProgress] = useState(0); // 0 → 1 for animating polygon
     const [showText, setShowText] = useState(false);
     const [showSample, setShowSample] = useState(false);
@@ -2303,7 +2309,7 @@ const RevealScreen: React.FC<{ result: ReturnType<typeof computePersonaResult>; 
                                 fill="rgba(255,255,255,0.7)"
                                 textAnchor="middle" dominantBaseline="middle"
                                 style={{ opacity: drawProgress, transition: 'opacity 800ms' }}>
-                                {d.label}
+                                {t(d.label)}
                             </text>
                         );
                     })}
@@ -2337,7 +2343,7 @@ const RevealScreen: React.FC<{ result: ReturnType<typeof computePersonaResult>; 
                     style={{ opacity: showText ? 1 : 0, transition: 'opacity 600ms 200ms' }}>
                     {VOICE_DIMENSIONS.map(d => (
                         <div key={d.key} className="flex items-center justify-between border-b border-white/5 py-1">
-                            <span className="text-white/60">{d.label}</span>
+                            <span className="text-white/60">{t(d.label)}</span>
                             <span className="text-white font-mono">{result.voiceMix[d.key]}</span>
                         </div>
                     ))}
