@@ -159,12 +159,13 @@ const HOOK_VISIBLE = {
 // ViralPhysics flags (so the rest of the codebase + prompts don't churn) and
 // map each visible lever to a set of backing flags. Toggling a lever flips
 // every flag in its set; "on" = at least one flag in the set is true.
+// label/desc hold i18n keys resolved with t() at render (keys[] drives the AI).
 const AMPLIFIER_GROUPS: Array<{ id: string; label: string; desc: string; keys: Array<keyof ViralPhysics> }> = [
-  { id: 'tribal_voice',          label: 'Tribal voice',          desc: "Speak the in-group's language, signal belonging, define an us-vs-them. (status + insider + tribal, merged)", keys: ['statusCurrency', 'inGroupSignaling', 'tribalFraming'] },
-  { id: 'setup_reversal',        label: 'Setup-reversal',        desc: 'Set up an expectation, then flip it — concede the obvious counter and dismantle it. (concession + bait-switch, merged)', keys: ['concessionMove', 'baitAndSwitch'] },
-  { id: 'fortune_cookie_close',  label: 'Fortune cookie close',  desc: 'End on a quotable, condensed truth.', keys: ['fortuneCookieClose'] },
-  { id: 'loop_opener',           label: 'Loop opener',           desc: 'Open a curiosity loop the post must close.', keys: ['loopOpener'] },
-  { id: 'forbidden_specificity', label: 'Forbidden specificity', desc: 'Use the number, name, or detail others would soften.', keys: ['forbiddenSpecificity'] },
+  { id: 'tribal_voice',          label: 'va.amp.tribal.l',    desc: 'va.amp.tribal.d',    keys: ['statusCurrency', 'inGroupSignaling', 'tribalFraming'] },
+  { id: 'setup_reversal',        label: 'va.amp.setup.l',     desc: 'va.amp.setup.d',     keys: ['concessionMove', 'baitAndSwitch'] },
+  { id: 'fortune_cookie_close',  label: 'va.amp.fortune.l',   desc: 'va.amp.fortune.d',   keys: ['fortuneCookieClose'] },
+  { id: 'loop_opener',           label: 'va.amp.loop.l',      desc: 'va.amp.loop.d',      keys: ['loopOpener'] },
+  { id: 'forbidden_specificity', label: 'va.amp.forbidden.l', desc: 'va.amp.forbidden.d', keys: ['forbiddenSpecificity'] },
 ];
 
 // CLOSER — option list mirrored from the reference. Old ids are accepted via
@@ -1320,6 +1321,7 @@ const AmplifierBulbs: React.FC<{
     viral: ViralPhysics;
     toggle: (key: keyof ViralPhysics) => void;
 }> = ({ viral, toggle }) => {
+    const t = useT();
     const isGroupOn = (g: typeof AMPLIFIER_GROUPS[number]) => g.keys.some(k => viral[k]);
     const handleGroupClick = (g: typeof AMPLIFIER_GROUPS[number]) => {
         const currentlyOn = isGroupOn(g);
@@ -1343,7 +1345,7 @@ const AmplifierBulbs: React.FC<{
                             key={g.id}
                             type="button"
                             onClick={() => handleGroupClick(g)}
-                            title={`${g.label} — ${g.desc}`}
+                            title={`${t(g.label)} — ${t(g.desc)}`}
                             className="group flex flex-col items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/60 transition-colors min-w-[110px]"
                         >
                             <div className="relative w-10 h-10 flex items-center justify-center">
@@ -1359,14 +1361,14 @@ const AmplifierBulbs: React.FC<{
                                 </div>
                             </div>
                             <span className={`text-[10px] font-bold leading-tight text-center max-w-[110px] ${on ? 'text-gray-900' : 'text-gray-400'}`}>
-                                {g.label}
+                                {t(g.label)}
                             </span>
                         </button>
                     );
                 })}
             </div>
             <p className="text-[11px] text-gray-400">
-                <b>{activeCount}</b> amplifier{activeCount === 1 ? '' : 's'} on — hover any bulb to read what it does. Use sparingly: 1–3 is plenty.
+                <b>{activeCount}</b> {t('va.amp.count')}
             </p>
         </div>
     );
