@@ -1736,8 +1736,8 @@ type QuizQuestion = {
 const QUIZ_QUESTIONS: QuizQuestion[] = [
     {
         id: 'voice',
-        prompt: 'When you\'re most convincing, you sound like…',
-        subtitle: 'Pick the one that feels most like you on a good day.',
+        prompt: 'va.quiz.q.voice.p',
+        subtitle: 'va.quiz.q.voice.s',
         options: [
             {
                 id: 'confession',
@@ -1767,8 +1767,8 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
     },
     {
         id: 'tempo',
-        prompt: 'Your sentences feel like…',
-        subtitle: 'The pace at which you naturally write.',
+        prompt: 'va.quiz.q.tempo.p',
+        subtitle: 'va.quiz.q.tempo.s',
         options: [
             {
                 id: 'staccato',
@@ -1792,8 +1792,8 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
     },
     {
         id: 'distance',
-        prompt: 'Your relationship to the reader is…',
-        subtitle: 'How close do you get?',
+        prompt: 'va.quiz.q.distance.p',
+        subtitle: 'va.quiz.q.distance.s',
         options: [
             {
                 id: 'friend',
@@ -1821,8 +1821,8 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
     },
     {
         id: 'weapon',
-        prompt: 'Your strongest weapon is…',
-        subtitle: 'What you reach for when you really want to land.',
+        prompt: 'va.quiz.q.weapon.p',
+        subtitle: 'va.quiz.q.weapon.s',
         options: [
             {
                 id: 'numbers',
@@ -1855,8 +1855,8 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
     },
     {
         id: 'feeling',
-        prompt: 'After reading you, the reader should feel…',
-        subtitle: 'The emotional residue you want to leave.',
+        prompt: 'va.quiz.q.feeling.p',
+        subtitle: 'va.quiz.q.feeling.s',
         options: [
             {
                 id: 'seen',
@@ -1895,8 +1895,8 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
     },
     {
         id: 'proof',
-        prompt: 'Where do you draw credibility from?',
-        subtitle: 'How you prove you\'re worth listening to.',
+        prompt: 'va.quiz.q.proof.p',
+        subtitle: 'va.quiz.q.proof.s',
         options: [
             {
                 id: 'receipts',
@@ -1925,8 +1925,8 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
     },
     {
         id: 'stance',
-        prompt: 'When someone pushes back on your post, you…',
-        subtitle: 'Your default posture under disagreement.',
+        prompt: 'va.quiz.q.stance.p',
+        subtitle: 'va.quiz.q.stance.s',
         options: [
             {
                 id: 'concede',
@@ -2148,6 +2148,7 @@ function computePersonaResult(answers: QuizOption[]): {
 }
 
 export const VoiceMatchQuiz: React.FC<{ onClose: () => void; onComplete: (result: { voiceMix: VoiceMix; hook: HookArchitecture; viral: ViralPhysics; closer: CloserStrategy; personaName: string; tagline: string }) => void }> = ({ onClose, onComplete }) => {
+    const t = useT();
     const [step, setStep] = useState(0); // 0 = intro, 1-4 = questions, 5 = reveal
     const [answers, setAnswers] = useState<QuizOption[]>([]);
     const [transitioning, setTransitioning] = useState(false);
@@ -2192,15 +2193,15 @@ export const VoiceMatchQuiz: React.FC<{ onClose: () => void; onComplete: (result
             {step === 0 && (
                 <div className="max-w-xl w-full text-center animate-fade-in" style={{ animationDuration: '400ms' }}>
                     <div className="text-6xl mb-6">🎙️</div>
-                    <h1 className="text-4xl md:text-5xl font-display font-medium text-white mb-3 tracking-tight">Find your voice</h1>
+                    <h1 className="text-4xl md:text-5xl font-display font-medium text-white mb-3 tracking-tight">{t('va.quiz.intro.title')}</h1>
                     <p className="text-white/60 text-base mb-10 leading-relaxed">
-                        {totalQuestions} questions. About a minute. No sliders.<br />
-                        Pick what feels like you — we'll do the math.
+                        {t('va.quiz.intro.l1', { n: totalQuestions })}<br />
+                        {t('va.quiz.intro.l2')}
                     </p>
                     <button onClick={() => setStep(1)}
                         className="group inline-flex items-center gap-3 px-7 py-3.5 bg-white text-gray-900 rounded-xl font-medium text-sm hover:bg-gray-100 transition-all">
-                        Start
-                        <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                        {t('va.quiz.start')}
+                        <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform rtl:-scale-x-100" />
                     </button>
                 </div>
             )}
@@ -2210,10 +2211,10 @@ export const VoiceMatchQuiz: React.FC<{ onClose: () => void; onComplete: (result
                 <div key={currentQuestion.id} className="max-w-3xl w-full transition-all" style={{ opacity: transitioning ? 0 : 1, transform: transitioning ? 'translateY(10px)' : 'translateY(0)', transitionDuration: '300ms' }}>
                     <div className="text-center mb-8">
                         <div className="text-[10px] font-black tracking-[0.3em] text-amber-400/70 uppercase mb-3">
-                            Question {step} of {totalQuestions}
+                            {t('va.quiz.qOf', { step, total: totalQuestions })}
                         </div>
-                        <h2 className="text-4xl font-display font-bold text-white tracking-tight mb-2">{currentQuestion.prompt}</h2>
-                        <p className="text-white/50 text-sm">{currentQuestion.subtitle}</p>
+                        <h2 className="text-4xl font-display font-bold text-white tracking-tight mb-2">{t(currentQuestion.prompt)}</h2>
+                        <p className="text-white/50 text-sm">{t(currentQuestion.subtitle)}</p>
                     </div>
 
                     <div className="space-y-3">
@@ -2333,9 +2334,9 @@ const RevealScreen: React.FC<{ result: ReturnType<typeof computePersonaResult>; 
             <div className="text-white">
                 <div className="flex items-center gap-3 mb-3"
                     style={{ opacity: showText ? 1 : 0, transition: 'opacity 600ms' }}>
-                    <span className="text-[10px] tracking-[0.2em] text-amber-400/80 uppercase">Your voice profile</span>
+                    <span className="text-[10px] tracking-[0.2em] text-amber-400/80 uppercase">{t('va.quiz.profile')}</span>
                     <span className="text-[10px] text-white/40">·</span>
-                    <span className="text-[10px] text-white/50">{result.confidence}% match to known patterns</span>
+                    <span className="text-[10px] text-white/50">{t('va.quiz.match', { n: result.confidence })}</span>
                 </div>
                 <h1 className="text-3xl md:text-4xl font-display font-medium mb-3 tracking-tight text-white"
                     style={{ opacity: showText ? 1 : 0, transform: showText ? 'translateY(0)' : 'translateY(10px)', transition: 'opacity 600ms, transform 600ms' }}>
@@ -2359,7 +2360,7 @@ const RevealScreen: React.FC<{ result: ReturnType<typeof computePersonaResult>; 
 
                 <div className="p-4 bg-white/5 border border-white/10 rounded-xl mb-5"
                     style={{ opacity: showSample ? 1 : 0, transform: showSample ? 'translateY(0)' : 'translateY(10px)', transition: 'opacity 500ms, transform 500ms' }}>
-                    <div className="text-[10px] tracking-[0.15em] text-white/40 uppercase mb-2">Sample line at these settings</div>
+                    <div className="text-[10px] tracking-[0.15em] text-white/40 uppercase mb-2">{t('va.quiz.sampleLine')}</div>
                     <p className="text-white text-sm italic font-display leading-relaxed">{result.sampleLine}</p>
                 </div>
 
@@ -2367,11 +2368,11 @@ const RevealScreen: React.FC<{ result: ReturnType<typeof computePersonaResult>; 
                     style={{ opacity: showSample ? 1 : 0, transition: 'opacity 500ms 200ms' }}>
                     <button onClick={onLockIn}
                         className="flex-1 min-w-[160px] px-5 py-2.5 bg-white text-gray-900 rounded-xl font-medium text-sm hover:bg-gray-100 transition-all flex items-center justify-center gap-2">
-                        <Check size={15} /> Use this profile
+                        <Check size={15} /> {t('va.quiz.use')}
                     </button>
                     <button onClick={onRedo}
                         className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium text-sm transition-all">
-                        Try again
+                        {t('va.quiz.tryAgain')}
                     </button>
                 </div>
             </div>
