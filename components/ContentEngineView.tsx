@@ -912,7 +912,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                                             )}
                                             <button onClick={() => copy(draft.content, idx)}
                                                 className="flex items-center gap-1 px-2.5 py-1 hover:bg-gray-100 rounded-md text-xs text-gray-600 font-medium transition-all">
-                                                {copiedIdx === idx ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+                                                {copiedIdx === idx ? <><Check size={12} /> {t('ce.copied')}</> : <><Copy size={12} /> {t('ce.copy')}</>}
                                             </button>
                                         </div>
                                     </div>
@@ -956,7 +956,7 @@ export const ContentEngineView: React.FC<{ onOpenParameters?: () => void }> = ({
                     <div className="text-center">
                         <button onClick={() => { setStep(1); setDrafts([]); setSourceContent(''); setSourceUrl(''); }}
                             className="text-xs text-gray-400 hover:text-gray-700 transition-colors underline underline-offset-4">
-                            Start a new draft
+                            {t('ce.newDraft')}
                         </button>
                     </div>
                 </div>
