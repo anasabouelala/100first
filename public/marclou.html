@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Chat with Marc Lou's playbook — Viraholic</title>
-<meta name="description" content="An AI mentor trained on indie hacker Marc Lou's playbook: ship fast, build in public, charge from day one. Start chatting — no login, no API key." />
+<title>Your 1:1 with Marc Lou (his AI twin) — Viraholic</title>
+<meta name="description" content="Get a free 1-on-1 with an AI twin of indie hacker Marc Lou. Ask anything about shipping fast, first customers, building in public — no calendar, no login, he always replies." />
 <meta name="theme-color" content="#eef2f7" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,6 +43,40 @@ tailwind.config = { theme: { extend: {
   .dot:nth-child(2){ animation-delay:.2s; } .dot:nth-child(3){ animation-delay:.4s; }
   @keyframes blink{ 0%,80%,100%{opacity:.25;} 40%{opacity:1;} }
   .msgs::-webkit-scrollbar{ width:10px; } .msgs::-webkit-scrollbar-thumb{ background:rgba(15,23,42,0.15); border-radius:8px; border:3px solid transparent; background-clip:content-box; }
+  /* ── Live "online now" pulse on the avatar ── */
+  .status-dot{ position:absolute; bottom:2px; right:2px; width:22px; height:22px; border-radius:50%; background:#22c55e; border:4px solid #fff; box-shadow:0 0 0 0 rgba(34,197,94,0.55); animation:pulse-ring 1.8s ease-out infinite; }
+  .status-dot.sm{ width:11px; height:11px; border-width:2px; bottom:0; right:0; }
+  @keyframes pulse-ring{ 0%{ box-shadow:0 0 0 0 rgba(34,197,94,0.5); } 70%{ box-shadow:0 0 0 10px rgba(34,197,94,0); } 100%{ box-shadow:0 0 0 0 rgba(34,197,94,0); } }
+  .live-pill{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#16a34a; }
+  .live-pill .d{ width:7px; height:7px; border-radius:50%; background:#22c55e; animation:blink 1.3s infinite both; }
+  /* ── "Connecting to Marc…" intro overlay ── */
+  #connect{ position:absolute; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:24px; background:rgba(255,255,255,0.86); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:opacity .5s ease, visibility .5s; cursor:pointer; }
+  #connect.gone{ opacity:0; visibility:hidden; pointer-events:none; }
+  .ring{ position:relative; width:104px; height:104px; }
+  .ring .halo{ position:absolute; inset:0; border-radius:50%; border:3px solid rgba(99,102,241,0.4); animation:ringPulse 1.5s ease-out infinite; }
+  .ring .halo:nth-child(2){ animation-delay:.5s; } .ring .halo:nth-child(3){ animation-delay:1s; }
+  @keyframes ringPulse{ 0%{ transform:scale(.75); opacity:.9; } 100%{ transform:scale(1.35); opacity:0; } }
+  .ring .pic{ position:absolute; inset:14px; border-radius:50%; overflow:hidden; background:linear-gradient(135deg,#6366f1,#3b82f6); display:grid; place-items:center; color:#fff; font-weight:700; box-shadow:0 8px 24px rgba(79,70,229,0.4); }
+  .ring .pic img{ width:100%; height:100%; object-fit:cover; }
+  #connect .skip{ font-size:12px; color:var(--muted); }
+  /* ── Playful emoji topic cards ── */
+  .topic{ display:flex; align-items:center; gap:8px; text-align:left; padding:9px 12px; border-radius:14px; background:rgba(255,255,255,0.85); border:1px solid rgba(15,23,42,0.09); box-shadow:0 2px 8px rgba(15,23,42,0.04); cursor:pointer; transition:transform .18s cubic-bezier(0.16,1,0.3,1), border-color .18s, box-shadow .18s; }
+  .topic:hover{ transform:translateY(-2px) rotate(-1.2deg); border-color:rgba(99,102,241,0.5); box-shadow:0 8px 20px -6px rgba(79,70,229,0.28); }
+  .topic:active{ transform:scale(.97); }
+  .topic .emo{ font-size:18px; line-height:1; transition:transform .18s; } .topic:hover .emo{ transform:scale(1.18) rotate(6deg); }
+  .topic .lbl{ font-size:12.5px; font-weight:600; color:#334155; }
+  /* ── "Marc's homework" receipt ── */
+  .hw-btn{ display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--deep); background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.22); padding:7px 12px; border-radius:999px; cursor:pointer; transition:background .18s, transform .18s; }
+  .hw-btn:hover{ background:rgba(99,102,241,0.14); transform:translateY(-1px); } .hw-btn:disabled{ opacity:.45; cursor:not-allowed; transform:none; }
+  .homework{ border:1.5px dashed rgba(99,102,241,0.45); background:linear-gradient(180deg,rgba(99,102,241,0.06),rgba(59,130,246,0.04)); border-radius:16px; padding:14px 16px; }
+  .homework h4{ display:flex; align-items:center; gap:6px; margin:0 0 8px; font-size:13px; font-weight:800; color:var(--ink); text-transform:none; letter-spacing:0; }
+  .homework .copy{ font-size:11px; font-weight:700; color:var(--deep); cursor:pointer; background:none; border:none; padding:0; }
+  /* ── Typewriter caret ── */
+  .caret::after{ content:'▋'; display:inline-block; margin-left:1px; color:var(--indigo); animation:blink 1s step-end infinite; }
+  /* ── Confetti ── */
+  .confetti{ position:fixed; top:-12px; width:9px; height:14px; z-index:60; pointer-events:none; border-radius:2px; animation:fall linear forwards; }
+  @keyframes fall{ 0%{ transform:translateY(0) rotate(0); opacity:1; } 100%{ transform:translateY(102vh) rotate(720deg); opacity:.9; } }
+  @media (prefers-reduced-motion: reduce){ .status-dot,.ring .halo,.topic,.confetti,.caret::after{ animation:none !important; } }
 </style>
 </head>
 <body class="antialiased">
@@ -61,34 +95,61 @@ tailwind.config = { theme: { extend: {
 <main class="flex-1 max-w-3xl w-full mx-auto px-5 py-8 flex flex-col min-h-0">
   <!-- HERO — centered photo, name, signature quote -->
   <header class="text-center mb-7">
-    <span class="avatar w-28 h-28 rounded-full mx-auto text-2xl shadow-lg ring-4 ring-white/70"><img src="/marclou.jpg" alt="Marc Lou" referrerpolicy="no-referrer" onerror="if(this.dataset.f){this.remove()}else{this.dataset.f=1;this.src='https://unavatar.io/twitter/marc_louvion'}"><span>ML</span></span>
-    <h1 class="mt-4 text-2xl md:text-3xl font-bold">Marc Lou</h1>
-    <div class="mt-1.5 inline-flex items-center gap-2 text-xs text-slate-500"><span class="font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-600">AI persona</span> @marc_louvion</div>
+    <span class="avatar w-28 h-28 rounded-full mx-auto text-2xl shadow-lg ring-4 ring-white/70">
+      <img src="/marclou.jpg" alt="Marc Lou" referrerpolicy="no-referrer" onerror="if(this.dataset.f){this.remove()}else{this.dataset.f=1;this.src='https://unavatar.io/twitter/marc_louvion'}"><span>ML</span>
+      <span class="status-dot" title="online now"></span>
+    </span>
+    <h1 class="mt-5 text-3xl md:text-4xl font-bold leading-tight">Your <span class="accent">1-on-1</span> with Marc Lou</h1>
+    <div class="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
+      <span class="live-pill"><span class="d"></span>online now</span>
+      <span class="text-slate-300">·</span>
+      <span class="font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-600">AI twin</span>
+      <span>@marc_louvion</span>
+    </div>
     <blockquote class="mt-4 text-xl md:text-2xl leading-snug"><span class="accent">&ldquo;Ship fast, ship ugly. Done beats perfect.&rdquo;</span></blockquote>
-    <p class="mt-4 text-sm text-slate-500 max-w-xl mx-auto leading-relaxed">This AI was trained on as much of Marc Lou's public content as possible — to answer as close as possible to the real person.</p>
+    <p class="mt-4 text-sm text-slate-500 max-w-xl mx-auto leading-relaxed">No calendar. No $1k/hr. No login. Just pull up a chair and ask an AI twin of Marc anything you'd ask him over coffee.</p>
   </header>
 
   <!-- CHAT -->
-  <section class="card rounded-2xl flex flex-col flex-1 min-h-[58vh] overflow-hidden">
+  <section class="card rounded-2xl flex flex-col flex-1 min-h-[58vh] overflow-hidden relative">
+    <!-- "Connecting to Marc…" intro — auto-dismisses, tap to skip -->
+    <div id="connect" role="status" aria-label="Connecting you to Marc">
+      <div class="ring">
+        <span class="halo"></span><span class="halo"></span><span class="halo"></span>
+        <span class="pic"><img src="/marclou.jpg" alt="" referrerpolicy="no-referrer" onerror="if(this.dataset.f){this.remove()}else{this.dataset.f=1;this.src='https://unavatar.io/twitter/marc_louvion'}"><span>ML</span></span>
+      </div>
+      <div>
+        <div class="text-lg font-bold" style="color:var(--ink)">connecting you to marc…</div>
+        <div class="text-sm text-slate-500 mt-1">setting up your 1:1 — grabbing a coffee ☕</div>
+      </div>
+      <div class="skip">tap anywhere to skip →</div>
+    </div>
     <div id="msgs" class="msgs flex-1 overflow-y-auto px-5 py-5 space-y-4" aria-live="polite"></div>
+    <div id="toolbar" class="px-5 pt-1 hidden"><button id="hwBtn" class="hw-btn" type="button">📋 get my homework from marc</button></div>
     <div id="suggestions" class="px-5 pb-2 flex flex-wrap gap-2"></div>
     <form id="composer" class="border-t p-3 flex items-end gap-2" style="border-color:var(--line)">
-      <textarea id="input" rows="1" placeholder="Ask Marc anything…" class="flex-1 resize-none max-h-32 px-3.5 py-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-900 outline-none focus:border-indigo-400 leading-relaxed"></textarea>
+      <textarea id="input" rows="1" placeholder="ask marc anything…" class="flex-1 resize-none max-h-32 px-3.5 py-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-900 outline-none focus:border-indigo-400 leading-relaxed"></textarea>
       <button id="send" type="submit" class="btn-primary px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-1.5" aria-label="Send">
         <span class="hidden sm:inline">Send</span>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
       </button>
     </form>
   </section>
-  <p class="text-[11px] text-slate-400 mt-4 text-center">AI persona inspired by public posts, talks &amp; books. Not affiliated with, endorsed by, or actually Marc Lou. · <a href="/privacy.html" class="underline hover:text-slate-600">Privacy</a> · <a href="/terms.html" class="underline hover:text-slate-600">Terms</a></p>
+  <p class="text-[11px] text-slate-400 mt-4 text-center">not the real Marc — an AI twin trained on his public posts, talks &amp; books (and he won't judge you for asking at 3am). Not affiliated with or endorsed by Marc Lou. · <a href="/privacy.html" class="underline hover:text-slate-600">Privacy</a> · <a href="/terms.html" class="underline hover:text-slate-600">Terms</a></p>
 </main>
 
 <script>
 const ENDPOINT='/api/chat';
 const MENTOR={
   name:'Marc Lou', handle:'@marc_louvion', initials:'ML', avatar:'https://unavatar.io/twitter/marc_louvion',
-  greeting:"hey 👋 I'm an AI version of Marc Lou. ask me anything about shipping fast, getting your first customers, building in public, or making a micro-SaaS actually profitable. what are you working on?",
-  suggestions:["How do I get my first 10 paying customers?","I have no audience. Where do I start on X?","Should I keep building or just launch?"],
+  greeting:"hey 👋 you're in — this is your 1:1 with an AI twin of Marc Lou. ask me anything about shipping fast, getting your first customers, building in public, or making a micro-SaaS actually profitable. so… what are you working on?",
+  suggestions:[
+    {emo:'💸', lbl:'my first $', q:"How do I get my first 10 paying customers?"},
+    {emo:'🚀', lbl:'launch this week', q:"I keep polishing instead of shipping. How do I just launch this week?"},
+    {emo:'📣', lbl:'build in public', q:"I have no audience. Where do I start on X?"},
+    {emo:'🧠', lbl:'is my idea dumb?', q:"Here's my idea — be brutally honest, is it worth building?"}
+  ],
+  placeholders:["ask marc anything…","tell me your idea, i'll be brutally honest…","how do i get my first 10 customers?…","how do i launch by friday?…","i have no audience — where do i start?…"],
   system:`You are "Marc" — an AI persona modeled on French indie hacker Marc Lou (Marc Louvion, @marc_louvion). You are NOT the real Marc Lou; you're an AI trained to sound like him from his public tweets, blog, and YouTube. If asked, say you're an AI version of him.
 
 WHO HE IS (use naturally, never recite):
@@ -111,8 +172,8 @@ RULES: always give the exact next step / a number / a real tactic — never vagu
 };
 
 const $=(id)=>document.getElementById(id);
-const msgsEl=$('msgs'), suggestionsEl=$('suggestions'), inputEl=$('input'), composerEl=$('composer'), sendBtn=$('send');
-let history=[{role:'bot',text:MENTOR.greeting}], busy=false;
+const msgsEl=$('msgs'), suggestionsEl=$('suggestions'), inputEl=$('input'), composerEl=$('composer'), sendBtn=$('send'), toolbarEl=$('toolbar'), hwBtn=$('hwBtn'), connectEl=$('connect');
+let history=[{role:'bot',text:MENTOR.greeting}], busy=false, firstSend=true;
 
 function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function formatText(t){ const esc=escapeHtml(t), lines=esc.split('\n'); let html='',inList=false; for(let raw of lines){ const line=raw.trimEnd(), b=line.match(/^\s*[-•*]\s+(.*)$/); if(b){ if(!inList){html+='<ul>';inList=true;} html+='<li>'+b[1]+'</li>'; } else { if(inList){html+='</ul>';inList=false;} if(line.trim()==='')continue; html+='<p>'+line+'</p>'; } } if(inList)html+='</ul>'; return html.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>'); }
@@ -122,17 +183,40 @@ function renderMessage(role,text){ const row=document.createElement('div'); row.
 function note(text){ const n=document.createElement('div'); n.className='text-center text-[11px] text-slate-500 animate-fade-up'; n.textContent=text; msgsEl.appendChild(n); scrollDown(); }
 function showTyping(){ const row=document.createElement('div'); row.id='typing'; row.className='flex gap-3 animate-fade-up'; row.innerHTML=`<span class="avatar w-8 h-8 rounded-full text-[10px]">${avatarMarkup()}</span><div class="bubble bubble-bot rounded-2xl px-4 py-3 flex items-center gap-1"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`; msgsEl.appendChild(row); scrollDown(); }
 function hideTyping(){ const t=$('typing'); if(t)t.remove(); }
-function renderSuggestions(){ suggestionsEl.innerHTML=''; if(history.length>1)return; MENTOR.suggestions.forEach(q=>{ const b=document.createElement('button'); b.type='button'; b.className='text-[12px] text-slate-600 chip rounded-full px-3 py-1.5 hover:border-slate-300 transition-colors'; b.textContent=q; b.addEventListener('click',()=>{ inputEl.value=q; sendMessage(); }); suggestionsEl.appendChild(b); }); }
+function renderSuggestions(){ suggestionsEl.innerHTML=''; if(history.length>1){ suggestionsEl.classList.remove('grid'); return; } suggestionsEl.className='px-5 pb-3 grid grid-cols-2 gap-2'; MENTOR.suggestions.forEach(s=>{ const b=document.createElement('button'); b.type='button'; b.className='topic'; b.innerHTML='<span class="emo">'+s.emo+'</span><span class="lbl">'+s.lbl+'</span>'; b.setAttribute('aria-label',s.q); b.addEventListener('click',()=>{ inputEl.value=s.q; sendMessage(); }); suggestionsEl.appendChild(b); }); }
 
 async function callMentor(){ const contents=[]; for(const msg of history){ if(contents.length===0&&msg.role==='bot')continue; contents.push({ role:msg.role==='user'?'user':'model', parts:[{text:msg.text}] }); } const res=await fetch(ENDPOINT,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ system:MENTOR.system, contents }) }); let data={}; try{ data=await res.json(); }catch(e){} if(!res.ok) throw new Error(data?.error || `Request failed (${res.status}).`); if(!data.text) throw new Error('Empty response — try again.'); return data.text; }
 
-async function sendMessage(){ if(busy)return; const text=inputEl.value.trim(); if(!text)return; inputEl.value=''; autosize(); history.push({role:'user',text}); renderMessage('user',text); renderSuggestions(); busy=true; sendBtn.disabled=true; showTyping(); try{ const reply=await callMentor(); hideTyping(); history.push({role:'bot',text:reply}); renderMessage('bot',reply); }catch(err){ hideTyping(); note('⚠ '+(err.message||'Something went wrong.')); } finally{ busy=false; sendBtn.disabled=false; inputEl.focus(); } }
+async function sendMessage(){ if(busy)return; const text=inputEl.value.trim(); if(!text)return; if(firstSend){ firstSend=false; stopPlaceholders(); confettiBurst(); } inputEl.value=''; autosize(); history.push({role:'user',text}); renderMessage('user',text); renderSuggestions(); busy=true; sendBtn.disabled=true; showTyping(); try{ const reply=await callMentor(); hideTyping(); history.push({role:'bot',text:reply}); renderMessage('bot',reply); maybeShowHomework(); }catch(err){ hideTyping(); note('⚠ '+(err.message||'Something went wrong.')); } finally{ busy=false; sendBtn.disabled=false; inputEl.focus(); } }
+function userTurns(){ return history.filter(m=>m.role==='user').length; }
+function maybeShowHomework(){ if(userTurns()>=2) toolbarEl.classList.remove('hidden'); }
 function autosize(){ inputEl.style.height='auto'; inputEl.style.height=Math.min(inputEl.scrollHeight,128)+'px'; }
 inputEl.addEventListener('input',autosize);
 inputEl.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMessage(); } });
 composerEl.addEventListener('submit',e=>{ e.preventDefault(); sendMessage(); });
 
-renderMessage('bot',MENTOR.greeting); renderSuggestions();
+// ── Rotating placeholder hints (pause while typing / focused) ──
+let phTimer=null, phI=0;
+function startPlaceholders(){ phTimer=setInterval(()=>{ if(document.activeElement===inputEl||inputEl.value) return; phI=(phI+1)%MENTOR.placeholders.length; inputEl.setAttribute('placeholder',MENTOR.placeholders[phI]); },2600); }
+function stopPlaceholders(){ if(phTimer){ clearInterval(phTimer); phTimer=null; } inputEl.setAttribute('placeholder','ask marc anything…'); }
+
+// ── Typewriter greeting — Marc "types" his first message ──
+function typewriteGreeting(text){ const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches; const row=document.createElement('div'); row.className='flex gap-3 animate-fade-up'; const av=document.createElement('span'); av.className='avatar w-8 h-8 rounded-full text-[10px]'; av.innerHTML=avatarMarkup(); const bub=document.createElement('div'); bub.className='bubble bubble-bot rounded-2xl px-4 py-2.5 text-[14px] caret'; row.appendChild(av); row.appendChild(bub); msgsEl.appendChild(row); scrollDown(); if(reduce){ bub.classList.remove('caret'); bub.innerHTML=formatText(text); renderSuggestions(); return; } let i=0; (function step(){ if(i<=text.length){ bub.innerHTML=formatText(text.slice(0,i)); scrollDown(); i+=2; setTimeout(step,16); } else { bub.classList.remove('caret'); bub.innerHTML=formatText(text); renderSuggestions(); scrollDown(); } })(); }
+
+// ── "Connecting to Marc…" intro → reveal + greeting ──
+let greeted=false;
+function reveal(){ if(greeted) return; greeted=true; connectEl.classList.add('gone'); setTimeout(()=>{ typewriteGreeting(MENTOR.greeting); inputEl.focus(); },260); }
+connectEl.addEventListener('click',reveal);
+setTimeout(reveal,1900);
+startPlaceholders();
+
+// ── "Marc's homework" — distill the session into a checklist ──
+async function getHomework(){ if(busy) return; busy=true; hwBtn.disabled=true; const orig=hwBtn.innerHTML; hwBtn.innerHTML='📋 marc’s writing your homework…'; try{ const contents=[]; for(const msg of history){ if(contents.length===0&&msg.role==='bot') continue; contents.push({ role:msg.role==='user'?'user':'model', parts:[{text:msg.text}] }); } contents.push({ role:'user', parts:[{text:'Based on everything we just discussed, give me my homework: 3–5 concrete actions to take THIS WEEK — each specific and doable. Open with a one-line pep talk, then a checklist using "- ". Keep it punchy and in your voice.'}] }); const res=await fetch(ENDPOINT,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ system:MENTOR.system, contents }) }); let data={}; try{ data=await res.json(); }catch(e){} if(!res.ok||!data.text) throw new Error(data?.error||'try again in a sec.'); renderHomework(data.text); }catch(err){ note('⚠ '+(err.message||'couldn’t build your homework.')); } finally{ busy=false; hwBtn.disabled=false; hwBtn.innerHTML=orig; } }
+function renderHomework(text){ const row=document.createElement('div'); row.className='animate-fade-up'; const card=document.createElement('div'); card.className='homework'; const h=document.createElement('h4'); h.innerHTML='🔥 your homework from marc'; const body=document.createElement('div'); body.className='bubble text-[14px]'; body.style.maxWidth='100%'; body.innerHTML=formatText(text); const foot=document.createElement('div'); foot.className='mt-2'; const copy=document.createElement('button'); copy.className='copy'; copy.textContent='copy homework'; copy.addEventListener('click',()=>{ navigator.clipboard.writeText(text).then(()=>{ copy.textContent='copied ✓'; setTimeout(()=>copy.textContent='copy homework',1500); }).catch(()=>{}); }); foot.appendChild(copy); card.appendChild(h); card.appendChild(body); card.appendChild(foot); row.appendChild(card); msgsEl.appendChild(row); scrollDown(); confettiBurst(); }
+hwBtn.addEventListener('click',getHomework);
+
+// ── Confetti burst — first message + homework ──
+function confettiBurst(){ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; const colors=['#6366f1','#3b82f6','#22c55e','#f59e0b','#ec4899']; const n=window.innerWidth<480?14:22; for(let k=0;k<n;k++){ const c=document.createElement('div'); c.className='confetti'; c.style.left=(Math.random()*100)+'vw'; c.style.background=colors[k%colors.length]; c.style.animationDuration=(1.6+Math.random()*1.4)+'s'; c.style.animationDelay=(Math.random()*0.25)+'s'; c.style.transform='rotate('+(Math.random()*360)+'deg)'; document.body.appendChild(c); setTimeout(()=>c.remove(),3400); } }
 </script>
 </body>
 </html>
