@@ -22,15 +22,16 @@ textarea:not([class*="bg-"]) {
   color: #1e293b;
 }
 
-/* ─── App-wide scale ──────────────────────────────────────────────────
-   The dashboard was designed to read best at ~80% browser zoom, so bake
-   that in as the default: scale the whole mounted app to 0.8. Applied to
-   `#root` (not `body`) so the fixed ambient gradient on `body` still fills
-   the viewport behind the shrunk UI. `zoom` reflows like real browser zoom
-   (unlike transform:scale), so `min-h-screen` layouts and `inset-0` overlays
-   stay correct. Scoped to the React app — the landing .html pages don't load
-   this stylesheet. */
-#root {
+/* ─── Content scale ───────────────────────────────────────────────────
+   The dense views read best a touch smaller (~80%). Scale ONLY the main
+   content region, not the whole app: zooming `#root` shrank the shell too,
+   so the `min-h-screen` layout no longer filled the viewport and left a gap
+   on larger screens. `<main>` is a `flex-1` child of the full-height shell,
+   so zooming it keeps the sidebar + shell at full size and filling the
+   screen while its inner content renders at 0.8. Scoped to the React app —
+   the landing .html pages don't load this stylesheet, and the app has a
+   single <main>. */
+main {
   zoom: 0.8;
 }
 
