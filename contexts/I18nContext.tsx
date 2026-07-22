@@ -923,6 +923,52 @@ const en: Dict = {
 
   // Language switch
   'lang.switch': 'Language',
+
+  // Playbook — growth guide for LinkedIn/X automation users. Coach-y tone;
+  // every specific number was fact-checked against 2026 platform behavior.
+  'section.playbook.title': 'Playbook',
+  'section.playbook.subtitle': 'The compound-growth guide — how the top 1% run their accounts, and how Viraholic matches that rhythm.',
+  'pb.hero.title': 'Grow without hitting a wall',
+  'pb.hero.body': 'Every account that scales from 500 to 50k on LinkedIn or X follows the same rhythm. It’s not luck, and it’s not volume — it’s cadence. Here’s how the top 1% run their accounts, and how Viraholic is tuned to match that rhythm out of the box.',
+
+  'pb.li.title': 'LinkedIn — the compound platform',
+  'pb.li.intro': 'LinkedIn rewards consistency over intensity. Accounts that stay in the algorithm’s "good citizen" lane compound 3–5× faster than accounts that push volume.',
+  'pb.li.b1': '**15–40 thoughtful comments a day** is the sweet spot on a mid-trust account. High enough to keep building reach, low enough to always feel human. Brand-new accounts start softer (10–15 a day); established accounts can push toward 50.',
+  'pb.li.b2': '**The first 30 minutes are the golden window.** Comments landing inside it earn roughly 4× the impressions of comments that show up 24 hours later (measured across 261k comments in 2026). Feed Watcher’s default cadence lands you there — human-shaped, never in the same second.',
+  'pb.li.b3': '**Fast replies are rewarded, not flagged.** The old "wait 30 seconds or you look like a bot" rule is a myth — early replies actually get 2× the views. What the algorithm does catch is a burst of near-simultaneous, generic comments from multiple accounts on the same post. A substantive single reply, even seconds after publish, is a green flag.',
+  'pb.li.b4': '**New account? Ramp up.** Weeks 1–2: about 5 actions a day. Weeks 3–4: 15–25. Week 5+: 25–40. Slow and boring compounds.',
+  'pb.li.b5': '**Complete your profile first.** Photo, banner, bio, featured section — profile completeness is one of the four SSI pillars and quietly drives search + content distribution.',
+  'pb.li.b6': '**One tool per account.** Stacking two automation tools — especially one cloud, one browser extension — creates a mismatched IP and session fingerprint that stacks against you fast.',
+  'pb.li.b7': '**Concentrate activity in local business hours (8am–6pm).** Nights and weekends off. A ~12-hour quiet window every day, plus full weekends dark, is what a real human’s calendar looks like.',
+  'pb.li.b8': '**The invitation cap is ~100/week — but dynamic.** LinkedIn now flexes it by acceptance rate: high acceptance pushes it toward 150–200, low acceptance drops it to 15–30. If your acceptance drops under 25%, pause outreach and rewrite your opener before you burn trust.',
+  'pb.li.b9': '**Depth beats virality now.** LinkedIn’s 2026 stack (360Brew + the March Authenticity Update) weighs dwell time over quick likes — a 30-second read outperforms 50 scroll-by likes. Native video, carousels, and threaded storytelling win the new algorithm.',
+  'pb.li.b10': '**Human-edit every AI draft.** LinkedIn’s classifier suppresses generic openers ("In today’s fast-paced world…"), bullet-heavy templated structure, and low sentence variation. Voice Studio’s phrase rotation handles this by default.',
+
+  'pb.x.title': 'X / Twitter — the momentum platform',
+  'pb.x.intro': 'X rewards speed and boldness, but only when it reads as authentic.',
+  'pb.x.b1': '**10–20 human-written replies a day** on a new account for the first two weeks. Warm up to 20–40/day sustained. Platform hard cap for unverified accounts is 200 replies/day — don’t get anywhere near it.',
+  'pb.x.b2': '**The first 15 minutes are the golden window.** Replies landing then earn 3–5× the visibility of replies posted two hours later. X is a much tighter feed than LinkedIn — miss the window and the tweet is buried.',
+  'pb.x.b3': '**Replies are the currency.** In the leaked ranking code, a reply is worth ~13.5× a like, and an author-engaged back-and-forth is worth ~75×. One real thread beats fifty likes.',
+  'pb.x.b4': '**Follow-churn is the fastest way to lose reach.** Follow/unfollow within 24–72h is the specific pattern detection is tuned for. Keep it under ~50 follows or unfollows a day, and don’t churn what you just followed.',
+  'pb.x.b5': '**The "same URL 3× a week" rule is a myth.** What actually trips duplicate-content filters is reposting the identical text + URL + hashtags. The same link wrapped in fresh copy 3–5× a week is fine.',
+  'pb.x.b6': '**The link penalty is dead.** X officially removed the algorithmic link demote in October 2025 — link posts saw roughly an 8× reach lift overnight. Links still under-index because people click less than they reply, not because the algorithm punishes them anymore.',
+  'pb.x.b7': '**Spread the love.** X caps how many posts from one author appear in any single user’s session — the "author-diversity cap." Piling 10+ replies onto one account per day quietly throttles you to that account’s audience.',
+  'pb.x.b8': '**Low-effort replies get demoted.** As of March 2026, "great post" and single-emoji replies are actively down-ranked, and Premium users can downvote AI-slop. Say something real.',
+  'pb.x.b9': '**The Following feed isn’t chronological anymore** (since Nov 30, 2025). Grok reranks it just like For You. Old "follow-based reach" playbooks are dead — earning replies is the only lever left.',
+
+  'pb.hab.title': 'Habits both platforms reward',
+  'pb.hab.b1': '**Same account, same device, same rhythm.** Predictable = trusted.',
+  'pb.hab.b2': '**Post one thing manually a week.** Anchors your account as human-driven.',
+  'pb.hab.b3': '**Keep phrase-rotation on.** No two of your replies should read like siblings.',
+  'pb.hab.b4': '**Cross-post with a different voice, not an identical caption.** The platforms don’t talk to each other — but each audience punishes the wrong tone with silence, which the ranker reads as "demote."',
+  'pb.hab.b5': '**Vertical native video is the highest-leverage new format on both platforms in 2026** (+36% YoY engagement on LinkedIn, explicit distribution lift on X). If you make one thing this quarter, make it that.',
+
+  'pb.vh.title': 'How Viraholic is tuned for you',
+  'pb.vh.b1': '**Default poll intervals sit squarely in the human range** — inside the first-hour golden window, spaced so no two replies ever land in the same second.',
+  'pb.vh.b2': '**Voice Studio randomizes phrasing** so you never look copy-pasted and never trip the AI-generic classifier.',
+  'pb.vh.b3': '**Auto-comment ships in "Confirm before posting" mode.** You approve every reply until you’re sure.',
+  'pb.vh.b4': '**Feed Watcher spaces sweeps** across accounts and across time — the exact fingerprint stacked-tool users trip on.',
+  'pb.vh.b5': '**Acceptance-rate guardrail** built into Account Finder — you’ll get a warning to pause outreach if acceptance drops under 25%, before LinkedIn tightens your cap.',
 };
 
 const ar: Dict = {
@@ -1831,6 +1877,51 @@ const ar: Dict = {
 
   // Language switch
   'lang.switch': 'اللغة',
+
+  // Playbook (AR — MSA)
+  'section.playbook.title': 'دليل النمو',
+  'section.playbook.subtitle': 'دليل النمو المتراكم — كيف يدير الـ1% الأعلى حساباتهم، وكيف يطابق Viraholic هذا الإيقاع.',
+  'pb.hero.title': 'انمُ دون أن تصطدم بحائط',
+  'pb.hero.body': 'كل حساب ينمو من 500 إلى 50 ألفاً على LinkedIn أو X يتبع الإيقاع نفسه. ليس حظاً، وليس حجماً — بل انتظام. إليك كيف يدير الـ1% الأعلى حساباتهم، وكيف تم ضبط Viraholic ليطابق هذا الإيقاع تلقائياً.',
+
+  'pb.li.title': 'LinkedIn — منصة التراكم',
+  'pb.li.intro': 'LinkedIn يكافئ الانتظام لا الحدة. الحسابات التي تبقى في مسار «المستخدم الجيد» داخل الخوارزمية تنمو أسرع بـ3–5× من الحسابات التي تدفع بالحجم.',
+  'pb.li.b1': '**15–40 تعليقاً هادفاً يومياً** هو المدى الأمثل لحساب متوسط الثقة. عالٍ بما يكفي لبناء الوصول، ومنخفض بما يكفي ليبدو بشرياً دائماً. الحسابات الجديدة تبدأ أخف (10–15 يومياً)؛ الحسابات الراسخة يمكنها الاقتراب من 50.',
+  'pb.li.b2': '**أول 30 دقيقة هي النافذة الذهبية.** التعليقات التي تصل خلالها تحصل تقريباً على 4× من الظهور مقارنة بتعليقات تُنشر بعد 24 ساعة (قياس على 261 ألف تعليق في 2026). إيقاع Feed Watcher الافتراضي يضعك داخل هذه النافذة — بإيقاع بشري، لا يتصادف أبداً في الثانية نفسها.',
+  'pb.li.b3': '**الردود السريعة تُكافأ، لا تُعاقب.** قاعدة «انتظر 30 ثانية حتى لا تبدو بوتاً» أسطورة — الردود المبكرة تحصل فعلياً على ضعف المشاهدات. ما تلتقطه الخوارزمية فعلاً هو موجة تعليقات متزامنة وعامة من حسابات متعددة على نفس المنشور. رد واحد جوهري، حتى بعد ثوانٍ من النشر، إشارة إيجابية.',
+  'pb.li.b4': '**حساب جديد؟ تدرّج.** الأسبوعان 1–2: نحو 5 أفعال يومياً. الأسبوعان 3–4: 15–25. الأسبوع 5 وما بعده: 25–40. البطء المتّزن هو ما يتراكم.',
+  'pb.li.b5': '**أكمل ملفك الشخصي أولاً.** صورة، غلاف، سيرة، قسم المميز — اكتمال الملف أحد الأركان الأربعة لـSSI ويحرّك بهدوء البحث وتوزيع المحتوى.',
+  'pb.li.b6': '**أداة أتمتة واحدة لكل حساب.** استخدام أداتين معاً — خصوصاً واحدة سحابية وأخرى امتداد متصفح — يخلق بصمة IP وجلسة متضاربة تراكم ضدك بسرعة.',
+  'pb.li.b7': '**ركّز النشاط في ساعات العمل المحلية (8ص–6م).** أطفئ الليل والعطلات. نافذة صمت ~12 ساعة يومياً، مع تعطيل كامل لعطلة الأسبوع، هي شكل تقويم إنسان حقيقي.',
+  'pb.li.b8': '**سقف الدعوات ~100/أسبوع — لكنه متغيّر.** LinkedIn الآن يعدّله حسب نسبة القبول: القبول العالي يرفعه نحو 150–200، والقبول المنخفض يخفضه إلى 15–30. إذا نزل قبولك تحت 25%، أوقف التواصل الخارجي وأعد صياغة رسالتك الأولى قبل أن تحرق ثقتك.',
+  'pb.li.b9': '**العمق يهزم الفيروسية الآن.** المنظومة الجديدة لـLinkedIn في 2026 (360Brew + تحديث الأصالة في مارس) توزن مدة القراءة على الإعجابات السريعة — قراءة 30 ثانية تتفوّق على 50 إعجاباً عابراً. الفيديو الأصلي، الكاروسيلات، والقصص المتشابكة تكسب الخوارزمية الجديدة.',
+  'pb.li.b10': '**راجع كل مسودة ذكاء اصطناعي يدوياً.** مصنّف LinkedIn يخفض الافتتاحيات العامة («في عالمنا السريع اليوم…»)، والقوالب المثقلة بالنقاط، وضعف تنوع الجمل. تدوير العبارات في Voice Studio يعالج هذا افتراضياً.',
+
+  'pb.x.title': 'X / تويتر — منصة الزخم',
+  'pb.x.intro': 'X يكافئ السرعة والجرأة، لكن فقط حين يبدو الأمر أصيلاً.',
+  'pb.x.b1': '**10–20 ردّاً مكتوباً بيدك يومياً** على حساب جديد في أول أسبوعين. ثم تدرّج إلى 20–40 يومياً بشكل مستقر. السقف التقني للحسابات غير الموثّقة هو 200 ردّ/يوم — لا تقترب منه.',
+  'pb.x.b2': '**أول 15 دقيقة هي النافذة الذهبية.** الردود التي تصل حينها تحصل على 3–5× من ظهور الردود التي تُنشر بعد ساعتين. تدفق X أضيق بكثير من LinkedIn — تفوّت النافذة، تُدفن التغريدة.',
+  'pb.x.b3': '**الردود هي العملة.** في كود الترتيب المسرَّب، الردّ يساوي ~13.5× الإعجاب، وحوار مع صاحب المنشور يساوي ~75×. حوار حقيقي واحد يفوق خمسين إعجاباً.',
+  'pb.x.b4': '**دورة المتابعة/إلغاء المتابعة أسرع طريقة لخسارة الوصول.** المتابعة ثم إلغاؤها خلال 24–72 ساعة هي النمط الذي يُلتقط تحديداً. ابقَ تحت ~50 متابعة أو إلغاء يومياً، ولا تلغِ متابعة من تابعتَه للتو.',
+  'pb.x.b5': '**قاعدة «نفس الرابط 3× في الأسبوع» أسطورة.** ما يُشغّل فلاتر التكرار فعلاً هو إعادة نشر نفس النص + الرابط + الهاشتاجات. نفس الرابط بنص جديد 3–5× أسبوعياً لا مشكلة فيه.',
+  'pb.x.b6': '**عقوبة الروابط انتهت.** X ألغى رسمياً تخفيض ترتيب الروابط في أكتوبر 2025 — منشورات الروابط شاهدت ارتفاعاً بحوالي 8× في الوصول بين ليلة وضحاها. الروابط ما زالت تحقق تفاعلاً أقل لأن الناس يضغطون أقل مما يردّون، لا لأن الخوارزمية تعاقبها.',
+  'pb.x.b7': '**وزّع تفاعلك.** X يحدّد كم منشوراً من نفس المؤلف يظهر في جلسة أي مستخدم — «سقف تنوّع المؤلفين». تكديس 10+ ردود على حساب واحد يومياً يخنق ظهورك بهدوء لجمهور ذلك الحساب.',
+  'pb.x.b8': '**الردود الضعيفة تُخفَّض.** منذ مارس 2026، ردود مثل «منشور رائع» أو إيموجي مفرد تُنزَّل نشطاً، ويستطيع مستخدمو Premium التصويت ضد ردود الذكاء الاصطناعي الرديئة. قل شيئاً حقيقياً.',
+  'pb.x.b9': '**تدفق «المتابَعون» لم يعد زمنياً** (منذ 30 نوفمبر 2025). Grok يعيد ترتيبه تماماً كتدفق «لك». دفاتر النمو القديمة المبنية على المتابعة ماتت — كسب الردود هو الرافعة الوحيدة المتبقية.',
+
+  'pb.hab.title': 'عادات تكافئها المنصتان',
+  'pb.hab.b1': '**نفس الحساب، نفس الجهاز، نفس الإيقاع.** المتوقّع = الموثوق.',
+  'pb.hab.b2': '**انشر شيئاً يدوياً واحداً في الأسبوع.** يثبّت حسابك كمُدار بشرياً.',
+  'pb.hab.b3': '**أبقِ تدوير العبارات مفعّلاً.** لا ينبغي أن يبدو ردّان لك من عائلة واحدة.',
+  'pb.hab.b4': '**انشر عبر المنصتين بصوت مختلف، لا بنسخة متطابقة.** المنصتان لا تتحدثان مع بعضهما — لكن كل جمهور يعاقب النبرة الخاطئة بالصمت، وهو ما تقرأه الخوارزمية على أنه «خفّض».',
+  'pb.hab.b5': '**الفيديو العمودي الأصلي هو أعلى الصيغ الجديدة رافعةً على المنصتين في 2026** (+36% تفاعل سنوياً على LinkedIn، ورفع توزيع صريح على X). إذا صنعت شيئاً واحداً هذا الربع، اجعله هذا.',
+
+  'pb.vh.title': 'كيف تم ضبط Viraholic من أجلك',
+  'pb.vh.b1': '**فترات المسح الافتراضية تقع تماماً في المدى البشري** — داخل النافذة الذهبية للساعة الأولى، ومتباعدة بحيث لا يقع ردّان أبداً في الثانية نفسها.',
+  'pb.vh.b2': '**Voice Studio يعشوش الصياغة** حتى لا تبدو أبداً منسوخاً ولا تُشغّل مصنّف الذكاء الاصطناعي العامّ.',
+  'pb.vh.b3': '**التعليق التلقائي يُشحن بوضع «أكّد قبل النشر».** أنت تعتمد كل ردّ حتى تطمئن.',
+  'pb.vh.b4': '**Feed Watcher يوزّع المسحات** عبر الحسابات وعبر الوقت — نفس البصمة التي يقع فيها مستخدمو الأدوات المكدّسة.',
+  'pb.vh.b5': '**حاجز نسبة القبول** مدمج في Account Finder — سيصلك تنبيه لإيقاف التواصل إذا نزل القبول تحت 25%، قبل أن يشدّ LinkedIn سقفك.',
 };
 
 const DICTS: Record<UiLang, Dict> = { en, ar };

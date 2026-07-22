@@ -12,10 +12,11 @@ import { FeedWatcherView } from './components/FeedWatcherView';
 import { DashboardView } from './components/DashboardView';
 import { ExtensionInstallBanner } from './components/ExtensionInstallBanner';
 import { useI18n, useT } from './contexts/I18nContext';
+import { PlaybookView } from './components/PlaybookView';
 import {
   Zap, Menu, Home, ShieldCheck,
   Sparkles, Trash2, Plus, Crosshair, Settings2, Rss,
-  LogOut, Loader2, ArrowUpRight, Clock, Languages
+  LogOut, Loader2, ArrowUpRight, Clock, Languages, BookOpen
 } from 'lucide-react';
 
 // Unified section headers — i18n keys resolved at render so the header follows
@@ -26,6 +27,7 @@ const SECTION_META: Record<string, { titleKey: string; subtitleKey: string }> = 
   [AppMode.FEED_WATCHER]:       { titleKey: 'section.feedWatcher.title',   subtitleKey: 'section.feedWatcher.subtitle' },
   [AppMode.CONTENT_ENGINE]:     { titleKey: 'section.contentEngine.title', subtitleKey: 'section.contentEngine.subtitle' },
   [AppMode.CONTENT_PARAMETERS]: { titleKey: 'section.voiceStudio.title',   subtitleKey: 'section.voiceStudio.subtitle' },
+  [AppMode.PLAYBOOK]:           { titleKey: 'section.playbook.title',      subtitleKey: 'section.playbook.subtitle' },
 };
 
 // ──────────────────────────────────────────────────────────────────
@@ -374,6 +376,7 @@ function AppInner() {
       items: [
         { id: 'DASHBOARD', label: t('nav.item.dashboard'), icon: <Home size={18} /> },
         { id: AppMode.ANSWERLY_RADAR, label: t('section.postsTracker.title'), icon: <ShieldCheck size={18} /> },
+        { id: AppMode.PLAYBOOK, label: t('section.playbook.title'), icon: <BookOpen size={18} /> },
       ]
     },
     {
@@ -404,6 +407,7 @@ function AppInner() {
       case AppMode.CONTENT_PARAMETERS: return <>{projectHeader}<ContentParametersView /></>;
       case AppMode.ACCOUNT_FINDER:  return <AccountFinderView />;
       case AppMode.FEED_WATCHER:    return <>{projectHeader}<FeedWatcherView /></>;
+      case AppMode.PLAYBOOK:        return <>{projectHeader}<PlaybookView /></>;
 
       case 'DASHBOARD':
       default:

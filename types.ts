@@ -291,7 +291,8 @@ export enum AppMode {
   TRIAGE = 'TRIAGE',
   ACCOUNT_FINDER = 'ACCOUNT_FINDER',
   FEED_WATCHER = 'FEED_WATCHER',
-  CONTENT_PARAMETERS = 'CONTENT_PARAMETERS'
+  CONTENT_PARAMETERS = 'CONTENT_PARAMETERS',
+  PLAYBOOK = 'PLAYBOOK'
 }
 
 // =====================================================================
