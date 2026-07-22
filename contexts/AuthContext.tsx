@@ -92,6 +92,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signOut: AuthActions['signOut'] = async () => {
+    // Kill the extension's license SYNCHRONOUSLY before anything else. The
+    // React effect that owns `viraholic_license` will re-run once `session`
+    // flips to null, but that flush can lose the race with the sidebar/trial
+    // handlers doing `window.location.replace(...)` immediately after signOut
+    // resolves — which would leave the extension holding a long-lived `until`
+    // from BEFORE signout and keep the agent working in the background for
+    // hours. Dispatching here guarantees SET_LICENSE({active:false}) reaches
+    // the SW before the tab unloads.
+    try { window.dispatchEvent(new CustomEvent('viraholic_license', { detail: { active: false } })); } catch {}
     // Use LOCAL scope so this browser's session is always cleared even if the
     // server revoke call fails (e.g. an already-expired token) — a global-scope
     // signOut can throw before clearing local, leaving a ghost session. Then

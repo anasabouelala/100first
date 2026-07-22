@@ -164,26 +164,45 @@ function AppInner() {
   const trialExpired = !isAdmin && trialEndsMs !== null && Date.now() > trialEndsMs;
 
   // ── License heartbeat → Chrome extension ──
-  // The extension only operates while the web app is open AND the account is
-  // active (signed in + not trial-expired). We broadcast a short-TTL "license"
-  // the extension checks before any work — so if the app is closed, the user
-  // signs out, or the trial ends, the agent goes dormant.
+  // The extension checks `Date.now() < license.until` before every scheduled
+  // sweep. If we hand it a 2-min TTL and only refresh while THIS tab is open,
+  // closing the tab silently kills the Feed Watcher within ~2 min even though
+  // Chrome keeps firing the alarm — that's the "doesn't run in the background"
+  // bug. Instead, we mint a license bounded by the two things that SHOULD
+  // dormant the agent (Supabase session expiry + trial deadline), capped at
+  // 24h so a forgotten tab can't run indefinitely. Everything else the SW
+  // needs (poll interval, Gemini key, voice profile) already persists in
+  // chrome.storage.local and is re-armed by the extension's own
+  // `bootstrapFeedWatch()` on every service-worker wake.
   useEffect(() => {
+    const MAX_TTL_MS = 24 * 60 * 60 * 1000; // hard ceiling — a forgotten tab can't run past this
+    const sessionExpSec = (auth.session as any)?.expires_at;
+    const sessionExpMs = typeof sessionExpSec === 'number' ? sessionExpSec * 1000 : null;
     const active = !!auth.session && !trialExpired;
+    const computeUntil = () => {
+      const candidates: number[] = [Date.now() + MAX_TTL_MS];
+      if (Number.isFinite(sessionExpMs as number)) candidates.push(sessionExpMs as number);
+      // Admins have unlimited access, so we don't bound by trialEndsMs for them.
+      if (!isAdmin && Number.isFinite(trialEndsMs as number)) candidates.push(trialEndsMs as number);
+      return Math.min(...candidates);
+    };
     const push = () => {
       try {
         window.dispatchEvent(new CustomEvent('viraholic_license', {
           detail: active
-            ? { active: true, until: Date.now() + 120000, email: auth.user?.email || null }
+            ? { active: true, until: computeUntil(), email: auth.user?.email || null }
             : { active: false }
         }));
       } catch {}
     };
     push();
     window.addEventListener('EXTENSION_BRIDGE_READY', push);
-    const id = active ? window.setInterval(push, 30000) : undefined;
+    // Still refresh while the tab is open — a Supabase token refresh gives us a
+    // fresher `expires_at` to push down. 5 min is plenty; the whole point of
+    // the durable `until` is that background polling no longer depends on it.
+    const id = active ? window.setInterval(push, 5 * 60 * 1000) : undefined;
     return () => { window.removeEventListener('EXTENSION_BRIDGE_READY', push); if (id) clearInterval(id); };
-  }, [auth.session, trialExpired, auth.user?.email]);
+  }, [auth.session, trialExpired, auth.user?.email, trialEndsMs, isAdmin]);
 
   // Hand the extension a copy of the Gemini API key once the bridge is ready,
   // so the Feed Watcher (and any other SW-side AI feature) can call Gemini
