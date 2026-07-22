@@ -61,6 +61,10 @@ export const FeedWatcherView: React.FC = () => {
   const [sweepingNow, setSweepingNow] = useState(false);
   const [diag, setDiag] = useState<any | null>(null);
   const [showDiag, setShowDiag] = useState(false);
+  // Draft string for the poll-interval input. Separate from cfg so the field
+  // can hold intermediate states (empty while typing, "2" before "23", etc.)
+  // without the controlled `value` snapping back to the old number.
+  const [pollDraft, setPollDraft] = useState<string>(() => String(loadConfig().pollIntervalMinutes));
 
   const setPatch = (patch: Partial<FeedWatcherConfig>) => setCfg(c => ({ ...c, ...patch }));
   const togglePlatform = (p: DiscoveryPlatform) =>
@@ -264,11 +268,38 @@ export const FeedWatcherView: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
-                  min={2}
-                  max={360}
-                  value={cfg.pollIntervalMinutes}
-                  onChange={e => setPatch({ pollIntervalMinutes: Math.max(2, Math.min(360, parseInt(e.target.value, 10) || 15)) })}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={3}
+                  aria-label={t('fw.pollEvery')}
+                  value={pollDraft}
+                  // Focus selects the whole value so any keystroke replaces
+                  // the old number cleanly (the reason typing "23" over "15"
+                  // used to leave garbage in the field).
+                  onFocus={e => e.currentTarget.select()}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/\D/g, '').slice(0, 3);
+                    setPollDraft(raw);
+                    // Live-commit only when the typed value is a valid,
+                    // in-range number. Empty / out-of-range states are held
+                    // on the draft and reconciled on blur — so cfg (and the
+                    // extension) never see an invalid intermediate value.
+                    const n = parseInt(raw, 10);
+                    if (Number.isFinite(n) && n >= 2 && n <= 360 && n !== cfg.pollIntervalMinutes) {
+                      setPatch({ pollIntervalMinutes: n });
+                    }
+                  }}
+                  onBlur={() => {
+                    const n = parseInt(pollDraft, 10);
+                    if (!Number.isFinite(n)) {
+                      setPollDraft(String(cfg.pollIntervalMinutes));
+                      return;
+                    }
+                    const clamped = Math.max(2, Math.min(360, n));
+                    setPollDraft(String(clamped));
+                    if (clamped !== cfg.pollIntervalMinutes) setPatch({ pollIntervalMinutes: clamped });
+                  }}
                   className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:border-gray-900 focus:outline-none tabular-nums bg-white"
                 />
                 <span className="text-xs text-gray-600">{t('fw.minutes')}</span>
