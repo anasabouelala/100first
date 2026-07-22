@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
     Radar, ExternalLink, RefreshCw, Target, Trash2, Send, Inbox,
@@ -725,6 +725,16 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
   const [batchDrafts, setBatchDrafts] = useState<Record<string, string>>({});
   const [batchStates, setBatchStates] = useState<Record<string, 'generating' | 'done' | 'error'>>({});
   const [isBatchRunning, setIsBatchRunning] = useState(false);
+  // ── Publish-side state ──
+  // isPublishing gates the Publish button so a double-click can't re-enqueue
+  // the batch. publishProgress drives the "Posting 2/3 · waiting 45s" UI.
+  // submittedKeysRef is the SESSION-lifetime idempotency set — every postUrl
+  // we have ever dispatched this session ends up here, so it can never be
+  // re-enqueued even if the user re-selects or mounts flap.
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishProgress, setPublishProgress] = useState<{ current: number; total: number; phase: 'sending' | 'waiting' | 'idle'; waitSec: number }>({ current: 0, total: 0, phase: 'idle', waitSec: 0 });
+  const submittedKeysRef = useRef<Set<string>>(new Set());
+  const cancelPublishRef = useRef<boolean>(false);
 
   // ── Inline single-comment state (Posts Tracker) ──
   // Clicking "Comment" on a card now generates a reply directly INSIDE the card
@@ -976,7 +986,22 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
         const localHist = loadLocalData();
         const combined = [...localHist, ...answerlyExtHistory];
         const uniqueMap = new Map();
-        combined.forEach(item => { uniqueMap.set(item.uuid || item.url, item); });
+        // Dedup MUST use the same key order as postKey() (below) — i.e.
+        // (postUrl || url || uuid). Previously we keyed by (uuid || url), while
+        // selection + publish keyed by (postUrl || url || uuid). The local
+        // mirror and the extension push routinely emit the same postUrl under
+        // different uuids, so the same post survived dedup twice, and batch
+        // publish dispatched pipeline_queue_engagement twice for one selection
+        // — the "extension opened the same post twice, posted the same comment
+        // twice" bug.
+        combined.forEach(item => {
+            const k = item?.postUrl || item?.url || item?.uuid;
+            if (!k) return;
+            const prev: any = uniqueMap.get(k);
+            const tNew = new Date(item?.timestamp || 0).getTime();
+            const tPrev = new Date(prev?.timestamp || 0).getTime();
+            if (!prev || tNew >= tPrev) uniqueMap.set(k, item);
+        });
         const sorted = Array.from(uniqueMap.values()).sort((a: any, b: any) =>
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
@@ -1453,22 +1478,92 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
 
   // Publish (queue) every selected post that has a non-empty draft. Queue-only,
   // human-in-the-loop: the user explicitly selected these and pressed Publish.
-  function publishBatchComments() {
-    const items = influencerSignals.filter((it: any) => selectedPosts.has(postKey(it)));
-    let published = 0;
-    items.forEach(it => {
+  //
+  // Serialized with a jittered gap because:
+  //  1. The extension's QUEUE_FOR_ENGAGEMENT handler does a NON-atomic
+  //     chrome.storage.local get/push/set. Firing N events in one JS turn
+  //     races the RMW and either loses leads or, worse, double-queues the
+  //     same postUrl if the app-side selection already contains a duplicate.
+  //  2. The extension has NO postUrl dedup at the queue push, so any duplicate
+  //     we send WILL be posted twice (spaced by its own cooldown).
+  //  3. Serializing lets us show honest progress and lets the user cancel.
+  //
+  // We dedup on THREE layers before dispatch:
+  //  - seenThisBatch:            in-batch dedup
+  //  - submittedKeysRef.current: session-lifetime "already sent" set
+  //  - comment_log localStorage: catches posts committed in past sessions
+  async function publishBatchComments() {
+    if (isPublishing) return; // Hard in-flight guard against double-click.
+
+    let commentLog: any[] = [];
+    try { commentLog = JSON.parse(localStorage.getItem('comment_log') || '[]'); } catch {}
+    const alreadyPosted = new Set<string>(
+      commentLog.map((c: any) => (c?.url || c?.postUrl)).filter(Boolean)
+    );
+
+    const seenThisBatch = new Set<string>();
+    const work: Array<{ it: any; k: string; text: string }> = [];
+    for (const it of influencerSignals) {
       const k = postKey(it);
+      if (!k) continue;
+      if (!selectedPosts.has(k)) continue;
+      if (seenThisBatch.has(k)) continue;
+      if (submittedKeysRef.current.has(k)) continue;
+      if (alreadyPosted.has(k)) continue;
       const text = (batchDrafts[k] || '').trim();
-      if (!text) return;
+      if (!text) continue;
+      seenThisBatch.add(k);
+      work.push({ it, k, text });
+    }
+    if (work.length === 0) return;
+
+    cancelPublishRef.current = false;
+    setIsPublishing(true);
+    setPublishProgress({ current: 0, total: work.length, phase: 'sending', waitSec: 0 });
+
+    // Jittered gap. Purpose is to defeat the SW's RMW race and give the user
+    // a visible pace. The extension applies its own 1.5–7 min cooldown BETWEEN
+    // actual browser posts, so 30–60s here is plenty for correctness; anything
+    // shorter and the dispatches would still be racing the storage write.
+    const MIN_GAP_MS = 30_000;
+    const MAX_GAP_MS = 60_000;
+
+    for (let i = 0; i < work.length; i++) {
+      if (cancelPublishRef.current) break;
+      const { it, k, text } = work[i];
+      setPublishProgress({ current: i + 1, total: work.length, phase: 'sending', waitSec: 0 });
+
+      // Commit the key BEFORE dispatch so an accidental re-entry on this
+      // same postUrl is impossible.
+      submittedKeysRef.current.add(k);
       window.dispatchEvent(new CustomEvent('pipeline_queue_engagement', {
         detail: { lead: { ...it, actionType: 'comment', commentText: text } }
       }));
       logInteraction(it, 'reply');
       markReplied(it, text);
-      published++;
-    });
-    if (published > 0) clearBatchSelection();
+
+      // Countdown gap between dispatches — skipped after the last one.
+      if (i < work.length - 1) {
+        const gap = MIN_GAP_MS + Math.floor(Math.random() * (MAX_GAP_MS - MIN_GAP_MS));
+        const startedAt = Date.now();
+        while (!cancelPublishRef.current) {
+          const remain = gap - (Date.now() - startedAt);
+          if (remain <= 0) break;
+          setPublishProgress({ current: i + 1, total: work.length, phase: 'waiting', waitSec: Math.ceil(remain / 1000) });
+          await new Promise(r => setTimeout(r, Math.min(1000, remain)));
+        }
+      }
+    }
+
+    setPublishProgress({ current: 0, total: 0, phase: 'idle', waitSec: 0 });
+    setIsPublishing(false);
+    clearBatchSelection();
   }
+
+  // Stop button — the loop above checks this ref every second and exits.
+  // Anything already dispatched still gets posted by the extension (its
+  // engagement queue is persistent in chrome.storage.local).
+  const cancelBatchPublish = () => { cancelPublishRef.current = true; };
 
   const selectedReadyCount = useMemo(
     () => influencerSignals.filter((it: any) => selectedPosts.has(postKey(it)) && (batchDrafts[postKey(it)] || '').trim()).length,
@@ -2352,15 +2447,34 @@ export const UnifiedCommandCenter: React.FC<{ appDesc?: string }> = ({ appDesc }
                 </button>
                 <button
                     onClick={publishBatchComments}
-                    disabled={selectedReadyCount === 0 || isBatchRunning}
+                    disabled={selectedReadyCount === 0 || isBatchRunning || isPublishing}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-colors"
                     title={selectedReadyCount === 0 ? t('uc.batch.genFirst') : t('uc.batch.queueTitle', { n: selectedReadyCount })}
                 >
-                    <Send size={13} /> {t('uc.batch.publish')}{selectedReadyCount > 0 ? ` (${selectedReadyCount})` : ''}
+                    {isPublishing ? (
+                        <>
+                            <RefreshCw size={13} className="animate-spin" />
+                            {publishProgress.phase === 'waiting'
+                                ? t('uc.batch.waiting', { sec: publishProgress.waitSec, current: publishProgress.current, total: publishProgress.total })
+                                : t('uc.batch.posting', { current: publishProgress.current, total: publishProgress.total })}
+                        </>
+                    ) : (
+                        <><Send size={13} /> {t('uc.batch.publish')}{selectedReadyCount > 0 ? ` (${selectedReadyCount})` : ''}</>
+                    )}
                 </button>
+                {isPublishing && (
+                    <button
+                        onClick={cancelBatchPublish}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-400 text-white transition-colors"
+                        title={t('uc.batch.stopTitle')}
+                    >
+                        {t('uc.batch.stop')}
+                    </button>
+                )}
                 <button
                     onClick={clearBatchSelection}
-                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                    disabled={isPublishing}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors disabled:opacity-40"
                     title={t('uc.batch.clear')}
                     aria-label={t('uc.batch.clear')}
                 >
